@@ -1,0 +1,21 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build and Run LoginPage",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build/Desktop_Qt_6_9_1_MinGW_64_bit-Debug",
+				"--target",
+				"LoginPage"
+			],
+			"group": "build",
+			"isBackground": false,
+			"problemMatcher": [
+				"$gcc"
+			]
+		}
+	]
+}
