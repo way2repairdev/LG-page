@@ -1,0 +1,7 @@
+Test PDF content - this is a placeholder for testing the PDF viewer functionality.
+The application should now have:
+1. A working file browser that shows local files
+2. A tab system that can open different file types
+3. Basic PDF viewer structure (though PDF rendering is temporarily disabled)
+
+The build is now successful and the application runs without crashing.

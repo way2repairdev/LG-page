@@ -19,8 +19,11 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
 # Find Qt6 packages
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets Sql Network)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets Sql Network)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets Sql Network OpenGL OpenGLWidgets)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets Sql Network OpenGL OpenGLWidgets)
+
+# Find OpenGL
+find_package(OpenGL REQUIRED)
 
 # Set directories
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -37,6 +40,9 @@ include_directories(
     ${INCLUDE_DIR}/ui
     ${INCLUDE_DIR}/database
     ${INCLUDE_DIR}/network
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/pdfium/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glew/include
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -48,6 +54,12 @@ set(CORE_SOURCES
 set(UI_SOURCES
     ${SRC_DIR}/ui/mainwindow.cpp
     ${SRC_DIR}/ui/mainapplication.cpp
+    ${SRC_DIR}/ui/pdfviewerwidget.cpp
+)
+
+# PDF viewer sources
+set(PDF_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/src/rendering/pdf-render.cpp
 )
 
 set(DATABASE_SOURCES
@@ -62,6 +74,14 @@ set(NETWORK_SOURCES
 set(UI_HEADERS
     ${INCLUDE_DIR}/ui/mainwindow.h
     ${INCLUDE_DIR}/ui/mainapplication.h
+    ${INCLUDE_DIR}/ui/pdfviewerwidget.h
+    ${INCLUDE_DIR}/ui/pdfscrollstate.h
+    ${INCLUDE_DIR}/ui/textsearch.h
+)
+
+# PDF viewer headers
+set(PDF_HEADERS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/include/rendering/pdf-render.h
 )
 
 set(DATABASE_HEADERS
@@ -86,9 +106,11 @@ set(RESOURCE_FILES
 set(PROJECT_SOURCES
     ${CORE_SOURCES}
     ${UI_SOURCES}
+    ${PDF_SOURCES}
     ${DATABASE_SOURCES}
     ${NETWORK_SOURCES}
     ${UI_HEADERS}
+    ${PDF_HEADERS}
     ${DATABASE_HEADERS}
     ${NETWORK_HEADERS}
     ${UI_FORMS}
@@ -119,6 +141,20 @@ target_link_libraries(Way2RepairLoginSystem PRIVATE
     Qt${QT_VERSION_MAJOR}::Widgets 
     Qt${QT_VERSION_MAJOR}::Sql 
     Qt${QT_VERSION_MAJOR}::Network
+    Qt${QT_VERSION_MAJOR}::OpenGL
+    Qt${QT_VERSION_MAJOR}::OpenGLWidgets
+    ${OPENGL_LIBRARIES}
+)
+
+# Add PDFium and GLEW library paths and link
+target_link_directories(Way2RepairLoginSystem PRIVATE 
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/pdfium/lib"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glew/lib/Release/x64"
+)
+
+target_link_libraries(Way2RepairLoginSystem PRIVATE 
+    pdfium
+    glew32
 )
 
 # Set target properties

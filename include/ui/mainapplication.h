@@ -22,6 +22,9 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QTextStream>
+
+// Forward declaration for PDF viewer
+class PDFViewerWidget;
 // Server-side includes (commented out for local file loading)
 //#include <QNetworkAccessManager>
 //#include <QNetworkRequest>
@@ -65,6 +68,10 @@ private slots:
     //void onHttpRequestFinished(QNetworkReply *reply);
     //void onNetworkError(QNetworkReply::NetworkError error);
 
+public slots:
+    void toggleTreeView();
+    void toggleFullScreenPDF();
+
 private:
     UserSession m_userSession;
     DatabaseManager *m_dbManager;
@@ -82,10 +89,15 @@ private:
     QToolBar *m_toolbar;
     QStatusBar *m_statusBar;
     
+    // Tree view state
+    bool m_treeViewVisible;
+    QList<int> m_splitterSizes; // Store original splitter sizes
+    
     void setupUI();
     void setupMenuBar();
     void setupToolBar();
     void setupStatusBar();
+    void setupKeyboardShortcuts();
     void setupTreeView();
     void setupTabWidget();  // Changed from setupContentArea
     void updateUserInfo();
@@ -93,6 +105,7 @@ private:
     void loadLocalFileContent(const QString &filePath);  // Changed from loadFileContent
     void populateTreeFromDirectory(const QString &dirPath, QTreeWidgetItem *parentItem = nullptr);
     void openFileInTab(const QString &filePath);
+    void openPDFInTab(const QString &filePath);
     void addWelcomeTab();
     QIcon getFileIcon(const QString &filePath);
     QIcon getFolderIcon(bool isOpen = false);
@@ -101,8 +114,11 @@ private:
     bool isImageFile(const QString &extension);
     bool isArchiveFile(const QString &extension);
     bool isOfficeFile(const QString &extension);
+    bool isPDFFile(const QString &extension);
     void setupTreeItemAppearance(QTreeWidgetItem *item, const QFileInfo &fileInfo);
     void updateTreeItemIcon(QTreeWidgetItem *item, bool isExpanded);
+    void setTreeViewVisible(bool visible);
+    bool isTreeViewVisible() const;
     
     // Server-side methods (commented out for local file loading)
     //void loadFileList();

@@ -1,4 +1,5 @@
 #include "ui/mainapplication.h"
+#include "ui/pdfviewerwidget.h"
 #include <QApplication>
 #include <QScreen>
 #include <QHeaderView>
@@ -11,6 +12,8 @@
 #include <QTabWidget>
 #include <QMessageBox>
 #include <QStandardPaths>
+#include <QTimer>
+#include <QShortcut>
 
 MainApplication::MainApplication(const UserSession &userSession, QWidget *parent)
     : QMainWindow(parent)
@@ -26,6 +29,9 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
     setupToolBar();
     setupStatusBar();
     updateUserInfo();
+    
+    // Setup keyboard shortcuts
+    setupKeyboardShortcuts();
     
     // Set window properties
     setWindowTitle("Way2Repair - Equipment Maintenance System");
@@ -76,7 +82,24 @@ void MainApplication::setupUI()
     
     // Set splitter proportions (tree view: 25%, tabs: 75%)
     m_splitter->setSizes({300, 900});
-    m_splitter->setCollapsible(0, false); // Don't allow tree view to collapse
+    m_splitter->setCollapsible(0, true); // Allow tree view to collapse completely
+    m_splitter->setCollapsible(1, false); // Don't allow tab widget to collapse
+    
+    // Set splitter handle width for better visibility
+    m_splitter->setHandleWidth(3);
+    m_splitter->setStyleSheet(
+        "QSplitter::handle {"
+        "    background-color: #d4e1f5;"
+        "    border: 1px solid #a0b0c0;"
+        "}"
+        "QSplitter::handle:hover {"
+        "    background-color: #4285f4;"
+        "}"
+    );
+    
+    // Initialize tree view state
+    m_treeViewVisible = true;
+    m_splitterSizes = {300, 900};
     
     mainLayout->addWidget(m_splitter);
 }
@@ -115,6 +138,18 @@ void MainApplication::setupMenuBar()
     
     // View menu
     QMenu *viewMenu = menuBar->addMenu("&View");
+    
+    QAction *toggleTreeAction = viewMenu->addAction("&Toggle Tree View");
+    toggleTreeAction->setShortcut(QKeySequence("Ctrl+T"));
+    toggleTreeAction->setCheckable(true);
+    toggleTreeAction->setChecked(true);
+    connect(toggleTreeAction, &QAction::triggered, this, &MainApplication::toggleTreeView);
+    
+    QAction *fullScreenPDFAction = viewMenu->addAction("&Full Screen PDF");
+    fullScreenPDFAction->setShortcut(QKeySequence("F11"));
+    connect(fullScreenPDFAction, &QAction::triggered, this, &MainApplication::toggleFullScreenPDF);
+    
+    viewMenu->addSeparator();
     viewMenu->addAction("&Refresh Tree", this, &MainApplication::loadLocalFiles);
     viewMenu->addAction("&Expand All", this, [this]() { m_treeWidget->expandAll(); });
     viewMenu->addAction("&Collapse All", this, [this]() { m_treeWidget->collapseAll(); });
@@ -153,18 +188,34 @@ void MainApplication::setupToolBar()
     );
     
     // Add toolbar actions
-    QAction *refreshAction = m_toolbar->addAction("Refresh");
+    QAction *refreshAction = m_toolbar->addAction("🔄 Refresh");
+    refreshAction->setToolTip("Refresh file tree");
     connect(refreshAction, &QAction::triggered, this, &MainApplication::loadLocalFiles);
     
-    QAction *expandAction = m_toolbar->addAction("Expand All");
+    QAction *expandAction = m_toolbar->addAction("⊞ Expand All");
+    expandAction->setToolTip("Expand all folders");
     connect(expandAction, &QAction::triggered, this, [this]() { m_treeWidget->expandAll(); });
     
-    QAction *collapseAction = m_toolbar->addAction("Collapse All");
+    QAction *collapseAction = m_toolbar->addAction("⊟ Collapse All");
+    collapseAction->setToolTip("Collapse all folders");
     connect(collapseAction, &QAction::triggered, this, [this]() { m_treeWidget->collapseAll(); });
     
     m_toolbar->addSeparator();
     
-    QAction *logoutAction = m_toolbar->addAction("Logout");
+    QAction *toggleTreeAction = m_toolbar->addAction("📁 Toggle Tree");
+    toggleTreeAction->setToolTip("Toggle tree view (Ctrl+T)");
+    toggleTreeAction->setCheckable(true);
+    toggleTreeAction->setChecked(true);
+    connect(toggleTreeAction, &QAction::triggered, this, &MainApplication::toggleTreeView);
+    
+    QAction *fullScreenPDFAction = m_toolbar->addAction("📄 PDF Full Screen");
+    fullScreenPDFAction->setToolTip("Full screen PDF view (F11)");
+    connect(fullScreenPDFAction, &QAction::triggered, this, &MainApplication::toggleFullScreenPDF);
+    
+    m_toolbar->addSeparator();
+    
+    QAction *logoutAction = m_toolbar->addAction("🚪 Logout");
+    logoutAction->setToolTip("Logout from application");
     connect(logoutAction, &QAction::triggered, this, &MainApplication::onLogoutClicked);
 }
 
@@ -386,7 +437,16 @@ void MainApplication::openFileInTab(const QString &filePath)
         }
     }
     
-    // Read file content
+    // Check if it's a PDF file
+    QFileInfo fileInfo(filePath);
+    QString extension = fileInfo.suffix().toLower();
+    
+    if (extension == "pdf") {
+        openPDFInTab(filePath);
+        return;
+    }
+    
+    // Read file content for non-PDF files
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         statusBar()->showMessage("Error: Could not open file: " + filePath);
@@ -405,9 +465,6 @@ void MainApplication::openFileInTab(const QString &filePath)
     textEdit->setProperty("filePath", filePath);
     
     // Set appropriate font based on file type
-    QFileInfo fileInfo(filePath);
-    QString extension = fileInfo.suffix().toLower();
-    
     if (isCodeFile(extension)) {
         // Code files - use monospace font
         QFont codeFont("Consolas", 10);
@@ -450,6 +507,87 @@ void MainApplication::openFileInTab(const QString &filePath)
     m_tabWidget->setCurrentIndex(tabIndex);
     
     statusBar()->showMessage(QString("Opened file: %1").arg(fileInfo.fileName()));
+}
+
+void MainApplication::openPDFInTab(const QString &filePath)
+{
+    // Show loading message
+    statusBar()->showMessage("Loading PDF file...");
+    
+    // Check if PDF file is already open in a tab
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+        QWidget *tabWidget = m_tabWidget->widget(i);
+        if (tabWidget->property("filePath").toString() == filePath) {
+            // File is already open, just switch to that tab
+            m_tabWidget->setCurrentIndex(i);
+            statusBar()->showMessage("PDF file already open in tab");
+            return;
+        }
+    }
+    
+    // Verify file exists and is readable
+    QFileInfo fileInfo(filePath);
+    if (!fileInfo.exists() || !fileInfo.isReadable()) {
+        statusBar()->showMessage("Error: Cannot access PDF file: " + filePath);
+        QMessageBox::warning(this, "PDF Error", "Cannot access PDF file:\n" + filePath);
+        return;
+    }
+    
+    // Create PDF viewer widget
+    PDFViewerWidget *pdfViewer = new PDFViewerWidget();
+    pdfViewer->setProperty("filePath", filePath);
+    
+    // Connect PDF viewer signals
+    connect(pdfViewer, &PDFViewerWidget::pdfLoaded, this, [this, filePath](const QString &loadedPath) {
+        Q_UNUSED(loadedPath)
+        QFileInfo fileInfo(filePath);
+        statusBar()->showMessage(QString("PDF loaded: %1").arg(fileInfo.fileName()));
+    });
+    
+    connect(pdfViewer, &PDFViewerWidget::errorOccurred, this, [this](const QString &error) {
+        statusBar()->showMessage("PDF Error: " + error);
+        QMessageBox::warning(this, "PDF Error", error);
+    });
+    
+    connect(pdfViewer, &PDFViewerWidget::pageChanged, this, [this](int currentPage, int totalPages) {
+        statusBar()->showMessage(QString("PDF Page %1 of %2").arg(currentPage).arg(totalPages));
+    });
+    
+    connect(pdfViewer, &PDFViewerWidget::zoomChanged, this, [this](double zoomLevel) {
+        statusBar()->showMessage(QString("PDF Zoom: %1%").arg(static_cast<int>(zoomLevel * 100)));
+    });
+    
+    // Add PDF viewer to tab first
+    QString tabName = fileInfo.fileName();
+    QIcon tabIcon = getFileIcon(filePath);
+    int tabIndex = m_tabWidget->addTab(pdfViewer, tabIcon, tabName);
+    
+    // Switch to the new tab
+    m_tabWidget->setCurrentIndex(tabIndex);
+    
+    // Note: Removed automatic tree view hiding - let user control when to hide/show
+    // Tree view will stay visible unless manually toggled
+    
+    // Use QTimer to delay PDF loading until the widget is shown and OpenGL context is ready
+    QTimer::singleShot(100, this, [this, pdfViewer, filePath, tabIndex]() {
+        // Try to load the PDF after the widget is properly initialized
+        if (!pdfViewer->loadPDF(filePath)) {
+            // If loading fails, remove the tab and show error
+            m_tabWidget->removeTab(tabIndex);
+            statusBar()->showMessage("Error: Failed to load PDF file: " + filePath);
+            QMessageBox::warning(this, "PDF Error", "Failed to load PDF file:\n" + filePath);
+            return;
+        }
+    });
+    
+    // Set tab tooltip
+    QString tooltip = QString("PDF File: %1\nPath: %2\nSize: %3 bytes")
+                        .arg(fileInfo.fileName())
+                        .arg(filePath)
+                        .arg(fileInfo.size());
+    m_tabWidget->setTabToolTip(tabIndex, tooltip);
+    
+    statusBar()->showMessage(QString("Opened PDF: %1").arg(fileInfo.fileName()));
 }
 
 void MainApplication::onTabCloseRequested(int index)
@@ -949,4 +1087,122 @@ void MainApplication::updateUserInfo()
 {
     // Update window title with user info
     setWindowTitle(QString("Way2Repair - Equipment Maintenance System - %1").arg(m_userSession.fullName));
+}
+
+void MainApplication::toggleTreeView()
+{
+    setTreeViewVisible(!m_treeViewVisible);
+}
+
+void MainApplication::toggleFullScreenPDF()
+{
+    // Check if current tab is a PDF viewer
+    QWidget *currentWidget = m_tabWidget->currentWidget();
+    PDFViewerWidget *pdfViewer = qobject_cast<PDFViewerWidget*>(currentWidget);
+    
+    if (pdfViewer) {
+        // It's a PDF tab - toggle full screen mode
+        if (m_treeViewVisible) {
+            setTreeViewVisible(false);
+            statusBar()->showMessage("PDF in full screen mode - Press F11 or Ctrl+T to restore tree view");
+        } else {
+            setTreeViewVisible(true);
+            statusBar()->showMessage("PDF in normal mode - Tree view restored");
+        }
+    } else {
+        // Not a PDF tab, just hide tree view for full screen experience
+        setTreeViewVisible(false);
+        statusBar()->showMessage("Full screen mode - Press F11 or Ctrl+T to restore tree view");
+    }
+}
+
+void MainApplication::setTreeViewVisible(bool visible)
+{
+    if (m_treeViewVisible == visible) {
+        return; // Already in desired state
+    }
+    
+    m_treeViewVisible = visible;
+    
+    if (visible) {
+        // Show tree view - restore original sizes
+        m_treeWidget->show();
+        m_splitter->setSizes(m_splitterSizes);
+        statusBar()->showMessage("Tree view shown");
+    } else {
+        // Hide tree view - save current sizes and collapse completely
+        m_splitterSizes = m_splitter->sizes();
+        m_treeWidget->hide();
+        
+        // Force all space to the tab widget (PDF viewer)
+        QList<int> fullScreenSizes;
+        fullScreenSizes << 0 << this->width(); // Give all width to tab widget
+        m_splitter->setSizes(fullScreenSizes);
+        
+        statusBar()->showMessage("Tree view hidden - Full screen PDF mode");
+    }
+    
+    // Update menu action state if it exists
+    QList<QAction*> actions = menuBar()->actions();
+    for (QAction *action : actions) {
+        if (action->text().contains("View")) {
+            QMenu *viewMenu = action->menu();
+            if (viewMenu) {
+                QList<QAction*> viewActions = viewMenu->actions();
+                for (QAction *viewAction : viewActions) {
+                    if (viewAction->text().contains("Toggle Tree")) {
+                        viewAction->setChecked(visible);
+                        break;
+                    }
+                }
+            }
+            break;
+        }
+    }
+    
+    // Update toolbar action state
+    QList<QAction*> toolbarActions = m_toolbar->actions();
+    for (QAction *action : toolbarActions) {
+        if (action->text().contains("Toggle Tree")) {
+            action->setChecked(visible);
+            break;
+        }
+    }
+}
+
+bool MainApplication::isTreeViewVisible() const
+{
+    return m_treeViewVisible;
+}
+
+void MainApplication::setupKeyboardShortcuts()
+{
+    // Tree view toggle shortcut
+    QShortcut *toggleTreeShortcut = new QShortcut(QKeySequence("Ctrl+T"), this);
+    connect(toggleTreeShortcut, &QShortcut::activated, this, &MainApplication::toggleTreeView);
+    
+    // PDF full screen shortcut
+    QShortcut *fullScreenShortcut = new QShortcut(QKeySequence("F11"), this);
+    connect(fullScreenShortcut, &QShortcut::activated, this, &MainApplication::toggleFullScreenPDF);
+    
+    // Quick tree view restore (for when in PDF full screen)
+    QShortcut *showTreeShortcut = new QShortcut(QKeySequence("Ctrl+Shift+T"), this);
+    connect(showTreeShortcut, &QShortcut::activated, this, [this]() {
+        setTreeViewVisible(true);
+    });
+    
+    // Tab navigation shortcuts
+    QShortcut *nextTabShortcut = new QShortcut(QKeySequence("Ctrl+Tab"), this);
+    connect(nextTabShortcut, &QShortcut::activated, this, [this]() {
+        int currentIndex = m_tabWidget->currentIndex();
+        int nextIndex = (currentIndex + 1) % m_tabWidget->count();
+        m_tabWidget->setCurrentIndex(nextIndex);
+    });
+    
+    QShortcut *prevTabShortcut = new QShortcut(QKeySequence("Ctrl+Shift+Tab"), this);
+    connect(prevTabShortcut, &QShortcut::activated, this, [this]() {
+        int currentIndex = m_tabWidget->currentIndex();
+        int prevIndex = (currentIndex - 1 + m_tabWidget->count()) % m_tabWidget->count();
+        m_tabWidget->setCurrentIndex(prevIndex);
+    });
 }
