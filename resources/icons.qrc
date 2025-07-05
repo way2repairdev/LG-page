@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/icons">
+        <!-- We'll use Qt's built-in icons via QStyle instead of custom files -->
+        <!-- This is a placeholder resource file -->
+    </qresource>
+</RCC>

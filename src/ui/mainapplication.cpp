@@ -242,8 +242,10 @@ void MainApplication::setupTreeView()
     // Connect signals
     connect(m_treeWidget, &QTreeWidget::itemClicked, this, &MainApplication::onTreeItemClicked);
     connect(m_treeWidget, &QTreeWidget::itemDoubleClicked, this, &MainApplication::onTreeItemDoubleClicked);
+    connect(m_treeWidget, &QTreeWidget::itemExpanded, this, &MainApplication::onTreeItemExpanded);
+    connect(m_treeWidget, &QTreeWidget::itemCollapsed, this, &MainApplication::onTreeItemCollapsed);
     
-    // Tree will be populated via HTTP request in constructor
+    // Tree will be populated via local file loading in constructor
 }
 
 void MainApplication::setupTabWidget()
@@ -342,32 +344,37 @@ void MainApplication::populateTreeFromDirectory(const QString &dirPath, QTreeWid
             item = new QTreeWidgetItem(m_treeWidget);
         }
         
-        item->setText(0, entry.fileName());
+        // Set up the tree item appearance
+        setupTreeItemAppearance(item, entry);
         
         if (entry.isDir()) {
             // This is a directory
-            item->setIcon(0, QIcon(":/icons/folder.png"));
             item->setData(0, Qt::UserRole + 1, entry.absoluteFilePath()); // Store folder path
             
-            // Recursively populate subdirectory
-            populateTreeFromDirectory(entry.absoluteFilePath(), item);
+            // Add a dummy child item to make the folder expandable
+            // The actual children will be loaded when the folder is expanded
+            QTreeWidgetItem *dummyItem = new QTreeWidgetItem(item);
+            dummyItem->setText(0, "Loading...");
+            dummyItem->setData(0, Qt::UserRole + 2, true); // Mark as dummy
+            
+            // Don't expand folders by default - let user expand them
+            item->setExpanded(false);
         } else {
             // This is a file
-            item->setIcon(0, QIcon(":/icons/file.png"));
             item->setData(0, Qt::UserRole, entry.absoluteFilePath()); // Store file path
             
-            // Add tooltip with file info
-            QString tooltip = QString("File: %1\nSize: %2 bytes\nModified: %3")
-                                .arg(entry.fileName())
-                                .arg(entry.size())
-                                .arg(entry.lastModified().toString("yyyy-MM-dd hh:mm:ss"));
-            item->setToolTip(0, tooltip);
+            // Make files non-expandable by ensuring they have no children
+            // and can't be expanded
+            item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
         }
     }
 }
 
 void MainApplication::openFileInTab(const QString &filePath)
 {
+    // Show loading message
+    statusBar()->showMessage("Loading file...");
+    
     // Check if file is already open in a tab
     for (int i = 0; i < m_tabWidget->count(); ++i) {
         QWidget *tabWidget = m_tabWidget->widget(i);
@@ -401,9 +408,7 @@ void MainApplication::openFileInTab(const QString &filePath)
     QFileInfo fileInfo(filePath);
     QString extension = fileInfo.suffix().toLower();
     
-    if (extension == "cpp" || extension == "h" || extension == "c" || extension == "hpp" ||
-        extension == "js" || extension == "py" || extension == "html" || extension == "css" ||
-        extension == "json" || extension == "xml" || extension == "sql") {
+    if (isCodeFile(extension)) {
         // Code files - use monospace font
         QFont codeFont("Consolas", 10);
         codeFont.setStyleHint(QFont::Monospace);
@@ -428,15 +433,17 @@ void MainApplication::openFileInTab(const QString &filePath)
         "}"
     );
     
-    // Add tab with file name
+    // Add tab with file name and icon
     QString tabName = fileInfo.fileName();
-    int tabIndex = m_tabWidget->addTab(textEdit, tabName);
+    QIcon tabIcon = getFileIcon(filePath);
+    int tabIndex = m_tabWidget->addTab(textEdit, tabIcon, tabName);
     
     // Set tab tooltip
-    QString tooltip = QString("File: %1\nPath: %2\nSize: %3 bytes")
+    QString tooltip = QString("File: %1\nPath: %2\nSize: %3 bytes\nType: %4")
                         .arg(fileInfo.fileName())
                         .arg(filePath)
-                        .arg(fileInfo.size());
+                        .arg(fileInfo.size())
+                        .arg(extension.isEmpty() ? "Unknown" : extension.toUpper());
     m_tabWidget->setTabToolTip(tabIndex, tooltip);
     
     // Switch to the new tab
@@ -730,6 +737,164 @@ void MainApplication::onTreeItemDoubleClicked(QTreeWidgetItem *item, int column)
         }
         statusBar()->showMessage(QString("Toggled folder: %1").arg(itemText));
     }
+}
+
+void MainApplication::onTreeItemExpanded(QTreeWidgetItem *item)
+{
+    if (!item) return;
+    
+    // Update folder icon to "open" state
+    updateTreeItemIcon(item, true);
+    
+    // Check if this folder has dummy children and needs to be populated
+    if (item->childCount() == 1) {
+        QTreeWidgetItem *child = item->child(0);
+        if (child && child->data(0, Qt::UserRole + 2).toBool()) {
+            // This is a dummy item, remove it and load actual contents
+            delete child;
+            
+            // Load the actual folder contents
+            QString folderPath = item->data(0, Qt::UserRole + 1).toString();
+            if (!folderPath.isEmpty()) {
+                statusBar()->showMessage(QString("Loading folder: %1...").arg(item->text(0)));
+                populateTreeFromDirectory(folderPath, item);
+                statusBar()->showMessage(QString("Loaded folder: %1").arg(item->text(0)));
+            }
+        }
+    }
+}
+
+void MainApplication::onTreeItemCollapsed(QTreeWidgetItem *item)
+{
+    if (!item) return;
+    
+    // Update folder icon to "closed" state
+    updateTreeItemIcon(item, false);
+}
+
+void MainApplication::setupTreeItemAppearance(QTreeWidgetItem *item, const QFileInfo &fileInfo)
+{
+    item->setText(0, fileInfo.fileName());
+    
+    if (fileInfo.isDir()) {
+        // This is a directory
+        item->setIcon(0, getFolderIcon(false));
+        
+        // Add tooltip with folder info
+        QString tooltip = QString("Folder: %1\nPath: %2\nModified: %3")
+                            .arg(fileInfo.fileName())
+                            .arg(fileInfo.absoluteFilePath())
+                            .arg(fileInfo.lastModified().toString("yyyy-MM-dd hh:mm:ss"));
+        item->setToolTip(0, tooltip);
+        
+        // Set folder-specific properties
+        item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+    } else {
+        // This is a file
+        item->setIcon(0, getFileIcon(fileInfo.absoluteFilePath()));
+        
+        // Add tooltip with file info
+        QString extension = getFileExtension(fileInfo.absoluteFilePath());
+        QString tooltip = QString("File: %1\nSize: %2 bytes\nType: %3\nModified: %4")
+                            .arg(fileInfo.fileName())
+                            .arg(fileInfo.size())
+                            .arg(extension.isEmpty() ? "Unknown" : extension.toUpper())
+                            .arg(fileInfo.lastModified().toString("yyyy-MM-dd hh:mm:ss"));
+        item->setToolTip(0, tooltip);
+        
+        // Set file-specific properties
+        item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
+    }
+}
+
+void MainApplication::updateTreeItemIcon(QTreeWidgetItem *item, bool isExpanded)
+{
+    if (!item) return;
+    
+    // Check if this is a folder
+    QString folderPath = item->data(0, Qt::UserRole + 1).toString();
+    if (!folderPath.isEmpty()) {
+        item->setIcon(0, getFolderIcon(isExpanded));
+    }
+}
+
+QIcon MainApplication::getFileIcon(const QString &filePath)
+{
+    QString extension = getFileExtension(filePath);
+    
+    // Use Qt's built-in standard icons based on file type
+    if (isCodeFile(extension)) {
+        return style()->standardIcon(QStyle::SP_ComputerIcon);
+    } else if (isImageFile(extension)) {
+        return style()->standardIcon(QStyle::SP_FileIcon);
+    } else if (isArchiveFile(extension)) {
+        return style()->standardIcon(QStyle::SP_DriveHDIcon);
+    } else if (isOfficeFile(extension)) {
+        return style()->standardIcon(QStyle::SP_FileDialogDetailedView);
+    } else if (extension == "pdf") {
+        return style()->standardIcon(QStyle::SP_FileDialogListView);
+    } else if (extension == "txt" || extension == "log" || extension == "md") {
+        return style()->standardIcon(QStyle::SP_FileIcon);
+    } else {
+        // Default file icon
+        return style()->standardIcon(QStyle::SP_FileIcon);
+    }
+}
+
+QIcon MainApplication::getFolderIcon(bool isOpen)
+{
+    if (isOpen) {
+        return style()->standardIcon(QStyle::SP_DirOpenIcon);
+    } else {
+        return style()->standardIcon(QStyle::SP_DirClosedIcon);
+    }
+}
+
+QString MainApplication::getFileExtension(const QString &filePath)
+{
+    QFileInfo fileInfo(filePath);
+    return fileInfo.suffix().toLower();
+}
+
+bool MainApplication::isCodeFile(const QString &extension)
+{
+    static const QStringList codeExtensions = {
+        "cpp", "c", "h", "hpp", "cc", "cxx", "hxx",
+        "js", "ts", "jsx", "tsx", "py", "java", "cs",
+        "html", "htm", "css", "scss", "sass", "less",
+        "json", "xml", "yaml", "yml", "sql", "php",
+        "rb", "go", "rs", "swift", "kt", "dart", "r",
+        "m", "mm", "scala", "groovy", "pl", "sh", "bat",
+        "ps1", "cmake", "make", "makefile", "pro", "pri"
+    };
+    return codeExtensions.contains(extension);
+}
+
+bool MainApplication::isImageFile(const QString &extension)
+{
+    static const QStringList imageExtensions = {
+        "png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif",
+        "svg", "ico", "webp", "psd", "ai", "eps"
+    };
+    return imageExtensions.contains(extension);
+}
+
+bool MainApplication::isArchiveFile(const QString &extension)
+{
+    static const QStringList archiveExtensions = {
+        "zip", "rar", "7z", "tar", "gz", "bz2", "xz",
+        "cab", "iso", "dmg", "pkg", "deb", "rpm"
+    };
+    return archiveExtensions.contains(extension);
+}
+
+bool MainApplication::isOfficeFile(const QString &extension)
+{
+    static const QStringList officeExtensions = {
+        "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+        "odt", "ods", "odp", "rtf", "pages", "numbers", "keynote"
+    };
+    return officeExtensions.contains(extension);
 }
 
 void MainApplication::onAboutClicked()

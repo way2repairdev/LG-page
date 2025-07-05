@@ -77,6 +77,11 @@ set(UI_FORMS
     resources/ui/mainwindow.ui
 )
 
+# Resource files
+set(RESOURCE_FILES
+    resources/icons.qrc
+)
+
 # All project sources
 set(PROJECT_SOURCES
     ${CORE_SOURCES}
@@ -87,6 +92,7 @@ set(PROJECT_SOURCES
     ${DATABASE_HEADERS}
     ${NETWORK_HEADERS}
     ${UI_FORMS}
+    ${RESOURCE_FILES}
 )
 
 # Create executable

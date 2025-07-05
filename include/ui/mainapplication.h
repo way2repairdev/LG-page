@@ -56,6 +56,8 @@ public:
 private slots:
     void onTreeItemClicked(QTreeWidgetItem *item, int column);
     void onTreeItemDoubleClicked(QTreeWidgetItem *item, int column);
+    void onTreeItemExpanded(QTreeWidgetItem *item);
+    void onTreeItemCollapsed(QTreeWidgetItem *item);
     void onAboutClicked();
     void onLogoutClicked();
     void onTabCloseRequested(int index);
@@ -92,6 +94,15 @@ private:
     void populateTreeFromDirectory(const QString &dirPath, QTreeWidgetItem *parentItem = nullptr);
     void openFileInTab(const QString &filePath);
     void addWelcomeTab();
+    QIcon getFileIcon(const QString &filePath);
+    QIcon getFolderIcon(bool isOpen = false);
+    QString getFileExtension(const QString &filePath);
+    bool isCodeFile(const QString &extension);
+    bool isImageFile(const QString &extension);
+    bool isArchiveFile(const QString &extension);
+    bool isOfficeFile(const QString &extension);
+    void setupTreeItemAppearance(QTreeWidgetItem *item, const QFileInfo &fileInfo);
+    void updateTreeItemIcon(QTreeWidgetItem *item, bool isExpanded);
     
     // Server-side methods (commented out for local file loading)
     //void loadFileList();

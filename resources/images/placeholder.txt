@@ -1,0 +1,2 @@
+/* This is a placeholder - in a real application, you would use actual PNG/SVG icon files */
+/* For now, we'll use Qt's built-in icons and style sheets to create visual icons */
