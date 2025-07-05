@@ -6,13 +6,6 @@ project(Way2RepairLoginSystem VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Compiler specific flags
-if(MSVC)
-    add_compile_options(/Zc:__cplusplus /permissive-)
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    add_compile_options(-Wall -Wextra)
-endif()
-
 # Qt configuration
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -27,9 +20,6 @@ set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(RESOURCES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 
-# Tell Qt where to find UI files
-set(CMAKE_AUTOUIC_SEARCH_PATHS ${RESOURCES_DIR}/ui)
-
 # Include directories
 include_directories(
     ${INCLUDE_DIR}
@@ -37,7 +27,6 @@ include_directories(
     ${INCLUDE_DIR}/ui
     ${INCLUDE_DIR}/database
     ${INCLUDE_DIR}/network
-    ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 # Source files
@@ -74,7 +63,7 @@ set(NETWORK_HEADERS
 
 # UI files
 set(UI_FORMS
-    resources/ui/mainwindow.ui
+    ${RESOURCES_DIR}/ui/mainwindow.ui
 )
 
 # All project sources
