@@ -19,7 +19,7 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
     : QMainWindow(parent)
     , m_userSession(userSession)
     , m_dbManager(new DatabaseManager(this))
-    , m_rootFolderPath(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation))  // Set to desktop folder
+    , m_rootFolderPath(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation))  // Set to downloads folder
     // Server-side initialization (commented out for local file loading)
     //, m_networkManager(new QNetworkAccessManager(this))
     //, m_baseUrl("http://localhost/api") // WAMP server API endpoint

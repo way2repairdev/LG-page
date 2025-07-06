@@ -144,6 +144,7 @@ private:
     // OpenGL rendering
     void renderPDF();
     void updateTextures();
+    void updateVisibleTextures(); // Fast update for visible pages only
     void createQuadGeometry();
     GLuint createTextureFromPDFBitmap(void* bitmap, int width, int height);
 
@@ -214,6 +215,9 @@ private:
     int m_currentPage;
     int m_pageCount;
     double m_zoomLevel;
+    double m_lastRenderedZoom;  // Track last zoom level for texture updates
+    bool m_zoomChanged;         // Flag for zoom change detection
+    bool m_immediateRenderRequired; // Flag for immediate visible page updates
     bool m_isDragging;
     QPoint m_lastPanPoint;
     QTimer *m_renderTimer;
@@ -226,6 +230,7 @@ private:
     float m_scrollOffsetX;
     float m_maxScrollY;
     float m_maxScrollX;
+    float m_minScrollX;  // Minimum scroll X position (can be negative for centering)
     
     // Private methods
     void toggleZoomMode();

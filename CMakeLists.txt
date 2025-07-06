@@ -22,6 +22,16 @@ set(CMAKE_AUTORCC ON)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets Sql Network OpenGL OpenGLWidgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets Sql Network OpenGL OpenGLWidgets)
 
+# Try to find PDF modules (optional)
+find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS Pdf PdfWidgets)
+if(Qt${QT_VERSION_MAJOR}Pdf_FOUND AND Qt${QT_VERSION_MAJOR}PdfWidgets_FOUND)
+    message(STATUS "Qt PDF modules found - enabling hybrid PDF viewer")
+    set(HAVE_QT_PDF TRUE)
+else()
+    message(STATUS "Qt PDF modules not found - using custom PDF viewer only")
+    set(HAVE_QT_PDF FALSE)
+endif()
+
 # Find OpenGL
 find_package(OpenGL REQUIRED)
 
@@ -51,11 +61,17 @@ set(CORE_SOURCES
     ${SRC_DIR}/core/main.cpp
 )
 
+# UI sources - conditionally include hybrid PDF viewer
 set(UI_SOURCES
     ${SRC_DIR}/ui/mainwindow.cpp
     ${SRC_DIR}/ui/mainapplication.cpp
     ${SRC_DIR}/ui/pdfviewerwidget.cpp
 )
+
+# Add hybrid PDF viewer only if Qt PDF modules are available
+if(HAVE_QT_PDF)
+    list(APPEND UI_SOURCES ${SRC_DIR}/ui/hybridpdfviewer.cpp)
+endif()
 
 # PDF viewer sources
 set(PDF_SOURCES
@@ -71,6 +87,7 @@ set(NETWORK_SOURCES
 )
 
 # Header files
+# UI headers - conditionally include hybrid PDF viewer
 set(UI_HEADERS
     ${INCLUDE_DIR}/ui/mainwindow.h
     ${INCLUDE_DIR}/ui/mainapplication.h
@@ -78,6 +95,11 @@ set(UI_HEADERS
     ${INCLUDE_DIR}/ui/pdfscrollstate.h
     ${INCLUDE_DIR}/ui/textsearch.h
 )
+
+# Add hybrid PDF viewer header only if Qt PDF modules are available
+if(HAVE_QT_PDF)
+    list(APPEND UI_HEADERS ${INCLUDE_DIR}/ui/hybridpdfviewer.h)
+endif()
 
 # PDF viewer headers
 set(PDF_HEADERS
@@ -146,16 +168,42 @@ target_link_libraries(Way2RepairLoginSystem PRIVATE
     ${OPENGL_LIBRARIES}
 )
 
-# Add PDFium and GLEW library paths and link
-target_link_directories(Way2RepairLoginSystem PRIVATE 
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/pdfium/lib"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glew/lib/Release/x64"
-)
+# Link Qt PDF modules if available
+if(HAVE_QT_PDF)
+    target_link_libraries(Way2RepairLoginSystem PRIVATE 
+        Qt${QT_VERSION_MAJOR}::Pdf
+        Qt${QT_VERSION_MAJOR}::PdfWidgets
+    )
+    target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_QT_PDF)
+endif()
 
-target_link_libraries(Way2RepairLoginSystem PRIVATE 
-    pdfium
-    glew32
-)
+# Add PDFium and GLEW library paths and link (conditionally)
+set(PDFIUM_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/pdfium/lib")
+set(GLEW_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glew/lib/Release/x64")
+
+# Check if PDFium library exists
+if(EXISTS "${PDFIUM_LIB_PATH}/pdfium.lib")
+    message(STATUS "PDFium library found - enabling custom PDF viewer")
+    target_link_directories(Way2RepairLoginSystem PRIVATE "${PDFIUM_LIB_PATH}")
+    target_link_libraries(Way2RepairLoginSystem PRIVATE pdfium)
+    target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_PDFIUM)
+    set(HAVE_PDFIUM TRUE)
+else()
+    message(STATUS "PDFium library not found - using Qt PDF module only")
+    set(HAVE_PDFIUM FALSE)
+endif()
+
+# Check if GLEW library exists
+if(EXISTS "${GLEW_LIB_PATH}/glew32.lib")
+    message(STATUS "GLEW library found - enabling OpenGL features")
+    target_link_directories(Way2RepairLoginSystem PRIVATE "${GLEW_LIB_PATH}")
+    target_link_libraries(Way2RepairLoginSystem PRIVATE glew32)
+    target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_GLEW)
+    set(HAVE_GLEW TRUE)
+else()
+    message(STATUS "GLEW library not found - using basic OpenGL")
+    set(HAVE_GLEW FALSE)
+endif()
 
 # Set target properties
 if(${QT_VERSION} VERSION_LESS 6.1.0)
@@ -181,6 +229,85 @@ install(TARGETS Way2RepairLoginSystem
 # Finalize executable (Qt6 only)
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(Way2RepairLoginSystem)
+endif()
+
+# Auto-deploy Qt dependencies and other required files
+if(WIN32)
+    # Find Qt deployment tool
+    find_program(QT_DEPLOY_TOOL 
+        NAMES windeployqt.exe windeployqt
+        HINTS ${Qt${QT_VERSION_MAJOR}_DIR}/../../../bin
+              ${Qt${QT_VERSION_MAJOR}_DIR}/bin
+              ${QT_INSTALL_PREFIX}/bin
+        DOC "Qt deployment tool"
+    )
+    
+    if(QT_DEPLOY_TOOL)
+        message(STATUS "Found Qt deployment tool: ${QT_DEPLOY_TOOL}")
+        
+        # Custom target to deploy Qt dependencies
+        add_custom_target(deploy
+            COMMAND ${QT_DEPLOY_TOOL} --verbose 2 --no-translations --no-system-d3d-compiler --no-opengl-sw --dir ${CMAKE_CURRENT_BINARY_DIR} $<TARGET_FILE:Way2RepairLoginSystem>
+            DEPENDS Way2RepairLoginSystem
+            COMMENT "Deploying Qt dependencies"
+        )
+        
+        # Auto-deploy after build
+        add_custom_command(TARGET Way2RepairLoginSystem POST_BUILD
+            COMMAND ${QT_DEPLOY_TOOL} --verbose 2 --no-translations --no-system-d3d-compiler --no-opengl-sw --dir ${CMAKE_CURRENT_BINARY_DIR} $<TARGET_FILE:Way2RepairLoginSystem>
+            COMMENT "Auto-deploying Qt dependencies to build directory"
+        )
+    else()
+        message(WARNING "Qt deployment tool not found. You may need to manually copy Qt DLLs.")
+    endif()
+    
+    # Copy PDFium and GLEW DLLs if they exist
+    set(PDFIUM_DLL "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/pdfium/bin/pdfium.dll")
+    set(GLEW_DLL "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glew/bin/Release/x64/glew32.dll")
+    
+    if(EXISTS ${PDFIUM_DLL})
+        add_custom_command(TARGET Way2RepairLoginSystem POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PDFIUM_DLL} ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Copying PDFium DLL"
+        )
+        message(STATUS "PDFium DLL will be copied: ${PDFIUM_DLL}")
+    else()
+        message(STATUS "PDFium DLL not found - application will use Qt PDF module: ${PDFIUM_DLL}")
+    endif()
+    
+    if(EXISTS ${GLEW_DLL})
+        add_custom_command(TARGET Way2RepairLoginSystem POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${GLEW_DLL} ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Copying GLEW DLL"
+        )
+        message(STATUS "GLEW DLL will be copied: ${GLEW_DLL}")
+    else()
+        message(STATUS "GLEW DLL not found - application will use basic OpenGL: ${GLEW_DLL}")
+    endif()
+    
+    # Copy additional runtime dependencies (database files, etc.)
+    set(DATABASE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/database/w2r_login.db")
+    if(EXISTS ${DATABASE_FILE})
+        add_custom_command(TARGET Way2RepairLoginSystem POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${DATABASE_FILE} ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Copying database file"
+        )
+        message(STATUS "Database file found: ${DATABASE_FILE}")
+    else()
+        message(STATUS "Database file not found: ${DATABASE_FILE}")
+    endif()
+    
+    # Create a complete deployment target
+    add_custom_target(package
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/deploy
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_BINARY_DIR}/deploy
+        COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_CURRENT_BINARY_DIR}/deploy/CMakeFiles
+        COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_CURRENT_BINARY_DIR}/deploy/cmake_install.cmake
+        COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_CURRENT_BINARY_DIR}/deploy/Makefile
+        COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_CURRENT_BINARY_DIR}/deploy/CMakeCache.txt
+        DEPENDS Way2RepairLoginSystem deploy
+        COMMENT "Creating complete deployment package"
+    )
 endif()
 
 # Print configuration info
