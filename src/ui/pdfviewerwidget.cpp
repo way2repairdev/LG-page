@@ -54,6 +54,8 @@ GLuint CreateTextureFromPDFBitmap(FPDF_BITMAP bitmap, int width, int height) {
     }
     
     glBindTexture(GL_TEXTURE_2D, textureID);
+    
+    // Use standard linear filtering for compatibility
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -65,6 +67,9 @@ GLuint CreateTextureFromPDFBitmap(FPDF_BITMAP bitmap, int width, int height) {
     }
     
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, buffer);
+    
+    // Skip mipmaps for now to avoid compatibility issues
+    // In a production version, we could use QOpenGLFunctions_3_0 for mipmap support
     
     error = glGetError();
     if (error != GL_NO_ERROR) {
@@ -116,13 +121,18 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_maxScrollY(0.0f)
     , m_maxScrollX(0.0f)
     , m_minScrollX(0.0f)
+    , m_wheelZoomMode(false) // Default to Ctrl+Wheel zoom, can be toggled
+    , m_useBackgroundLoading(true)
+    , m_highZoomMode(false)
+    , m_loadingLabel(nullptr)
+    , m_isLoadingTextures(false)
 {
     // Set focus policy for keyboard events
     setFocusPolicy(Qt::StrongFocus);
     
-    // Set up render timer
+    // Set up render timer for 60 FPS like standalone viewer
     m_renderTimer->setSingleShot(true);
-    m_renderTimer->setInterval(16); // ~60 FPS
+    m_renderTimer->setInterval(16); // 60 FPS for smooth animation
     connect(m_renderTimer, &QTimer::timeout, this, &PDFViewerWidget::updateRender);
     
     // Initialize UI
@@ -182,16 +192,34 @@ void PDFViewerWidget::updateTextures()
     for (int i = 0; i < m_pageCount; ++i) {
         qDebug() << "Rendering page" << i;
         
-        // Use standalone viewer's approach: calculate effective zoom for texture resolution
+        // OPTIMIZATION: Cap texture resolution to prevent memory issues at high zoom
+        // Use effective zoom but limit it to prevent excessive texture sizes
         float effectiveZoom = (m_zoomLevel > 0.5f) ? m_zoomLevel : 0.5f;
+        
+        // Cap effective zoom at 3.0x for texture resolution to prevent memory issues
+        // At higher zooms, we'll use interpolation rather than higher resolution textures
+        // With max zoom of 5.0, this gives us good quality up to 60% of max zoom
+        float textureZoom = std::min(effectiveZoom, 3.0f);
         
         // Get base page dimensions first
         int baseWidth, baseHeight;
         m_renderer->GetBestFitSize(i, m_viewportWidth, m_viewportHeight, baseWidth, baseHeight);
         
-        // Calculate texture resolution based on effective zoom
-        int textureWidth = static_cast<int>(baseWidth * effectiveZoom);
-        int textureHeight = static_cast<int>(baseHeight * effectiveZoom);
+        // Calculate texture resolution based on capped zoom
+        int textureWidth = static_cast<int>(baseWidth * textureZoom);
+        int textureHeight = static_cast<int>(baseHeight * textureZoom);
+        
+        // Additional safety cap on absolute texture size to prevent memory overflow
+        const int MAX_TEXTURE_SIZE = 4096; // 4K max texture size
+        if (textureWidth > MAX_TEXTURE_SIZE || textureHeight > MAX_TEXTURE_SIZE) {
+            float scaleFactor = std::min(
+                static_cast<float>(MAX_TEXTURE_SIZE) / textureWidth,
+                static_cast<float>(MAX_TEXTURE_SIZE) / textureHeight
+            );
+            textureWidth = static_cast<int>(textureWidth * scaleFactor);
+            textureHeight = static_cast<int>(textureHeight * scaleFactor);
+            qDebug() << "Page" << i << "texture size capped to" << textureWidth << "x" << textureHeight;
+        }
         
         // Render page at calculated resolution
         FPDF_BITMAP bitmap = m_renderer->RenderPageToBitmap(i, textureWidth, textureHeight);
@@ -236,43 +264,55 @@ void PDFViewerWidget::updateVisibleTextures()
         return;
     }
     
-    // Calculate visible page range (simplified for now)
+    // Calculate visible page range based on current scroll position
     int firstVisible = 0;
-    int lastVisible = std::min(m_pageCount - 1, 2); // Update first few pages for quick response
+    int lastVisible = 0;
     
-    // TODO: Implement proper visible page range calculation based on scroll position
+    // Improved visible page calculation
+    float currentY = -m_scrollOffsetY;
+    for (int i = 0; i < m_pageCount; ++i) {
+        float pageHeight = m_pageHeights[i] * m_zoomLevel;
+        
+        // Check if page is visible in viewport
+        if (currentY + pageHeight >= 0 && currentY <= m_viewportHeight) {
+            if (firstVisible == 0 && lastVisible == 0) {
+                firstVisible = i;
+            }
+            lastVisible = i;
+        }
+        
+        currentY += pageHeight + PAGE_MARGIN;
+        
+        // Stop if we're well below the viewport
+        if (currentY > m_viewportHeight + 500) { // Small buffer
+            break;
+        }
+    }
+    
+    // Add one page before and after for smooth scrolling
+    firstVisible = std::max(0, firstVisible - 1);
+    lastVisible = std::min(m_pageCount - 1, lastVisible + 1);
     
     qDebug() << "Updating visible pages" << firstVisible << "to" << lastVisible << "at zoom" << m_zoomLevel;
     
+    // Use optimized background loading for better performance
+    std::vector<int> pagesToUpdate;
     for (int i = firstVisible; i <= lastVisible && i < m_pageCount; ++i) {
-        // Delete existing texture
-        if (i < static_cast<int>(m_pageTextures.size()) && m_pageTextures[i] != 0) {
-            glDeleteTextures(1, &m_pageTextures[i]);
+        pagesToUpdate.push_back(i);
+    }
+    
+    if (m_useBackgroundLoading) {
+        loadTexturesInBackground(pagesToUpdate);
+    } else {
+        // Fallback to direct loading
+        for (int i : pagesToUpdate) {
+            scheduleTextureUpdate(i);
         }
-        
-        // Use standalone viewer's approach: calculate effective zoom for texture resolution
-        float effectiveZoom = (m_zoomLevel > 0.5f) ? m_zoomLevel : 0.5f;
-        
-        // Get base page dimensions
-        int baseWidth, baseHeight;
-        m_renderer->GetBestFitSize(i, m_viewportWidth, m_viewportHeight, baseWidth, baseHeight);
-        
-        // Calculate texture resolution based on effective zoom
-        int textureWidth = static_cast<int>(baseWidth * effectiveZoom);
-        int textureHeight = static_cast<int>(baseHeight * effectiveZoom);
-        
-        // Render page at calculated resolution
-        FPDF_BITMAP bitmap = m_renderer->RenderPageToBitmap(i, textureWidth, textureHeight);
-        
-        if (bitmap) {
-            // Create texture from bitmap
-            m_pageTextures[i] = CreateTextureFromPDFBitmap(bitmap, textureWidth, textureHeight);
-            FPDFBitmap_Destroy(bitmap);
-            qDebug() << "Updated visible page" << i << "texture at resolution:" << textureWidth << "x" << textureHeight;
-        } else {
-            m_pageTextures[i] = 0;
-            qDebug() << "Failed to update visible page" << i;
-        }
+    }
+    
+    // Clean up unused textures to free memory
+    if (m_highZoomMode) {
+        cleanupUnusedTextures();
     }
     
     // Recalculate layout since we updated some textures
@@ -540,7 +580,68 @@ void PDFViewerWidget::paintGL()
     renderPDF();
 }
 
-// Add minimal implementations for the missing methods
+// Implement the missing zoom mode methods
+void PDFViewerWidget::setWheelZoomMode(bool enabled)
+{
+    m_wheelZoomMode = enabled;
+    if (m_zoomModeAction) {
+        m_zoomModeAction->setChecked(enabled);
+    }
+    qDebug() << "Wheel zoom mode set to:" << (enabled ? "Enabled" : "Disabled");
+}
+
+bool PDFViewerWidget::getWheelZoomMode() const
+{
+    return m_wheelZoomMode;
+}
+
+// Implement screen to document coordinate conversion
+QPointF PDFViewerWidget::screenToDocumentCoordinates(const QPoint &screenPos) const
+{
+    if (!m_isPDFLoaded || m_pageWidths.empty()) {
+        return QPointF();
+    }
+    
+    // Find the widest page for horizontal reference
+    float maxPageWidth = 0.0f;
+    for (int i = 0; i < m_pageCount; ++i) {
+        float pageWidth = m_pageWidths[i] * m_zoomLevel;
+        maxPageWidth = std::max(maxPageWidth, pageWidth);
+    }
+    
+    // Calculate page position on screen
+    float pageX = (m_viewportWidth - maxPageWidth) / 2.0f - m_scrollOffsetX;
+    
+    // Convert to document coordinates
+    double docX = (screenPos.x() - pageX) / m_zoomLevel;
+    double docY = (screenPos.y() + m_scrollOffsetY) / m_zoomLevel;
+    
+    return QPointF(docX, docY);
+}
+
+QPoint PDFViewerWidget::documentToScreenCoordinates(const QPointF &docPos) const
+{
+    if (!m_isPDFLoaded || m_pageWidths.empty()) {
+        return QPoint();
+    }
+    
+    // Find the widest page for horizontal reference
+    float maxPageWidth = 0.0f;
+    for (int i = 0; i < m_pageCount; ++i) {
+        float pageWidth = m_pageWidths[i] * m_zoomLevel;
+        maxPageWidth = std::max(maxPageWidth, pageWidth);
+    }
+    
+    // Calculate page position on screen
+    float pageX = (m_viewportWidth - maxPageWidth) / 2.0f - m_scrollOffsetX;
+    
+    // Convert to screen coordinates
+    int screenX = static_cast<int>(docPos.x() * m_zoomLevel + pageX);
+    int screenY = static_cast<int>(docPos.y() * m_zoomLevel - m_scrollOffsetY);
+    
+    return QPoint(screenX, screenY);
+}
+
 void PDFViewerWidget::setupUI() 
 {
     // Create main layout - this will be handled by the parent widget
@@ -550,7 +651,44 @@ void PDFViewerWidget::setupUI()
 
 void PDFViewerWidget::setupToolbar() { /* Implement toolbar setup */ }
 void PDFViewerWidget::setupSearchBar() { /* Implement search bar setup */ }
-void PDFViewerWidget::createContextMenu() { /* Implement context menu */ }
+void PDFViewerWidget::createContextMenu() 
+{ 
+    m_contextMenu = new QMenu(this);
+    
+    // Zoom actions
+    m_zoomInAction = m_contextMenu->addAction("Zoom In");
+    m_zoomInAction->setShortcut(QKeySequence("Ctrl+="));
+    connect(m_zoomInAction, &QAction::triggered, this, &PDFViewerWidget::zoomIn);
+    
+    m_zoomOutAction = m_contextMenu->addAction("Zoom Out");
+    m_zoomOutAction->setShortcut(QKeySequence("Ctrl+-"));
+    connect(m_zoomOutAction, &QAction::triggered, this, &PDFViewerWidget::zoomOut);
+    
+    m_zoomFitAction = m_contextMenu->addAction("Zoom to Fit");
+    m_zoomFitAction->setShortcut(QKeySequence("Ctrl+0"));
+    connect(m_zoomFitAction, &QAction::triggered, this, &PDFViewerWidget::zoomToFit);
+    
+    m_zoomWidthAction = m_contextMenu->addAction("Zoom to Width");
+    connect(m_zoomWidthAction, &QAction::triggered, this, &PDFViewerWidget::zoomToWidth);
+    
+    m_contextMenu->addSeparator();
+    
+    // Zoom mode toggle
+    m_zoomModeAction = m_contextMenu->addAction("Toggle Wheel Zoom Mode");
+    m_zoomModeAction->setCheckable(true);
+    m_zoomModeAction->setChecked(m_wheelZoomMode);
+    connect(m_zoomModeAction, &QAction::triggered, this, [this](bool checked) {
+        m_wheelZoomMode = checked;
+        toggleZoomMode();
+    });
+    
+    m_contextMenu->addSeparator();
+    
+    // Search action
+    m_searchAction = m_contextMenu->addAction("Search...");
+    m_searchAction->setShortcut(QKeySequence("Ctrl+F"));
+    connect(m_searchAction, &QAction::triggered, this, &PDFViewerWidget::startSearch);
+}
 
 void PDFViewerWidget::closePDF() 
 {
@@ -664,12 +802,12 @@ void PDFViewerWidget::performCursorBasedZoom(const QPoint &cursorPos, bool zoomI
         return;
     }
     
-    // Calculate zoom factor
-    double zoomFactor = zoomIn ? 1.2 : 0.8;
+    // Calculate zoom factor - Use 1.1x like standalone viewer for smoother zooming
+    double zoomFactor = zoomIn ? 1.1 : (1.0 / 1.1);
     double newZoom = std::clamp(m_zoomLevel * zoomFactor, MIN_ZOOM, MAX_ZOOM);
     
     // If zoom level doesn't actually change, nothing to do
-    if (std::abs(newZoom - m_zoomLevel) < 0.001) {
+    if (std::abs(newZoom - m_zoomLevel) < 0.0005) { // Reduced threshold like standalone viewer
         return;
     }
     
@@ -726,37 +864,42 @@ void PDFViewerWidget::performCursorBasedZoom(const QPoint &cursorPos, bool zoomI
     m_zoomChanged = true;
     m_immediateRenderRequired = true; // Request immediate update for responsive feel
     
+    // IMMEDIATE RENDERING: Trigger immediate repaint for responsive feel like standalone viewer
+    update();
+    
     // Check if we need texture updates using standalone viewer's logic
     bool needsFullRegeneration = false;
     bool needsVisibleRegeneration = false;
     
     double zoomDifference = std::abs(newZoom - m_lastRenderedZoom) / m_lastRenderedZoom;
     
-    // For immediate responsive zoom, regenerate visible pages with lower threshold (1%)
-    if (m_immediateRenderRequired && zoomDifference > 0.01) {
+    // More aggressive thresholds like standalone viewer for smoother zooming
+    // At high zoom levels, use more relaxed thresholds to reduce texture regeneration
+    float baseThreshold = (m_zoomLevel > 2.5f) ? 0.05f : 0.0005f; // Higher threshold at high zoom
+    float fullRegenThreshold = (m_zoomLevel > 2.5f) ? 0.1f : 0.015f; // Much higher threshold at high zoom
+    
+    if (m_immediateRenderRequired && zoomDifference > baseThreshold) {
         needsVisibleRegeneration = true;
         m_immediateRenderRequired = false;
     }
-    // For full regeneration, use higher threshold (3%) to avoid too frequent full regens
-    else if (zoomDifference > 0.03) {
+    // For full regeneration, use adaptive threshold based on zoom level
+    else if (zoomDifference > fullRegenThreshold) {
         needsFullRegeneration = true;
         m_lastRenderedZoom = newZoom;
     }
     
     if (needsFullRegeneration || needsVisibleRegeneration) {
         qDebug() << "Texture update triggered:" << (needsFullRegeneration ? "Full" : "Visible") << "zoom:" << m_zoomLevel;
-        // Defer texture update to avoid blocking UI
-        QTimer::singleShot(10, this, [this, needsFullRegeneration]() {
-            if (context() && context()->isValid()) {
-                makeCurrent();
-                if (needsFullRegeneration) {
-                    updateTextures();
-                } else {
-                    updateVisibleTextures();
-                }
-                doneCurrent();
+        // Use immediate texture updates for better responsiveness
+        if (context() && context()->isValid()) {
+            makeCurrent();
+            if (needsFullRegeneration) {
+                updateTextures();
+            } else {
+                updateVisibleTextures();
             }
-        });
+            doneCurrent();
+        }
     }
     
     // Update UI controls
@@ -766,9 +909,6 @@ void PDFViewerWidget::performCursorBasedZoom(const QPoint &cursorPos, bool zoomI
     if (m_zoomLabel) {
         m_zoomLabel->setText(QString("%1%").arg(static_cast<int>(m_zoomLevel * 100)));
     }
-    
-    // Trigger repaint
-    update();
     
     emit zoomChanged(m_zoomLevel);
 }
@@ -779,12 +919,23 @@ void PDFViewerWidget::setZoomLevel(double zoom)
     double oldZoom = m_zoomLevel;
     m_zoomLevel = std::clamp(zoom, MIN_ZOOM, MAX_ZOOM);
     
-    if (std::abs(oldZoom - m_zoomLevel) < 0.001) {
+    // Enable high zoom mode for performance optimizations - adjusted for new zoom limits
+    m_highZoomMode = (m_zoomLevel > 2.5); // Since max zoom is now 5.0, use 2.5 as threshold
+    
+    if (std::abs(oldZoom - m_zoomLevel) < 0.0005) { // More responsive threshold
         return; // No significant change
+    }
+    
+    // Clean up unused textures when entering/leaving high zoom mode
+    if ((oldZoom <= 2.5 && m_zoomLevel > 2.5) || (oldZoom > 2.5 && m_zoomLevel <= 2.5)) {
+        cleanupUnusedTextures();
     }
     
     // Recalculate page layout
     calculatePageLayout();
+    
+    // IMMEDIATE RENDERING: Trigger immediate repaint for responsive feel
+    update();
     
     // Mark that zoom has changed for smart texture updates
     m_zoomChanged = true;
@@ -793,32 +944,31 @@ void PDFViewerWidget::setZoomLevel(double zoom)
     // Check if we need texture updates using standalone viewer's logic
     double zoomDifference = std::abs(m_zoomLevel - m_lastRenderedZoom) / m_lastRenderedZoom;
     
-    // For immediate responsive zoom, regenerate visible pages with lower threshold (1%)
-    if (m_immediateRenderRequired && zoomDifference > 0.01) {
-        bool needsVisibleRegeneration = true;
+    // More aggressive thresholds for smoother zooming with high zoom optimization
+    // At high zoom levels, use more relaxed thresholds to reduce texture regeneration
+    float baseThreshold = (m_zoomLevel > 2.5f) ? 0.05f : 0.0005f; // Higher threshold at high zoom
+    float fullRegenThreshold = (m_zoomLevel > 2.5f) ? 0.1f : 0.015f; // Much higher threshold at high zoom
+    
+    if (m_immediateRenderRequired && zoomDifference > baseThreshold) {
         m_immediateRenderRequired = false;
         
         qDebug() << "Texture update in setZoomLevel: Visible update, Old:" << oldZoom << "New:" << m_zoomLevel;
-        QTimer::singleShot(10, this, [this]() {
-            if (context() && context()->isValid()) {
-                makeCurrent();
-                updateVisibleTextures();
-                doneCurrent();
-            }
-        });
+        if (context() && context()->isValid()) {
+            makeCurrent();
+            updateVisibleTextures();
+            doneCurrent();
+        }
     }
-    // For full regeneration, use higher threshold (3%) to avoid too frequent full regens
-    else if (zoomDifference > 0.03) {
+    // For full regeneration, use adaptive threshold based on zoom level
+    else if (zoomDifference > fullRegenThreshold) {
         m_lastRenderedZoom = m_zoomLevel;
         
         qDebug() << "Texture update in setZoomLevel: Full update, Old:" << oldZoom << "New:" << m_zoomLevel;
-        QTimer::singleShot(10, this, [this]() {
-            if (context() && context()->isValid()) {
-                makeCurrent();
-                updateTextures();
-                doneCurrent();
-            }
-        });
+        if (context() && context()->isValid()) {
+            makeCurrent();
+            updateTextures();
+            doneCurrent();
+        }
     }
     
     // Update UI controls
@@ -829,8 +979,9 @@ void PDFViewerWidget::setZoomLevel(double zoom)
         m_zoomLabel->setText(QString("%1%").arg(static_cast<int>(m_zoomLevel * 100)));
     }
     
-    // Trigger repaint
+    // Trigger final repaint and auto-center if needed
     update();
+    autoCenter(); // Auto-center like standalone viewer when zoomed out
     
     emit zoomChanged(m_zoomLevel);
 }
@@ -1039,8 +1190,10 @@ void PDFViewerWidget::wheelEvent(QWheelEvent *event)
         return;
     }
     
-    // Check if Ctrl is pressed for zooming
-    if (event->modifiers() & Qt::ControlModifier) {
+    // Check zoom mode: if wheel zoom mode is enabled, or Ctrl is pressed
+    bool shouldZoom = m_wheelZoomMode || (event->modifiers() & Qt::ControlModifier);
+    
+    if (shouldZoom) {
         // Cursor-based zoom implementation
         QPoint cursorPos = event->position().toPoint();
         
@@ -1145,6 +1298,13 @@ void PDFViewerWidget::keyPressEvent(QKeyEvent *event)
             }
             event->accept();
             return;
+        case Qt::Key_Z:
+            if (event->modifiers() & Qt::ControlModifier) {
+                toggleZoomMode();
+                event->accept();
+                return;
+            }
+            break;
     }
     
     QOpenGLWidget::keyPressEvent(event);
@@ -1167,6 +1327,168 @@ void PDFViewerWidget::resizeEvent(QResizeEvent *event)
     m_viewportHeight = event->size().height() - TOOLBAR_HEIGHT - (m_searchWidget && m_searchWidget->isVisible() ? SEARCH_BAR_HEIGHT : 0);
     
     if (m_isPDFLoaded) {
+        calculatePageLayout();
+        update();
+    }
+}
+
+// Background texture loading for high zoom performance
+void PDFViewerWidget::loadTexturesInBackground(const std::vector<int>& pageIndices)
+{
+    // For now, implement as immediate loading but with memory management
+    // In a full implementation, this would use QThread for background loading
+    
+    for (int pageIndex : pageIndices) {
+        if (pageIndex >= 0 && pageIndex < m_pageCount) {
+            scheduleTextureUpdate(pageIndex);
+        }
+    }
+}
+
+void PDFViewerWidget::scheduleTextureUpdate(int pageIndex)
+{
+    if (!m_renderer || pageIndex < 0 || pageIndex >= m_pageCount) {
+        return;
+    }
+    
+    // Check memory usage before creating new textures
+    if (calculateTextureMemoryUsage() > MAX_TEXTURE_MEMORY) {
+        cleanupUnusedTextures();
+    }
+    
+    // Delete existing texture for this page
+    if (pageIndex < static_cast<int>(m_pageTextures.size()) && m_pageTextures[pageIndex] != 0) {
+        glDeleteTextures(1, &m_pageTextures[pageIndex]);
+    }
+    
+    // Use optimized texture resolution for high zoom
+    float effectiveZoom = (m_zoomLevel > 0.5f) ? m_zoomLevel : 0.5f;
+    float textureZoom = m_highZoomMode ? std::min(effectiveZoom, 2.5f) : std::min(effectiveZoom, 3.0f);
+    
+    // Get base page dimensions
+    int baseWidth, baseHeight;
+    m_renderer->GetBestFitSize(pageIndex, m_viewportWidth, m_viewportHeight, baseWidth, baseHeight);
+    
+    // Calculate texture resolution with caps
+    int textureWidth = static_cast<int>(baseWidth * textureZoom);
+    int textureHeight = static_cast<int>(baseHeight * textureZoom);
+    
+    const int MAX_TEXTURE_SIZE = m_highZoomMode ? 3072 : 4096; // Reduced size in high zoom mode
+    if (textureWidth > MAX_TEXTURE_SIZE || textureHeight > MAX_TEXTURE_SIZE) {
+        float scaleFactor = std::min(
+            static_cast<float>(MAX_TEXTURE_SIZE) / textureWidth,
+            static_cast<float>(MAX_TEXTURE_SIZE) / textureHeight
+        );
+        textureWidth = static_cast<int>(textureWidth * scaleFactor);
+        textureHeight = static_cast<int>(textureHeight * scaleFactor);
+    }
+    
+    // Render and create texture
+    FPDF_BITMAP bitmap = m_renderer->RenderPageToBitmap(pageIndex, textureWidth, textureHeight);
+    if (bitmap) {
+        m_pageTextures[pageIndex] = CreateTextureFromPDFBitmap(bitmap, textureWidth, textureHeight);
+        FPDFBitmap_Destroy(bitmap);
+    }
+}
+
+void PDFViewerWidget::cleanupUnusedTextures()
+{
+    if (!m_isPDFLoaded || m_pageTextures.empty()) {
+        return;
+    }
+    
+    // Calculate visible page range
+    int firstVisible = 0;
+    int lastVisible = 0;
+    
+    float currentY = -m_scrollOffsetY;
+    for (int i = 0; i < m_pageCount; ++i) {
+        float pageHeight = m_pageHeights[i] * m_zoomLevel;
+        
+        if (currentY + pageHeight >= 0 && currentY <= m_viewportHeight) {
+            if (firstVisible == 0 && lastVisible == 0) {
+                firstVisible = i;
+            }
+            lastVisible = i;
+        }
+        
+        currentY += pageHeight + PAGE_MARGIN;
+        
+        if (currentY > m_viewportHeight + 1000) { // Extended buffer
+            break;
+        }
+    }
+    
+    // Keep a buffer of pages around visible area
+    int bufferSize = m_highZoomMode ? 1 : 2; // Smaller buffer in high zoom mode
+    firstVisible = std::max(0, firstVisible - bufferSize);
+    lastVisible = std::min(m_pageCount - 1, lastVisible + bufferSize);
+    
+    // Clean up textures outside the buffer range
+    for (int i = 0; i < m_pageCount; ++i) {
+        if ((i < firstVisible || i > lastVisible) && 
+            i < static_cast<int>(m_pageTextures.size()) && 
+            m_pageTextures[i] != 0) {
+            glDeleteTextures(1, &m_pageTextures[i]);
+            m_pageTextures[i] = 0;
+        }
+    }
+}
+
+size_t PDFViewerWidget::calculateTextureMemoryUsage() const
+{
+    size_t totalMemory = 0;
+    
+    for (int i = 0; i < static_cast<int>(m_pageTextures.size()); ++i) {
+        if (m_pageTextures[i] != 0 && i < static_cast<int>(m_pageWidths.size()) && i < static_cast<int>(m_pageHeights.size())) {
+            // Estimate memory usage: width * height * 4 bytes per pixel (RGBA)
+            float effectiveZoom = (m_zoomLevel > 0.5f) ? m_zoomLevel : 0.5f;
+            float textureZoom = std::min(effectiveZoom, 3.0f);
+            
+            int textureWidth = static_cast<int>(m_pageWidths[i] * textureZoom);
+            int textureHeight = static_cast<int>(m_pageHeights[i] * textureZoom);
+            
+            totalMemory += textureWidth * textureHeight * 4;
+        }
+    }
+    
+    return totalMemory;
+}
+
+// Add the toggleZoomMode method after other methods
+void PDFViewerWidget::toggleZoomMode()
+{
+    m_wheelZoomMode = !m_wheelZoomMode;
+    qDebug() << "Wheel zoom mode:" << (m_wheelZoomMode ? "Enabled (wheel always zooms)" : "Disabled (Ctrl+wheel zooms)");
+    
+    // Update tooltip or status to inform user
+    setToolTip(m_wheelZoomMode ? 
+        "Mouse wheel zooms (like standalone viewer)" : 
+        "Ctrl+Mouse wheel zooms (like web browser)");
+}
+
+// Add auto-centering functionality like standalone viewer
+void PDFViewerWidget::autoCenter()
+{
+    if (!m_isPDFLoaded || m_pageWidths.empty()) {
+        return;
+    }
+    
+    // Auto-center when zoomed out (100% or less)
+    if (m_zoomLevel <= 1.0f) {
+        // Find the largest page width
+        float maxWidth = 0.0f;
+        for (int i = 0; i < m_pageCount; ++i) {
+            float pageWidth = m_pageWidths[i] * m_zoomLevel;
+            maxWidth = std::max(maxWidth, pageWidth);
+        }
+        
+        // If content fits within viewport, center it
+        if (maxWidth <= m_viewportWidth) {
+            m_scrollOffsetX = 0.0f; // Center horizontally
+        }
+        
+        // Similar for vertical centering if needed
         calculatePageLayout();
         update();
     }

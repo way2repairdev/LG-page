@@ -28,9 +28,9 @@
 #include <memory>
 #include <vector>
 
-// Constants for PDF viewing
-static constexpr double MIN_ZOOM = 0.1;
-static constexpr double MAX_ZOOM = 10.0;
+// Constants for PDF viewing - matching standalone viewer limits
+static constexpr double MIN_ZOOM = 0.35;   // Match standalone viewer (35%)
+static constexpr double MAX_ZOOM = 5.0;    // Match standalone viewer (500%)
 static constexpr double DEFAULT_ZOOM = 0.8;  // Fit to screen better
 static constexpr double ZOOM_STEP = 0.1;
 static constexpr float PAGE_MARGIN = 10.0f;
@@ -97,6 +97,14 @@ public:
     
     // Cursor-based zoom functionality
     void performCursorBasedZoom(const QPoint &cursorPos, bool zoomIn);
+    
+    // Zoom mode functionality (like standalone viewer)
+    void toggleZoomMode();
+    void setWheelZoomMode(bool enabled);
+    bool getWheelZoomMode() const;
+    void autoCenter();
+    
+    // Coordinate conversion
     QPointF screenToDocumentCoordinates(const QPoint &screenPos) const;
     QPoint documentToScreenCoordinates(const QPointF &docPos) const;
 
@@ -160,6 +168,15 @@ private:
     void highlightSearchResults();
     void updateSearchUI();
 
+    // Background texture loading for high zoom performance
+    void loadTexturesInBackground(const std::vector<int>& pageIndices);
+    void scheduleTextureUpdate(int pageIndex);
+    
+    // Texture memory management
+    void cleanupUnusedTextures();
+    size_t calculateTextureMemoryUsage() const;
+    static constexpr size_t MAX_TEXTURE_MEMORY = 512 * 1024 * 1024; // 512MB limit
+
     // Utility functions
     QPoint mapToViewport(const QPoint &point);
     int getPageAtPoint(const QPoint &point);
@@ -221,7 +238,6 @@ private:
     bool m_isDragging;
     QPoint m_lastPanPoint;
     QTimer *m_renderTimer;
-    bool m_wheelZoomMode; // true = wheel zooms, false = wheel scrolls
 
     // View parameters
     int m_viewportWidth;
@@ -231,9 +247,15 @@ private:
     float m_maxScrollY;
     float m_maxScrollX;
     float m_minScrollX;  // Minimum scroll X position (can be negative for centering)
+    bool m_wheelZoomMode; // true = wheel zooms, false = wheel scrolls
     
-    // Private methods
-    void toggleZoomMode();
+    // Performance optimization flags
+    bool m_useBackgroundLoading;
+    bool m_highZoomMode;           // Enables optimizations at high zoom levels
+    
+    // Loading indicator
+    QLabel *m_loadingLabel;
+    bool m_isLoadingTextures;
 };
 
 #endif // PDFVIEWERWIDGET_H
