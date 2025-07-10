@@ -25,6 +25,7 @@
 #include <QLineEdit>
 #include <QCheckBox>
 #include <QSplitter>
+#include <QScrollBar>
 #include <memory>
 #include <vector>
 
@@ -98,10 +99,7 @@ public:
     // Cursor-based zoom functionality
     void performCursorBasedZoom(const QPoint &cursorPos, bool zoomIn);
     
-    // Zoom mode functionality (like standalone viewer)
-    void toggleZoomMode();
-    void setWheelZoomMode(bool enabled);
-    bool getWheelZoomMode() const;
+    // Auto-centering functionality
     void autoCenter();
     
     // Coordinate conversion
@@ -139,6 +137,7 @@ private slots:
     void onSearchPrevious();
     void onToggleCaseSensitive(bool enabled);
     void onToggleWholeWords(bool enabled);
+    void onVerticalScrollBarChanged(int value);
     void updateRender();
 
 private:
@@ -159,6 +158,7 @@ private:
     // View management
     void updateScrollState();
     void updateViewport();
+    void updateScrollBar();
     void calculatePageLayout();
     void handlePanning(const QPoint &delta);
     void handleZooming(double factor, const QPoint &center);
@@ -171,6 +171,21 @@ private:
     // Background texture loading for high zoom performance
     void loadTexturesInBackground(const std::vector<int>& pageIndices);
     void scheduleTextureUpdate(int pageIndex);
+    
+    // Wheel event throttling and acceleration
+    void processThrottledWheelEvent();
+    void resetWheelAcceleration();
+    void handleWheelEventBatch(double totalDelta, const QPoint& cursorPos);
+    
+    // Panning throttling and optimization
+    void processThrottledPanEvent();
+    void handlePanEventBatch(const QPoint& totalDelta);
+    void resetPanThrottling();
+    
+    // Progressive rendering for smooth high zoom experience
+    void startProgressiveRender();
+    void processProgressiveRender();
+    void cancelProgressiveRender();
     
     // Texture memory management
     void cleanupUnusedTextures();
@@ -206,6 +221,9 @@ private:
     QLabel *m_zoomLabel;
     QLineEdit *m_pageInput;
     QLabel *m_pageCountLabel;
+    
+    // Scroll bar
+    QScrollBar *m_verticalScrollBar;
     
     // Search UI
     QWidget *m_searchWidget;
@@ -247,11 +265,36 @@ private:
     float m_maxScrollY;
     float m_maxScrollX;
     float m_minScrollX;  // Minimum scroll X position (can be negative for centering)
-    bool m_wheelZoomMode; // true = wheel zooms, false = wheel scrolls
     
     // Performance optimization flags
     bool m_useBackgroundLoading;
     bool m_highZoomMode;           // Enables optimizations at high zoom levels
+    
+    // Wheel event throttling and acceleration for high zoom performance
+    QTimer* m_wheelThrottleTimer;
+    QTimer* m_wheelAccelTimer;
+    double m_pendingZoomDelta;
+    QPoint m_pendingWheelCursor;
+    int m_wheelEventCount;
+    qint64 m_lastWheelTime;
+    bool m_wheelThrottleActive;
+    static constexpr int WHEEL_THROTTLE_MS = 5; // 5ms throttle at high zoom
+    static constexpr int WHEEL_ACCEL_RESET_MS = 150; // Reset acceleration after 150ms
+    static constexpr int MAX_WHEEL_EVENTS_PER_BATCH = 3; // Max events per batch
+
+    // Panning throttling and optimization for high zoom performance
+    QTimer* m_panThrottleTimer;
+    QPoint m_pendingPanDelta;
+    bool m_panThrottleActive;
+    qint64 m_lastPanTime;
+    int m_panEventCount;
+    static constexpr int PAN_THROTTLE_MS = 8; // 8ms throttle at high zoom (slightly slower than wheel)
+    static constexpr int MAX_PAN_EVENTS_PER_BATCH = 5; // Max pan events per batch
+    
+    // Progressive rendering for smooth experience
+    QTimer* m_progressiveRenderTimer;
+    std::vector<int> m_pendingTextureUpdates;
+    bool m_progressiveRenderActive;
     
     // Loading indicator
     QLabel *m_loadingLabel;

@@ -19,6 +19,7 @@
 #include <QWheelEvent>
 #include <QMouseEvent>
 #include <QKeyEvent>
+#include <QDateTime>
 #include <algorithm>
 #include <cmath>
 
@@ -96,6 +97,7 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_zoomLabel(nullptr)
     , m_pageInput(nullptr)
     , m_pageCountLabel(nullptr)
+    , m_verticalScrollBar(nullptr)
     , m_searchWidget(nullptr)
     , m_searchInput(nullptr)
     , m_searchNextButton(nullptr)
@@ -121,11 +123,24 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_maxScrollY(0.0f)
     , m_maxScrollX(0.0f)
     , m_minScrollX(0.0f)
-    , m_wheelZoomMode(false) // Default to Ctrl+Wheel zoom, can be toggled
     , m_useBackgroundLoading(true)
     , m_highZoomMode(false)
     , m_loadingLabel(nullptr)
     , m_isLoadingTextures(false)
+    , m_wheelThrottleTimer(new QTimer(this))
+    , m_wheelAccelTimer(new QTimer(this))
+    , m_pendingZoomDelta(0.0)
+    , m_pendingWheelCursor(0, 0)
+    , m_wheelEventCount(0)
+    , m_lastWheelTime(0)
+    , m_wheelThrottleActive(false)
+    , m_panThrottleTimer(new QTimer(this))
+    , m_pendingPanDelta(0, 0)
+    , m_panThrottleActive(false)
+    , m_lastPanTime(0)
+    , m_panEventCount(0)
+    , m_progressiveRenderTimer(new QTimer(this))
+    , m_progressiveRenderActive(false)
 {
     // Set focus policy for keyboard events
     setFocusPolicy(Qt::StrongFocus);
@@ -134,6 +149,25 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     m_renderTimer->setSingleShot(true);
     m_renderTimer->setInterval(16); // 60 FPS for smooth animation
     connect(m_renderTimer, &QTimer::timeout, this, &PDFViewerWidget::updateRender);
+    
+    // Set up wheel throttling timers
+    m_wheelThrottleTimer->setSingleShot(true);
+    m_wheelThrottleTimer->setInterval(WHEEL_THROTTLE_MS);
+    connect(m_wheelThrottleTimer, &QTimer::timeout, this, &PDFViewerWidget::processThrottledWheelEvent);
+    
+    m_wheelAccelTimer->setSingleShot(true);
+    m_wheelAccelTimer->setInterval(WHEEL_ACCEL_RESET_MS);
+    connect(m_wheelAccelTimer, &QTimer::timeout, this, &PDFViewerWidget::resetWheelAcceleration);
+    
+    // Set up panning throttling timer
+    m_panThrottleTimer->setSingleShot(true);
+    m_panThrottleTimer->setInterval(PAN_THROTTLE_MS);
+    connect(m_panThrottleTimer, &QTimer::timeout, this, &PDFViewerWidget::processThrottledPanEvent);
+    
+    // Set up progressive render timer
+    m_progressiveRenderTimer->setSingleShot(false);
+    m_progressiveRenderTimer->setInterval(25); // 40 FPS for progressive updates
+    connect(m_progressiveRenderTimer, &QTimer::timeout, this, &PDFViewerWidget::processProgressiveRender);
     
     // Initialize UI
     setupUI();
@@ -145,6 +179,20 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
 
 PDFViewerWidget::~PDFViewerWidget()
 {
+    // Cancel any progressive rendering
+    cancelProgressiveRender();
+    
+    // Stop all timers
+    if (m_wheelThrottleTimer) {
+        m_wheelThrottleTimer->stop();
+    }
+    if (m_wheelAccelTimer) {
+        m_wheelAccelTimer->stop();
+    }
+    if (m_panThrottleTimer) {
+        m_panThrottleTimer->stop();
+    }
+    
     // Clean up OpenGL resources
     makeCurrent();
     
@@ -503,6 +551,9 @@ bool PDFViewerWidget::loadPDF(const QString &filePath)
         emit pageChanged(m_currentPage + 1, m_pageCount);
         emit zoomChanged(m_zoomLevel);
         
+        // Initialize scroll bar after successful PDF load
+        updateScrollBar();
+        
         return true;
         
     } catch (const std::exception &e) {
@@ -564,8 +615,8 @@ void PDFViewerWidget::resizeGL(int w, int h)
     glViewport(0, 0, w, h);
     
     if (m_isPDFLoaded) {
-        calculatePageLayout();
-        update();
+        // Use updateViewport to properly handle visible texture updates on OpenGL resize
+        updateViewport();
     }
 }
 
@@ -578,21 +629,6 @@ void PDFViewerWidget::paintGL()
     }
     
     renderPDF();
-}
-
-// Implement the missing zoom mode methods
-void PDFViewerWidget::setWheelZoomMode(bool enabled)
-{
-    m_wheelZoomMode = enabled;
-    if (m_zoomModeAction) {
-        m_zoomModeAction->setChecked(enabled);
-    }
-    qDebug() << "Wheel zoom mode set to:" << (enabled ? "Enabled" : "Disabled");
-}
-
-bool PDFViewerWidget::getWheelZoomMode() const
-{
-    return m_wheelZoomMode;
 }
 
 // Implement screen to document coordinate conversion
@@ -644,9 +680,21 @@ QPoint PDFViewerWidget::documentToScreenCoordinates(const QPointF &docPos) const
 
 void PDFViewerWidget::setupUI() 
 {
-    // Create main layout - this will be handled by the parent widget
-    // Just initialize basic UI elements that might be needed
-    // The actual UI setup is done in the main window
+    // Create and setup vertical scroll bar
+    m_verticalScrollBar = new QScrollBar(Qt::Vertical, this);
+    m_verticalScrollBar->setVisible(false); // Hide initially until PDF is loaded
+    m_verticalScrollBar->setMinimum(0);
+    m_verticalScrollBar->setMaximum(100);
+    m_verticalScrollBar->setValue(0);
+    m_verticalScrollBar->setSingleStep(10);
+    m_verticalScrollBar->setPageStep(50);
+    
+    // Connect scroll bar signal
+    connect(m_verticalScrollBar, QOverload<int>::of(&QScrollBar::valueChanged),
+            this, &PDFViewerWidget::onVerticalScrollBarChanged);
+    
+    // Position the scroll bar on the right side
+    // This will be updated in resizeEvent
 }
 
 void PDFViewerWidget::setupToolbar() { /* Implement toolbar setup */ }
@@ -656,11 +704,11 @@ void PDFViewerWidget::createContextMenu()
     m_contextMenu = new QMenu(this);
     
     // Zoom actions
-    m_zoomInAction = m_contextMenu->addAction("Zoom In");
+    m_zoomInAction = m_contextMenu->addAction("Zoom In (Mouse Wheel Up)");
     m_zoomInAction->setShortcut(QKeySequence("Ctrl+="));
     connect(m_zoomInAction, &QAction::triggered, this, &PDFViewerWidget::zoomIn);
     
-    m_zoomOutAction = m_contextMenu->addAction("Zoom Out");
+    m_zoomOutAction = m_contextMenu->addAction("Zoom Out (Mouse Wheel Down)");
     m_zoomOutAction->setShortcut(QKeySequence("Ctrl+-"));
     connect(m_zoomOutAction, &QAction::triggered, this, &PDFViewerWidget::zoomOut);
     
@@ -673,14 +721,21 @@ void PDFViewerWidget::createContextMenu()
     
     m_contextMenu->addSeparator();
     
-    // Zoom mode toggle
-    m_zoomModeAction = m_contextMenu->addAction("Toggle Wheel Zoom Mode");
-    m_zoomModeAction->setCheckable(true);
-    m_zoomModeAction->setChecked(m_wheelZoomMode);
-    connect(m_zoomModeAction, &QAction::triggered, this, [this](bool checked) {
-        m_wheelZoomMode = checked;
-        toggleZoomMode();
-    });
+    // Control explanations
+    QAction* controlsAction = m_contextMenu->addAction("Controls:");
+    controlsAction->setEnabled(false); // Make it a label
+    
+    QAction* zoomHelpAction = m_contextMenu->addAction("  • Mouse Wheel = Zoom");
+    zoomHelpAction->setEnabled(false);
+    
+    QAction* scrollHelpAction = m_contextMenu->addAction("  • Ctrl + Mouse Wheel = Scroll");
+    scrollHelpAction->setEnabled(false);
+    
+    QAction* panHelpAction = m_contextMenu->addAction("  • Right Mouse Button = Pan");
+    panHelpAction->setEnabled(false);
+    
+    QAction* menuHelpAction = m_contextMenu->addAction("  • Ctrl + Right Click = Menu");
+    menuHelpAction->setEnabled(false);
     
     m_contextMenu->addSeparator();
     
@@ -867,38 +922,44 @@ void PDFViewerWidget::performCursorBasedZoom(const QPoint &cursorPos, bool zoomI
     // IMMEDIATE RENDERING: Trigger immediate repaint for responsive feel like standalone viewer
     update();
     
-    // Check if we need texture updates using standalone viewer's logic
+    // Check if we need texture updates using optimized high zoom logic
     bool needsFullRegeneration = false;
     bool needsVisibleRegeneration = false;
     
     double zoomDifference = std::abs(newZoom - m_lastRenderedZoom) / m_lastRenderedZoom;
     
     // More aggressive thresholds like standalone viewer for smoother zooming
-    // At high zoom levels, use more relaxed thresholds to reduce texture regeneration
-    float baseThreshold = (m_zoomLevel > 2.5f) ? 0.05f : 0.0005f; // Higher threshold at high zoom
-    float fullRegenThreshold = (m_zoomLevel > 2.5f) ? 0.1f : 0.015f; // Much higher threshold at high zoom
-    
-    if (m_immediateRenderRequired && zoomDifference > baseThreshold) {
-        needsVisibleRegeneration = true;
-        m_immediateRenderRequired = false;
-    }
-    // For full regeneration, use adaptive threshold based on zoom level
-    else if (zoomDifference > fullRegenThreshold) {
-        needsFullRegeneration = true;
-        m_lastRenderedZoom = newZoom;
-    }
-    
-    if (needsFullRegeneration || needsVisibleRegeneration) {
-        qDebug() << "Texture update triggered:" << (needsFullRegeneration ? "Full" : "Visible") << "zoom:" << m_zoomLevel;
-        // Use immediate texture updates for better responsiveness
-        if (context() && context()->isValid()) {
-            makeCurrent();
-            if (needsFullRegeneration) {
-                updateTextures();
-            } else {
-                updateVisibleTextures();
+    // At high zoom levels, use progressive rendering instead of immediate texture updates
+    if (m_zoomLevel > 2.5f) {
+        // High zoom mode: use progressive rendering for smooth experience
+        if (zoomDifference > 0.02f) { // Lower threshold for better quality
+            startProgressiveRender();
+        }
+    } else {
+        // Low zoom mode: use immediate texture updates
+        float baseThreshold = 0.0005f;
+        float fullRegenThreshold = 0.015f;
+        
+        if (m_immediateRenderRequired && zoomDifference > baseThreshold) {
+            needsVisibleRegeneration = true;
+            m_immediateRenderRequired = false;
+        }
+        else if (zoomDifference > fullRegenThreshold) {
+            needsFullRegeneration = true;
+            m_lastRenderedZoom = newZoom;
+        }
+        
+        if (needsFullRegeneration || needsVisibleRegeneration) {
+            qDebug() << "Texture update triggered:" << (needsFullRegeneration ? "Full" : "Visible") << "zoom:" << m_zoomLevel;
+            if (context() && context()->isValid()) {
+                makeCurrent();
+                if (needsFullRegeneration) {
+                    updateTextures();
+                } else {
+                    updateVisibleTextures();
+                }
+                doneCurrent();
             }
-            doneCurrent();
         }
     }
     
@@ -941,33 +1002,39 @@ void PDFViewerWidget::setZoomLevel(double zoom)
     m_zoomChanged = true;
     m_immediateRenderRequired = true; // Request immediate update for responsive feel
     
-    // Check if we need texture updates using standalone viewer's logic
+    // Check if we need texture updates using optimized high zoom logic
     double zoomDifference = std::abs(m_zoomLevel - m_lastRenderedZoom) / m_lastRenderedZoom;
     
-    // More aggressive thresholds for smoother zooming with high zoom optimization
-    // At high zoom levels, use more relaxed thresholds to reduce texture regeneration
-    float baseThreshold = (m_zoomLevel > 2.5f) ? 0.05f : 0.0005f; // Higher threshold at high zoom
-    float fullRegenThreshold = (m_zoomLevel > 2.5f) ? 0.1f : 0.015f; // Much higher threshold at high zoom
-    
-    if (m_immediateRenderRequired && zoomDifference > baseThreshold) {
-        m_immediateRenderRequired = false;
-        
-        qDebug() << "Texture update in setZoomLevel: Visible update, Old:" << oldZoom << "New:" << m_zoomLevel;
-        if (context() && context()->isValid()) {
-            makeCurrent();
-            updateVisibleTextures();
-            doneCurrent();
+    // Use progressive rendering at high zoom for smooth experience
+    if (m_zoomLevel > 2.5f) {
+        // High zoom mode: use progressive rendering
+        if (zoomDifference > 0.02f) {
+            startProgressiveRender();
         }
-    }
-    // For full regeneration, use adaptive threshold based on zoom level
-    else if (zoomDifference > fullRegenThreshold) {
-        m_lastRenderedZoom = m_zoomLevel;
+    } else {
+        // Low zoom mode: use immediate texture updates with optimized thresholds
+        float baseThreshold = 0.0005f;
+        float fullRegenThreshold = 0.015f;
         
-        qDebug() << "Texture update in setZoomLevel: Full update, Old:" << oldZoom << "New:" << m_zoomLevel;
-        if (context() && context()->isValid()) {
-            makeCurrent();
-            updateTextures();
-            doneCurrent();
+        if (m_immediateRenderRequired && zoomDifference > baseThreshold) {
+            m_immediateRenderRequired = false;
+            
+            qDebug() << "Texture update in setZoomLevel: Visible update, Old:" << oldZoom << "New:" << m_zoomLevel;
+            if (context() && context()->isValid()) {
+                makeCurrent();
+                updateVisibleTextures();
+                doneCurrent();
+            }
+        }
+        else if (zoomDifference > fullRegenThreshold) {
+            m_lastRenderedZoom = m_zoomLevel;
+            
+            qDebug() << "Texture update in setZoomLevel: Full update, Old:" << oldZoom << "New:" << m_zoomLevel;
+            if (context() && context()->isValid()) {
+                makeCurrent();
+                updateTextures();
+                doneCurrent();
+            }
         }
     }
     
@@ -982,6 +1049,9 @@ void PDFViewerWidget::setZoomLevel(double zoom)
     // Trigger final repaint and auto-center if needed
     update();
     autoCenter(); // Auto-center like standalone viewer when zoomed out
+    
+    // Update scroll bar since zoom changes affect scroll range
+    updateScrollBar();
     
     emit zoomChanged(m_zoomLevel);
 }
@@ -1183,6 +1253,52 @@ void PDFViewerWidget::onToggleWholeWords(bool enabled)
     // TODO: Implement toggle whole words
 }
 
+void PDFViewerWidget::onVerticalScrollBarChanged(int value)
+{
+    if (!m_isPDFLoaded) {
+        return;
+    }
+    
+    // Convert scroll bar value (0-100) to actual scroll offset
+    float scrollRange = m_maxScrollY;
+    float newScrollY = (value / 100.0f) * scrollRange;
+    
+    // Update scroll position
+    m_scrollOffsetY = newScrollY;
+    
+    // Update scroll state and trigger texture updates
+    updateScrollState();
+    
+    // Use progressive rendering for smooth scrolling at high zoom
+    if (m_zoomLevel > 2.5f && !m_progressiveRenderActive) {
+        startProgressiveRender();
+    } else {
+        update();
+    }
+}
+
+/*
+ * ====================================================================
+ * EVENT HANDLING - NEW KEY MAPPINGS FOR IMPROVED UX
+ * ====================================================================
+ * 
+ * NEW CONTROL SCHEME (matching user requirements):
+ * 1. Mouse wheel alone           → Zooming (no Ctrl required)
+ * 2. Ctrl + Mouse wheel          → Vertical scrolling  
+ * 3. Right mouse button drag     → Panning (horizontal & vertical)
+ * 4. Ctrl + Right click          → Context menu (zoom options, search, etc.)
+ * 
+ * PERFORMANCE OPTIMIZATIONS:
+ * - Wheel and pan event throttling at high zoom levels (>2.5x)
+ * - Progressive rendering for smooth experience
+ * - Batch processing of rapid events to prevent lag
+ * - Optimized texture updates for visible content only
+ * 
+ * NOTE: Regular right-click no longer shows context menu to avoid
+ * interference with panning. Use Ctrl + Right-click for menu access.
+ * ====================================================================
+ */
+
 // Event handlers
 void PDFViewerWidget::wheelEvent(QWheelEvent *event)
 {
@@ -1190,60 +1306,176 @@ void PDFViewerWidget::wheelEvent(QWheelEvent *event)
         return;
     }
     
-    // Check zoom mode: if wheel zoom mode is enabled, or Ctrl is pressed
-    bool shouldZoom = m_wheelZoomMode || (event->modifiers() & Qt::ControlModifier);
+    // NEW KEY MAPPING:
+    // - Mouse wheel alone = Zooming (like standalone viewer)
+    // - Ctrl + Mouse wheel = Scrolling
+    bool shouldScroll = (event->modifiers() & Qt::ControlModifier);
     
-    if (shouldZoom) {
-        // Cursor-based zoom implementation
-        QPoint cursorPos = event->position().toPoint();
+    if (shouldScroll) {
+        // Scroll vertically with optimized visible texture updates when Ctrl is pressed
+        float scrollDelta = -event->angleDelta().y() * 0.5f;
         
-        // Calculate zoom direction
-        bool zoomIn = event->angleDelta().y() > 0;
+        // At high zoom, use smaller scroll steps for precision
+        if (m_zoomLevel > 2.5f) {
+            scrollDelta *= 0.5f; // Finer control at high zoom
+        }
         
-        // Perform cursor-based zoom
-        performCursorBasedZoom(cursorPos, zoomIn);
+        m_scrollOffsetY = std::clamp(m_scrollOffsetY + scrollDelta, 0.0f, m_maxScrollY);
+        
+        // Update scroll state and trigger optimized visible texture updates
+        updateScrollState();
+        
+        // Update scroll bar position
+        updateScrollBar();
+        
+        // Use progressive rendering for smooth scrolling at high zoom
+        if (m_zoomLevel > 2.5f && !m_progressiveRenderActive) {
+            startProgressiveRender();
+        } else {
+            update();
+        }
         
         event->accept();
     } else {
-        // Scroll vertically
-        float scrollDelta = -event->angleDelta().y() * 0.5f;
-        m_scrollOffsetY = std::clamp(m_scrollOffsetY + scrollDelta, 0.0f, m_maxScrollY);
-        update();
+        // DEFAULT: Mouse wheel alone always zooms (no Ctrl required, like standalone viewer)
+        // OPTIMIZED HIGH ZOOM WHEEL HANDLING
+        qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+        
+        // At high zoom levels, enable throttling for better performance
+        bool enableThrottling = (m_zoomLevel > 2.5f);
+        
+        if (enableThrottling) {
+            // Accumulate wheel delta for batch processing
+            double delta = event->angleDelta().y() > 0 ? 1.1 : (1.0 / 1.1);
+            m_pendingZoomDelta *= delta; // Multiply for compound effect
+            m_pendingWheelCursor = event->position().toPoint();
+            m_wheelEventCount++;
+            m_lastWheelTime = currentTime;
+            
+            // Start throttle timer if not active
+            if (!m_wheelThrottleActive) {
+                m_wheelThrottleActive = true;
+                m_wheelThrottleTimer->start();
+                m_pendingZoomDelta = delta; // Initialize on first event
+            }
+            
+            // Reset acceleration timer
+            m_wheelAccelTimer->start();
+            
+            // Limit events per batch to prevent lag
+            if (m_wheelEventCount >= MAX_WHEEL_EVENTS_PER_BATCH) {
+                processThrottledWheelEvent();
+            }
+        } else {
+            // Standard immediate processing for low zoom levels
+            QPoint cursorPos = event->position().toPoint();
+            bool zoomIn = event->angleDelta().y() > 0;
+            performCursorBasedZoom(cursorPos, zoomIn);
+        }
+        
         event->accept();
     }
 }
 
 void PDFViewerWidget::mousePressEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton) {
+    // NEW KEY MAPPING: Right mouse button for panning
+    if (event->button() == Qt::RightButton) {
         m_isDragging = true;
         m_lastPanPoint = event->pos();
         setCursor(Qt::ClosedHandCursor);
+        event->accept();
+        return;
     }
+    
+    // Left mouse button can still be used for other interactions (like text selection in future)
+    if (event->button() == Qt::LeftButton) {
+        // For now, left button doesn't do panning anymore
+        // This can be used for text selection or other features later
+        event->accept();
+        return;
+    }
+    
     event->accept();
 }
 
 void PDFViewerWidget::mouseMoveEvent(QMouseEvent *event)
 {
-    if (m_isDragging && (event->buttons() & Qt::LeftButton)) {
+    // NEW KEY MAPPING: Right mouse button for panning
+    if (m_isDragging && (event->buttons() & Qt::RightButton)) {
         QPoint delta = event->pos() - m_lastPanPoint;
         
-        // Pan the view with updated limits that handle centering
-        m_scrollOffsetX = std::clamp(m_scrollOffsetX - delta.x(), m_minScrollX, m_maxScrollX);
-        m_scrollOffsetY = std::clamp(m_scrollOffsetY - delta.y(), 0.0f, m_maxScrollY);
+        // OPTIMIZED HIGH ZOOM PANNING HANDLING
+        qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+        
+        // At high zoom levels, enable throttling for better performance
+        bool enableThrottling = (m_zoomLevel > 2.5f);
+        
+        if (enableThrottling) {
+            // Accumulate pan delta for batch processing
+            m_pendingPanDelta += delta;
+            m_panEventCount++;
+            m_lastPanTime = currentTime;
+            
+            // Start throttle timer if not active
+            if (!m_panThrottleActive) {
+                m_panThrottleActive = true;
+                m_panThrottleTimer->start();
+            }
+            
+            // Limit events per batch to prevent lag
+            if (m_panEventCount >= MAX_PAN_EVENTS_PER_BATCH) {
+                processThrottledPanEvent();
+            }
+            
+            // For immediate feedback, do a lightweight scroll update without texture regeneration
+            float newScrollX = m_scrollOffsetX - delta.x();
+            float newScrollY = m_scrollOffsetY - delta.y();
+            m_scrollOffsetX = std::clamp(newScrollX, m_minScrollX, m_maxScrollX);
+            m_scrollOffsetY = std::clamp(newScrollY, 0.0f, m_maxScrollY);
+            
+            // Update scroll bar for immediate visual feedback
+            updateScrollBar();
+            
+            update(); // Quick repaint without texture updates
+        } else {
+            // Standard immediate processing for low zoom levels
+            handlePanning(delta);
+        }
         
         m_lastPanPoint = event->pos();
-        update();
     }
     event->accept();
 }
 
 void PDFViewerWidget::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton && m_isDragging) {
+    // NEW KEY MAPPING: Right mouse button for panning
+    if (event->button() == Qt::RightButton && m_isDragging) {
         m_isDragging = false;
-        setCursor(Qt::OpenHandCursor);
+        setCursor(Qt::ArrowCursor); // Return to normal cursor
+        
+        // Process any remaining panning events when drag ends
+        if (m_panThrottleActive) {
+            processThrottledPanEvent();
+        }
+        
+        // If we're at high zoom and have been panning, ensure final texture update
+        if (m_zoomLevel > 2.5f && !m_progressiveRenderActive) {
+            startProgressiveRender();
+        }
+        
+        event->accept();
+        return;
     }
+    
+    // Handle left mouse button release (for future features like text selection)
+    if (event->button() == Qt::LeftButton) {
+        // Left button functionality can be added here later
+        event->accept();
+        return;
+    }
+    
     event->accept();
 }
 
@@ -1285,7 +1517,13 @@ void PDFViewerWidget::keyPressEvent(QKeyEvent *event)
                 goToFirstPage();
             } else {
                 m_scrollOffsetY = 0.0f;
-                update();
+                updateScrollState();
+                updateScrollBar();
+                if (m_zoomLevel > 2.5f && !m_progressiveRenderActive) {
+                    startProgressiveRender();
+                } else {
+                    update();
+                }
             }
             event->accept();
             return;
@@ -1294,16 +1532,19 @@ void PDFViewerWidget::keyPressEvent(QKeyEvent *event)
                 goToLastPage();
             } else {
                 m_scrollOffsetY = m_maxScrollY;
-                update();
+                updateScrollState();
+                updateScrollBar();
+                if (m_zoomLevel > 2.5f && !m_progressiveRenderActive) {
+                    startProgressiveRender();
+                } else {
+                    update();
+                }
             }
             event->accept();
             return;
         case Qt::Key_Z:
-            if (event->modifiers() & Qt::ControlModifier) {
-                toggleZoomMode();
-                event->accept();
-                return;
-            }
+            // Removed old zoom mode toggle functionality
+            // Mouse wheel now directly controls zoom without mode switching
             break;
     }
     
@@ -1312,9 +1553,15 @@ void PDFViewerWidget::keyPressEvent(QKeyEvent *event)
 
 void PDFViewerWidget::contextMenuEvent(QContextMenuEvent *event)
 {
-    if (m_contextMenu) {
-        m_contextMenu->exec(event->globalPos());
+    // NEW BEHAVIOR: Only show context menu with Ctrl+Right-click
+    // Regular right-click is reserved for panning
+    if (event->modifiers() & Qt::ControlModifier) {
+        if (m_contextMenu) {
+            m_contextMenu->exec(event->globalPos());
+        }
     }
+    // If no Ctrl modifier, just accept the event without showing menu
+    // This allows right-click to be used purely for panning
     event->accept();
 }
 
@@ -1326,11 +1573,51 @@ void PDFViewerWidget::resizeEvent(QResizeEvent *event)
     m_viewportWidth = event->size().width();
     m_viewportHeight = event->size().height() - TOOLBAR_HEIGHT - (m_searchWidget && m_searchWidget->isVisible() ? SEARCH_BAR_HEIGHT : 0);
     
+    // Position the vertical scroll bar on the right side
+    if (m_verticalScrollBar) {
+        const int scrollBarWidth = 16; // Standard scroll bar width
+        const int margin = 2; // Small margin from edge
+        
+        // Reserve space for scroll bar in viewport width
+        if (m_verticalScrollBar->isVisible()) {
+            m_viewportWidth -= (scrollBarWidth + margin);
+        }
+        
+        // Position scroll bar at the right edge
+        m_verticalScrollBar->setGeometry(
+            width() - scrollBarWidth - margin,
+            TOOLBAR_HEIGHT,
+            scrollBarWidth,
+            height() - TOOLBAR_HEIGHT - (m_searchWidget && m_searchWidget->isVisible() ? SEARCH_BAR_HEIGHT : 0)
+        );
+    }
+    
     if (m_isPDFLoaded) {
-        calculatePageLayout();
-        update();
+        // Use updateViewport to properly handle visible texture updates on resize
+        updateViewport();
     }
 }
+
+/*
+ * NEW KEY MAPPINGS FOR PDF VIEWER:
+ * 
+ * ZOOMING:
+ * - Mouse Wheel (no modifiers) = Zoom in/out at cursor position
+ * - Ctrl + Plus/Minus keys = Zoom in/out
+ * - Ctrl + 0 = Reset zoom to fit
+ * 
+ * SCROLLING:
+ * - Ctrl + Mouse Wheel = Scroll up/down
+ * - Page Up/Down keys = Previous/Next page
+ * - Home/End keys = Scroll to top/bottom
+ * - Ctrl + Home/End = Go to first/last page
+ * 
+ * PANNING:
+ * - Right Mouse Button + Drag = Pan document
+ * 
+ * SEARCH:
+ * - Ctrl + F = Open search
+ */
 
 // Background texture loading for high zoom performance
 void PDFViewerWidget::loadTexturesInBackground(const std::vector<int>& pageIndices)
@@ -1455,19 +1742,7 @@ size_t PDFViewerWidget::calculateTextureMemoryUsage() const
     return totalMemory;
 }
 
-// Add the toggleZoomMode method after other methods
-void PDFViewerWidget::toggleZoomMode()
-{
-    m_wheelZoomMode = !m_wheelZoomMode;
-    qDebug() << "Wheel zoom mode:" << (m_wheelZoomMode ? "Enabled (wheel always zooms)" : "Disabled (Ctrl+wheel zooms)");
-    
-    // Update tooltip or status to inform user
-    setToolTip(m_wheelZoomMode ? 
-        "Mouse wheel zooms (like standalone viewer)" : 
-        "Ctrl+Mouse wheel zooms (like web browser)");
-}
-
-// Add auto-centering functionality like standalone viewer
+// Auto-centering functionality like standalone viewer
 void PDFViewerWidget::autoCenter()
 {
     if (!m_isPDFLoaded || m_pageWidths.empty()) {
@@ -1491,5 +1766,434 @@ void PDFViewerWidget::autoCenter()
         // Similar for vertical centering if needed
         calculatePageLayout();
         update();
+    }
+}
+
+// View management functions for scroll/pan texture updates
+void PDFViewerWidget::updateScrollState()
+{
+    if (!m_isPDFLoaded || !m_scrollState) {
+        return;
+    }
+    
+    // Update scroll state with current viewport and position
+    m_scrollState->scrollPosition = QPointF(m_scrollOffsetX, m_scrollOffsetY);
+    m_scrollState->zoomLevel = m_zoomLevel;
+    m_scrollState->viewportSize = QSizeF(m_viewportWidth, m_viewportHeight);
+    
+    // OPTIMIZED: Only trigger texture updates at specific intervals during high zoom panning
+    static QPointF lastScrollPos = QPointF(0, 0);
+    static double lastZoom = 0.0;
+    static qint64 lastTextureUpdate = 0;
+    
+    QPointF currentPos = m_scrollState->scrollPosition;
+    double scrollDelta = QLineF(lastScrollPos, currentPos).length();
+    qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+    
+    // Use different thresholds based on zoom level and throttle status
+    bool shouldUpdateTextures = false;
+    
+    if (m_zoomLevel > 2.5f) {
+        // High zoom: be more conservative about texture updates
+        // Only update if significant movement AND enough time has passed
+        bool significantMovement = scrollDelta > 100.0; // Higher threshold
+        bool enoughTimePassed = (currentTime - lastTextureUpdate) > 150; // 150ms minimum interval
+        bool zoomChanged = std::abs(lastZoom - m_zoomLevel) > 0.01;
+        
+        shouldUpdateTextures = (significantMovement && enoughTimePassed) || zoomChanged;
+    } else {
+        // Low zoom: use original logic for responsive updates
+        shouldUpdateTextures = scrollDelta > 50.0 || std::abs(lastZoom - m_zoomLevel) > 0.01;
+    }
+    
+    if (shouldUpdateTextures) {
+        // Don't update textures if we're actively throttling pan events
+        if (!m_panThrottleActive) {
+            updateVisibleTextures();
+            lastTextureUpdate = currentTime;
+        }
+        lastScrollPos = currentPos;
+        lastZoom = m_zoomLevel;
+    }
+}
+
+void PDFViewerWidget::updateViewport()
+{
+    if (!m_isPDFLoaded) {
+        return;
+    }
+    
+    // Recalculate viewport-dependent values
+    calculatePageLayout();
+    
+    // Update scroll limits
+    float totalHeight = 0.0f;
+    float maxWidth = 0.0f;
+    
+    for (int i = 0; i < m_pageCount; ++i) {
+        float pageHeight = m_pageHeights[i] * m_zoomLevel;
+        float pageWidth = m_pageWidths[i] * m_zoomLevel;
+        totalHeight += pageHeight + PAGE_MARGIN;
+        maxWidth = std::max(maxWidth, pageWidth);
+    }
+    
+    // Update scroll boundaries
+    m_maxScrollY = std::max(0.0f, totalHeight - m_viewportHeight);
+    m_maxScrollX = std::max(0.0f, maxWidth - m_viewportWidth);
+    m_minScrollX = (maxWidth <= m_viewportWidth) ? 0.0f : -std::max(0.0f, (m_viewportWidth - maxWidth) / 2.0f);
+    
+    // Clamp current scroll position to new boundaries
+    m_scrollOffsetX = std::clamp(m_scrollOffsetX, m_minScrollX, m_maxScrollX);
+    m_scrollOffsetY = std::clamp(m_scrollOffsetY, 0.0f, m_maxScrollY);
+    
+    // Update visible textures for new viewport
+    updateVisibleTextures();
+    
+    // Update scroll bar
+    updateScrollBar();
+}
+
+void PDFViewerWidget::updateScrollBar()
+{
+    if (!m_verticalScrollBar || !m_isPDFLoaded) {
+        return;
+    }
+    
+    // Show scroll bar only if there's content to scroll
+    bool hasVerticalScroll = m_maxScrollY > 0.0f;
+    m_verticalScrollBar->setVisible(hasVerticalScroll);
+    
+    if (hasVerticalScroll) {
+        // Block signals to prevent recursive calls
+        m_verticalScrollBar->blockSignals(true);
+        
+        // Update scroll bar range and value
+        m_verticalScrollBar->setMinimum(0);
+        m_verticalScrollBar->setMaximum(100); // Use percentage-based scrolling
+        
+        // Calculate current scroll position as percentage
+        int currentValue = (m_maxScrollY > 0) ? (int)((m_scrollOffsetY / m_maxScrollY) * 100) : 0;
+        m_verticalScrollBar->setValue(currentValue);
+        
+        // Calculate page step based on viewport height
+        float pageStepPercent = (m_viewportHeight / (m_maxScrollY + m_viewportHeight)) * 100;
+        m_verticalScrollBar->setPageStep(qMax(1, (int)pageStepPercent));
+        m_verticalScrollBar->setSingleStep(5); // 5% per step
+        
+        m_verticalScrollBar->blockSignals(false);
+    }
+}
+
+void PDFViewerWidget::handlePanning(const QPoint &delta)
+{
+    if (!m_isPDFLoaded) {
+        return;
+    }
+    
+    // Apply panning delta with proper clamping
+    float newScrollX = m_scrollOffsetX - delta.x();
+    float newScrollY = m_scrollOffsetY - delta.y();
+    
+    m_scrollOffsetX = std::clamp(newScrollX, m_minScrollX, m_maxScrollX);
+    m_scrollOffsetY = std::clamp(newScrollY, 0.0f, m_maxScrollY);
+    
+    // Update scroll state
+    updateScrollState();
+    
+    // Update scroll bar position
+    updateScrollBar();
+    
+    // At high zoom, use progressive rendering for smooth experience
+    if (m_zoomLevel > 2.5f && !m_progressiveRenderActive) {
+        startProgressiveRender();
+    } else {
+        // Immediate redraw for low zoom
+        update();
+    }
+}
+
+// ==============================================================================
+// HIGH ZOOM PERFORMANCE OPTIMIZATION FUNCTIONS
+// ==============================================================================
+
+void PDFViewerWidget::processThrottledWheelEvent()
+{
+    if (!m_isPDFLoaded || m_pendingZoomDelta == 0.0) {
+        m_wheelThrottleActive = false;
+        return;
+    }
+    
+    // Process the accumulated zoom delta
+    handleWheelEventBatch(m_pendingZoomDelta, m_pendingWheelCursor);
+    
+    // Reset state
+    m_pendingZoomDelta = 0.0;
+    m_wheelEventCount = 0;
+    m_wheelThrottleActive = false;
+}
+
+void PDFViewerWidget::resetWheelAcceleration()
+{
+    // Reset acceleration if no wheel events for a while
+    m_wheelEventCount = 0;
+    
+    // If throttle is still active, process remaining events
+    if (m_wheelThrottleActive) {
+        processThrottledWheelEvent();
+    }
+}
+
+void PDFViewerWidget::handleWheelEventBatch(double totalDelta, const QPoint& cursorPos)
+{
+    if (!m_isPDFLoaded) {
+        return;
+    }
+    
+    // Calculate the new zoom level from accumulated delta
+    double newZoom = std::clamp(m_zoomLevel * totalDelta, MIN_ZOOM, MAX_ZOOM);
+    
+    // If zoom level doesn't actually change, nothing to do
+    if (std::abs(newZoom - m_zoomLevel) < 0.0005) {
+        return;
+    }
+    
+    // Store old zoom level
+    double oldZoom = m_zoomLevel;
+    
+    // Convert cursor position to document coordinates (same as performCursorBasedZoom)
+    float maxPageWidth = 0.0f;
+    for (int i = 0; i < m_pageCount; ++i) {
+        float pageWidth = m_pageWidths[i] * oldZoom;
+        maxPageWidth = std::max(maxPageWidth, pageWidth);
+    }
+    
+    float currentPageX = (m_viewportWidth - maxPageWidth) / 2.0f - m_scrollOffsetX;
+    double docX = (cursorPos.x() - currentPageX) / oldZoom;
+    double docY = (cursorPos.y() + m_scrollOffsetY) / oldZoom;
+    
+    // Update zoom level
+    m_zoomLevel = newZoom;
+    
+    // Recalculate page layout with new zoom
+    calculatePageLayout();
+    
+    // Calculate new scroll position to keep the document point under cursor
+    float newMaxPageWidth = 0.0f;
+    for (int i = 0; i < m_pageCount; ++i) {
+        float pageWidth = m_pageWidths[i] * newZoom;
+        newMaxPageWidth = std::max(newMaxPageWidth, pageWidth);
+    }
+    
+    float newPageX = cursorPos.x() - docX * newZoom;
+    double newScrollX = (m_viewportWidth - newMaxPageWidth) / 2.0f - newPageX;
+    double newScrollY = docY * newZoom - cursorPos.y();
+    
+    m_scrollOffsetX = std::clamp(static_cast<float>(newScrollX), m_minScrollX, m_maxScrollX);
+    m_scrollOffsetY = std::clamp(static_cast<float>(newScrollY), 0.0f, m_maxScrollY);
+    
+    // IMMEDIATE RENDERING for responsive feel
+    update();
+    
+    // Use progressive rendering for texture updates at high zoom
+    if (m_zoomLevel > 2.5f) {
+        startProgressiveRender();
+    } else {
+        // Standard texture update logic for low zoom
+        double zoomDifference = std::abs(newZoom - m_lastRenderedZoom) / m_lastRenderedZoom;
+        if (zoomDifference > 0.015f) {
+            if (context() && context()->isValid()) {
+                makeCurrent();
+                updateVisibleTextures();
+                doneCurrent();
+            }
+            m_lastRenderedZoom = newZoom;
+        }
+    }
+    
+    // Update UI controls
+    if (m_zoomSlider) {
+        m_zoomSlider->setValue(static_cast<int>(m_zoomLevel * 100));
+    }
+    if (m_zoomLabel) {
+        m_zoomLabel->setText(QString("%1%").arg(static_cast<int>(m_zoomLevel * 100)));
+    }
+    
+    emit zoomChanged(m_zoomLevel);
+}
+
+void PDFViewerWidget::startProgressiveRender()
+{
+    if (m_progressiveRenderActive || !m_isPDFLoaded) {
+        return;
+    }
+    
+    // Cancel any existing progressive render
+    cancelProgressiveRender();
+    
+    // Calculate visible page range for progressive updating
+    int firstVisible = 0;
+    int lastVisible = 0;
+    
+    float currentY = -m_scrollOffsetY;
+    for (int i = 0; i < m_pageCount; ++i) {
+        float pageHeight = m_pageHeights[i] * m_zoomLevel;
+        
+        if (currentY + pageHeight >= 0 && currentY <= m_viewportHeight) {
+            if (firstVisible == 0 && lastVisible == 0) {
+                firstVisible = i;
+            }
+            lastVisible = i;
+        }
+        
+        currentY += pageHeight + PAGE_MARGIN;
+        if (currentY > m_viewportHeight + 500) {
+            break;
+        }
+    }
+    
+    // Add buffer pages for smooth scrolling
+    firstVisible = std::max(0, firstVisible - 1);
+    lastVisible = std::min(m_pageCount - 1, lastVisible + 1);
+    
+    // Set up progressive rendering
+    m_pendingTextureUpdates.clear();
+    for (int i = firstVisible; i <= lastVisible; ++i) {
+        m_pendingTextureUpdates.push_back(i);
+    }
+    
+    m_progressiveRenderActive = true;
+    m_progressiveRenderTimer->start();
+}
+
+void PDFViewerWidget::processProgressiveRender()
+{
+    if (m_pendingTextureUpdates.empty() || !m_isPDFLoaded) {
+        cancelProgressiveRender();
+        return;
+    }
+    
+    // Process one page at a time for smooth experience
+    int pageIndex = m_pendingTextureUpdates.front();
+    m_pendingTextureUpdates.erase(m_pendingTextureUpdates.begin());
+    
+    if (pageIndex >= 0 && pageIndex < m_pageCount) {
+        // Update texture for this page only
+        if (context() && context()->isValid()) {
+            makeCurrent();
+            
+            // Use optimized high zoom rendering
+            float effectiveZoom = std::min(static_cast<float>(m_zoomLevel), 3.0f);
+            
+            int baseWidth, baseHeight;
+            m_renderer->GetBestFitSize(pageIndex, m_viewportWidth, m_viewportHeight, baseWidth, baseHeight);
+            
+            int textureWidth = static_cast<int>(baseWidth * effectiveZoom);
+            int textureHeight = static_cast<int>(baseHeight * effectiveZoom);
+            
+            // Cap texture size
+            const int MAX_TEXTURE_SIZE = 4096;
+            if (textureWidth > MAX_TEXTURE_SIZE || textureHeight > MAX_TEXTURE_SIZE) {
+                float scaleFactor = std::min(
+                    static_cast<float>(MAX_TEXTURE_SIZE) / textureWidth,
+                    static_cast<float>(MAX_TEXTURE_SIZE) / textureHeight
+                );
+                textureWidth = static_cast<int>(textureWidth * scaleFactor);
+                textureHeight = static_cast<int>(textureHeight * scaleFactor);
+            }
+            
+            // Clean up old texture
+            if (pageIndex < static_cast<int>(m_pageTextures.size()) && m_pageTextures[pageIndex] != 0) {
+                glDeleteTextures(1, &m_pageTextures[pageIndex]);
+            }
+            
+            // Render new texture
+            FPDF_BITMAP bitmap = m_renderer->RenderPageToBitmap(pageIndex, textureWidth, textureHeight);
+            if (bitmap) {
+                m_pageTextures[pageIndex] = CreateTextureFromPDFBitmap(bitmap, textureWidth, textureHeight);
+                FPDFBitmap_Destroy(bitmap);
+            }
+            
+            doneCurrent();
+        }
+        
+        // Trigger update for immediate feedback
+        update();
+    }
+    
+    // Continue processing if more pages remain
+    if (m_pendingTextureUpdates.empty()) {
+        cancelProgressiveRender();
+        m_lastRenderedZoom = m_zoomLevel; // Update tracking zoom level
+    }
+}
+
+void PDFViewerWidget::cancelProgressiveRender()
+{
+    if (m_progressiveRenderActive) {
+        m_progressiveRenderTimer->stop();
+        m_progressiveRenderActive = false;
+        m_pendingTextureUpdates.clear();
+    }
+}
+
+void PDFViewerWidget::processThrottledPanEvent()
+{
+    if (!m_isPDFLoaded || (m_pendingPanDelta.x() == 0 && m_pendingPanDelta.y() == 0)) {
+        m_panThrottleActive = false;
+        return;
+    }
+    
+    // Process the accumulated pan delta
+    handlePanEventBatch(m_pendingPanDelta);
+    
+    // Reset state
+    m_pendingPanDelta = QPoint(0, 0);
+    m_panEventCount = 0;
+    m_panThrottleActive = false;
+}
+
+void PDFViewerWidget::handlePanEventBatch(const QPoint& totalDelta)
+{
+    if (!m_isPDFLoaded) {
+        return;
+    }
+    
+    // Apply the accumulated panning delta
+    float newScrollX = m_scrollOffsetX - totalDelta.x();
+    float newScrollY = m_scrollOffsetY - totalDelta.y();
+    
+    m_scrollOffsetX = std::clamp(newScrollX, m_minScrollX, m_maxScrollX);
+    m_scrollOffsetY = std::clamp(newScrollY, 0.0f, m_maxScrollY);
+    
+    // Update scroll state
+    updateScrollState();
+    
+    // Update scroll bar position
+    updateScrollBar();
+    
+    // At high zoom, use progressive rendering for texture updates
+    if (m_zoomLevel > 2.5f) {
+        if (!m_progressiveRenderActive) {
+            startProgressiveRender();
+        }
+    } else {
+        // For low zoom, trigger immediate visible texture updates
+        if (context() && context()->isValid()) {
+            makeCurrent();
+            updateVisibleTextures();
+            doneCurrent();
+        }
+        update();
+    }
+}
+
+void PDFViewerWidget::resetPanThrottling()
+{
+    // Reset panning throttling state
+    m_panEventCount = 0;
+    
+    // If throttle is still active, process remaining events
+    if (m_panThrottleActive) {
+        processThrottledPanEvent();
     }
 }
