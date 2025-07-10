@@ -313,8 +313,8 @@ void PDFViewerWidget::updateVisibleTextures()
     }
     
     // Calculate visible page range based on current scroll position
-    int firstVisible = 0;
-    int lastVisible = 0;
+    int firstVisible = -1;
+    int lastVisible = -1;
     
     // Improved visible page calculation
     float currentY = -m_scrollOffsetY;
@@ -323,7 +323,7 @@ void PDFViewerWidget::updateVisibleTextures()
         
         // Check if page is visible in viewport
         if (currentY + pageHeight >= 0 && currentY <= m_viewportHeight) {
-            if (firstVisible == 0 && lastVisible == 0) {
+            if (firstVisible == -1) {
                 firstVisible = i;
             }
             lastVisible = i;
@@ -337,28 +337,85 @@ void PDFViewerWidget::updateVisibleTextures()
         }
     }
     
+    // Fallback if no visible pages found
+    if (firstVisible == -1) {
+        firstVisible = 0;
+        lastVisible = 0;
+    }
+    
     // Add one page before and after for smooth scrolling
     firstVisible = std::max(0, firstVisible - 1);
     lastVisible = std::min(m_pageCount - 1, lastVisible + 1);
     
     qDebug() << "Updating visible pages" << firstVisible << "to" << lastVisible << "at zoom" << m_zoomLevel;
     
-    // Use optimized background loading for better performance
-    std::vector<int> pagesToUpdate;
-    for (int i = firstVisible; i <= lastVisible && i < m_pageCount; ++i) {
-        pagesToUpdate.push_back(i);
+    // Ensure pageTextures vector is large enough
+    if (static_cast<int>(m_pageTextures.size()) < m_pageCount) {
+        m_pageTextures.resize(m_pageCount, 0);
     }
     
-    if (m_useBackgroundLoading) {
-        loadTexturesInBackground(pagesToUpdate);
-    } else {
-        // Fallback to direct loading
-        for (int i : pagesToUpdate) {
-            scheduleTextureUpdate(i);
+    // CRITICAL: Generate missing textures for all visible pages immediately
+    std::vector<int> pagesToUpdate;
+    for (int i = firstVisible; i <= lastVisible && i < m_pageCount; ++i) {
+        // Always update texture if missing or if zoom has changed significantly
+        bool needsUpdate = (m_pageTextures[i] == 0) || 
+                          (std::abs(m_zoomLevel - m_lastRenderedZoom) > 0.015);
+        
+        if (needsUpdate) {
+            pagesToUpdate.push_back(i);
+            qDebug() << "Page" << i << "needs texture update (missing:" << (m_pageTextures[i] == 0) 
+                     << ", zoom changed:" << (std::abs(m_zoomLevel - m_lastRenderedZoom) > 0.015) << ")";
         }
     }
     
-    // Clean up unused textures to free memory
+    // Update textures immediately for visible pages to prevent blank content
+    for (int pageIndex : pagesToUpdate) {
+        if (pageIndex >= 0 && pageIndex < m_pageCount) {
+            // Use the same logic as scheduleTextureUpdate but execute immediately
+            float effectiveZoom = (m_zoomLevel > 0.5f) ? m_zoomLevel : 0.5f;
+            float textureZoom = m_highZoomMode ? std::min(effectiveZoom, 2.5f) : std::min(effectiveZoom, 3.0f);
+            
+            int baseWidth, baseHeight;
+            m_renderer->GetBestFitSize(pageIndex, m_viewportWidth, m_viewportHeight, baseWidth, baseHeight);
+            
+            int textureWidth = static_cast<int>(baseWidth * textureZoom);
+            int textureHeight = static_cast<int>(baseHeight * textureZoom);
+            
+            const int MAX_TEXTURE_SIZE = m_highZoomMode ? 3072 : 4096;
+            if (textureWidth > MAX_TEXTURE_SIZE || textureHeight > MAX_TEXTURE_SIZE) {
+                float scaleFactor = std::min(
+                    static_cast<float>(MAX_TEXTURE_SIZE) / textureWidth,
+                    static_cast<float>(MAX_TEXTURE_SIZE) / textureHeight
+                );
+                textureWidth = static_cast<int>(textureWidth * scaleFactor);
+                textureHeight = static_cast<int>(textureHeight * scaleFactor);
+            }
+            
+            // Delete existing texture for this page if it exists
+            if (m_pageTextures[pageIndex] != 0) {
+                glDeleteTextures(1, &m_pageTextures[pageIndex]);
+                m_pageTextures[pageIndex] = 0;
+            }
+            
+            // Render and create texture
+            FPDF_BITMAP bitmap = m_renderer->RenderPageToBitmap(pageIndex, textureWidth, textureHeight);
+            if (bitmap) {
+                m_pageTextures[pageIndex] = CreateTextureFromPDFBitmap(bitmap, textureWidth, textureHeight);
+                FPDFBitmap_Destroy(bitmap);
+                qDebug() << "Successfully updated texture for page" << pageIndex;
+            } else {
+                qWarning() << "Failed to generate bitmap for page" << pageIndex;
+                m_pageTextures[pageIndex] = 0;
+            }
+        }
+    }
+    
+    // Update the last rendered zoom level
+    if (!pagesToUpdate.empty()) {
+        m_lastRenderedZoom = m_zoomLevel;
+    }
+    
+    // Clean up unused textures to free memory (but be more conservative)
     if (m_highZoomMode) {
         cleanupUnusedTextures();
     }
@@ -394,22 +451,61 @@ void PDFViewerWidget::renderPDF()
     // Simple visibility calculation for now
     // TODO: Implement proper GetVisiblePageRange function
     
-    // Render each visible page using original PDF viewer's approach
+    // Render each visible page - generate missing textures on demand
     float currentY = -m_scrollOffsetY;
     
     for (int i = firstVisible; i <= lastVisible && i < m_pageCount; ++i) {
-        if (i >= 0 && i < static_cast<int>(m_pageTextures.size()) && m_pageTextures[i] != 0) {
+        // Calculate page position first to determine if page is actually visible
+        float pageWidth = m_pageWidths[i] * m_zoomLevel;
+        float pageHeight = m_pageHeights[i] * m_zoomLevel;
+        float pageX = (m_viewportWidth - pageWidth) / 2.0f - m_scrollOffsetX;
+        float pageY = currentY;
+        
+        // Only process pages that are actually visible in the viewport
+        if (pageY + pageHeight >= 0 && pageY <= m_viewportHeight) {
+            // CRITICAL FIX: Generate texture immediately if missing
+            if (i >= static_cast<int>(m_pageTextures.size()) || m_pageTextures[i] == 0) {
+                qDebug() << "Generating missing texture for visible page" << i << "during render";
+                
+                // Ensure the pageTextures vector is large enough
+                if (i >= static_cast<int>(m_pageTextures.size())) {
+                    m_pageTextures.resize(m_pageCount, 0);
+                }
+                
+                // Generate texture immediately using the same logic as scheduleTextureUpdate
+                float effectiveZoom = (m_zoomLevel > 0.5f) ? m_zoomLevel : 0.5f;
+                float textureZoom = m_highZoomMode ? std::min(effectiveZoom, 2.5f) : std::min(effectiveZoom, 3.0f);
+                
+                int baseWidth, baseHeight;
+                m_renderer->GetBestFitSize(i, m_viewportWidth, m_viewportHeight, baseWidth, baseHeight);
+                
+                int textureWidth = static_cast<int>(baseWidth * textureZoom);
+                int textureHeight = static_cast<int>(baseHeight * textureZoom);
+                
+                const int MAX_TEXTURE_SIZE = m_highZoomMode ? 3072 : 4096;
+                if (textureWidth > MAX_TEXTURE_SIZE || textureHeight > MAX_TEXTURE_SIZE) {
+                    float scaleFactor = std::min(
+                        static_cast<float>(MAX_TEXTURE_SIZE) / textureWidth,
+                        static_cast<float>(MAX_TEXTURE_SIZE) / textureHeight
+                    );
+                    textureWidth = static_cast<int>(textureWidth * scaleFactor);
+                    textureHeight = static_cast<int>(textureHeight * scaleFactor);
+                }
+                
+                // Render and create texture
+                FPDF_BITMAP bitmap = m_renderer->RenderPageToBitmap(i, textureWidth, textureHeight);
+                if (bitmap) {
+                    m_pageTextures[i] = CreateTextureFromPDFBitmap(bitmap, textureWidth, textureHeight);
+                    FPDFBitmap_Destroy(bitmap);
+                    qDebug() << "Successfully generated texture for page" << i;
+                } else {
+                    qWarning() << "Failed to generate bitmap for page" << i;
+                    m_pageTextures[i] = 0;
+                }
+            }
             
-            // Use standalone viewer's approach: base dimensions with zoom scaling
-            float pageWidth = m_pageWidths[i] * m_zoomLevel;
-            float pageHeight = m_pageHeights[i] * m_zoomLevel;
-            
-            // Calculate page position (centered horizontally)
-            float pageX = (m_viewportWidth - pageWidth) / 2.0f - m_scrollOffsetX;
-            float pageY = currentY;
-            
-            // Skip if page is not visible
-            if (pageY + pageHeight >= 0 && pageY <= m_viewportHeight) {
+            // Now render the page if we have a valid texture
+            if (i < static_cast<int>(m_pageTextures.size()) && m_pageTextures[i] != 0) {
                 // Render page texture using original PDF viewer's method
                 glBindTexture(GL_TEXTURE_2D, m_pageTextures[i]);
                 
@@ -432,10 +528,23 @@ void PDFViewerWidget::renderPDF()
                 glEnd();
                 
                 glBindTexture(GL_TEXTURE_2D, 0);
+            } else {
+                // Fallback: render a placeholder rectangle if texture generation failed
+                qDebug() << "Rendering placeholder for page" << i;
+                glDisable(GL_TEXTURE_2D);
+                glColor3f(0.95f, 0.95f, 0.95f); // Light gray placeholder
+                glBegin(GL_QUADS);
+                glVertex2f(pageX, pageY);
+                glVertex2f(pageX + pageWidth, pageY);
+                glVertex2f(pageX + pageWidth, pageY + pageHeight);
+                glVertex2f(pageX, pageY + pageHeight);
+                glEnd();
+                glColor3f(1.0f, 1.0f, 1.0f); // Reset color
+                glEnable(GL_TEXTURE_2D);
             }
-            
-            currentY += pageHeight + PAGE_MARGIN;
         }
+        
+        currentY += pageHeight + PAGE_MARGIN;
     }
     
     glDisable(GL_TEXTURE_2D);
@@ -1269,6 +1378,14 @@ void PDFViewerWidget::onVerticalScrollBarChanged(int value)
     // Update scroll state and trigger texture updates
     updateScrollState();
     
+    // CRITICAL: Trigger texture updates immediately for scroll bar navigation
+    // This ensures visible content is always rendered during scrolling
+    if (context() && context()->isValid()) {
+        makeCurrent();
+        updateVisibleTextures();
+        doneCurrent();
+    }
+    
     // Use progressive rendering for smooth scrolling at high zoom
     if (m_zoomLevel > 2.5f && !m_progressiveRenderActive) {
         startProgressiveRender();
@@ -1327,6 +1444,13 @@ void PDFViewerWidget::wheelEvent(QWheelEvent *event)
         
         // Update scroll bar position
         updateScrollBar();
+        
+        // CRITICAL: Trigger texture updates for wheel scrolling to ensure visible content
+        if (context() && context()->isValid()) {
+            makeCurrent();
+            updateVisibleTextures();
+            doneCurrent();
+        }
         
         // Use progressive rendering for smooth scrolling at high zoom
         if (m_zoomLevel > 2.5f && !m_progressiveRenderActive) {
@@ -1902,6 +2026,13 @@ void PDFViewerWidget::handlePanning(const QPoint &delta)
     
     // Update scroll bar position
     updateScrollBar();
+    
+    // CRITICAL: Trigger texture updates for panning to ensure visible content
+    if (context() && context()->isValid()) {
+        makeCurrent();
+        updateVisibleTextures();
+        doneCurrent();
+    }
     
     // At high zoom, use progressive rendering for smooth experience
     if (m_zoomLevel > 2.5f && !m_progressiveRenderActive) {
