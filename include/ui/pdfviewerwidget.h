@@ -170,7 +170,7 @@ private:
     bool isPointOverText(const QPointF &pdfPoint, int pageIndex) const;
     QPointF screenToPDFCoordinates(const QPointF &screenPoint) const;
     QPointF pdfToPageCoordinates(const QPointF &pdfPoint, int pageIndex) const;
-    int getPageAtPoint(const QPointF &pdfPoint) const;
+    int getPageAtPoint(const QPointF &screenPoint) const;
     QString extractTextFromRegion(const PageTextContent& pageText, 
                                   const QPointF& startPoint, 
                                   const QPointF& endPoint) const;
@@ -233,6 +233,7 @@ private:
     QLabel *m_zoomLabel;
     QLineEdit *m_pageInput;
     QLabel *m_pageCountLabel;
+    QLineEdit *m_selectedTextInput;  // Input box to display selected text
     
     // Scroll bar
     QScrollBar *m_verticalScrollBar;
@@ -306,6 +307,18 @@ private:
     
     // Additional text selection data
     bool m_selectionActive;
+
+    // Text selection rendering
+    void renderTextBasedSelection(int pageIndex, const QPointF& startPoint, const QPointF& endPoint, 
+                                 float pageX, float pageY, float pageWidth, float pageHeight);
+    std::vector<QRectF> mergeAdjacentRects(const std::vector<QRectF>& rects);
+
+    // Debug text visualization
+    void renderDebugTextHighlights();
+    template<typename T>
+    void renderTextElements(const std::vector<T>& elements, int pageIndex, 
+                           float pageX, float pageY, float pageWidth, float pageHeight,
+                           float pdfPageWidth, float pdfPageHeight);
 };
 
 #endif // PDFVIEWERWIDGET_H

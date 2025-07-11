@@ -180,8 +180,13 @@ void TextExtractor::extractCharacters(PDFTextPage textPage, PageTextContent& con
         // Get character bounds
         double left, top, right, bottom;
         if (FPDFText_GetCharBox(fpdfTextPage, i, &left, &right, &bottom, &top)) {
-            // Convert PDFium coordinates to Qt coordinates
-            QRectF bounds = pdfiumToQRect(left, top, right, bottom);
+            // PDFium uses bottom-left origin, we need to convert to top-left origin
+            // Also flip the Y coordinate relative to page height
+            double flippedTop = content.pageHeight - bottom;
+            double flippedBottom = content.pageHeight - top;
+            
+            // Convert PDFium coordinates to Qt coordinates with proper Y-flip
+            QRectF bounds = QRectF(left, flippedTop, right - left, flippedBottom - flippedTop);
             
             // Get font size (approximate)
             double fontSize = FPDFText_GetFontSize(fpdfTextPage, i);

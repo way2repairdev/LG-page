@@ -99,6 +99,7 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_zoomLabel(nullptr)
     , m_pageInput(nullptr)
     , m_pageCountLabel(nullptr)
+    , m_selectedTextInput(nullptr)
     , m_verticalScrollBar(nullptr)
     , m_contextMenu(nullptr)
     , m_isPDFLoaded(false)
@@ -168,6 +169,20 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     // Initialize UI
     setupUI();
     createContextMenu();
+    
+    // Connect text selection signal to update the input box
+    connect(this, &PDFViewerWidget::textSelectionChanged, 
+            this, [this](const QString& selectedText) {
+        if (m_selectedTextInput) {
+            if (selectedText.isEmpty()) {
+                m_selectedTextInput->clear();
+                m_selectedTextInput->setPlaceholderText("Selected text will appear here...");
+            } else {
+                m_selectedTextInput->setText(selectedText);
+                m_selectedTextInput->setPlaceholderText("");
+            }
+        }
+    });
     
     // Enable mouse tracking for hover effects
     setMouseTracking(true);
@@ -544,6 +559,10 @@ void PDFViewerWidget::renderPDF()
     }
     
     glDisable(GL_TEXTURE_2D);
+    
+    // Render text selection highlighting
+    renderTextSelection();
+    
     glDisable(GL_BLEND);
 }
 
@@ -655,6 +674,22 @@ bool PDFViewerWidget::loadPDF(const QString &filePath)
         // Extract text from all pages
         extractTextFromAllPages();
         
+        // CRITICAL FIX: Synchronize page dimensions with text extraction dimensions
+        // This ensures mouse coordinates and text coordinates use the SAME scale
+        for (int i = 0; i < m_pageCount && i < static_cast<int>(m_pageTexts.size()); ++i) {
+            if (!m_pageTexts[i].isEmpty()) {
+                qDebug() << "COORDINATE FIX: Synchronizing page" << i << "dimensions";
+                qDebug() << "  Old renderer dimensions:" << m_pageWidths[i] << "x" << m_pageHeights[i];
+                qDebug() << "  New PDF dimensions:" << m_pageTexts[i].pageWidth << "x" << m_pageTexts[i].pageHeight;
+                
+                // Use PDF dimensions from text extraction for ALL coordinate calculations
+                m_pageWidths[i] = static_cast<int>(m_pageTexts[i].pageWidth);
+                m_pageHeights[i] = static_cast<int>(m_pageTexts[i].pageHeight);
+                
+                qDebug() << "  Updated to PDF dimensions:" << m_pageWidths[i] << "x" << m_pageHeights[i];
+            }
+        }
+        
         emit pdfLoaded(filePath);
         emit pageChanged(m_currentPage + 1, m_pageCount);
         emit zoomChanged(m_zoomLevel);
@@ -717,10 +752,14 @@ void PDFViewerWidget::initializeGL()
 
 void PDFViewerWidget::resizeGL(int w, int h)
 {
-    m_viewportWidth = w;
-    m_viewportHeight = h - TOOLBAR_HEIGHT;
+    const int selectedTextHeight = 40;
+    const int margin = 8;
     
-    glViewport(0, 0, w, h);
+    m_viewportWidth = w;
+    m_viewportHeight = h - selectedTextHeight - 2 * margin;
+    
+    // Set OpenGL viewport to account for selected text input area
+    glViewport(0, 0, w, h - selectedTextHeight - 2 * margin);
     
     if (m_isPDFLoaded) {
         // Use updateViewport to properly handle visible texture updates on OpenGL resize
@@ -787,16 +826,47 @@ QPoint PDFViewerWidget::documentToScreenCoordinates(const QPointF &docPos) const
 }
 
 QPointF PDFViewerWidget::screenToPDFCoordinates(const QPointF &screenPoint) const {
-    if (!m_isPDFLoaded || m_pageCount == 0) {
+    if (!m_isPDFLoaded || m_pageCount == 0 || m_pageWidths.empty()) {
         return QPointF();
     }
     
-    // Convert screen coordinates to PDF document coordinates
-    // Account for scroll position and zoom level
-    float x = (screenPoint.x() + m_scrollOffsetX) / m_zoomLevel;
-    float y = (screenPoint.y() + m_scrollOffsetY) / m_zoomLevel;
+    // Use the EXACT same logic as renderPDF() for coordinate conversion
+    float currentY = -m_scrollOffsetY;
     
-    return QPointF(x, y);
+    qDebug() << "screenToPDFCoordinates DEBUG: screen" << screenPoint << "zoom" << m_zoomLevel;
+    
+    for (int i = 0; i < m_pageCount; ++i) {
+        // NOW all page dimensions are synchronized - use m_pageWidths/Heights directly
+        float pageWidth = m_pageWidths[i] * m_zoomLevel;
+        float pageHeight = m_pageHeights[i] * m_zoomLevel;
+        float pageX = (m_viewportWidth - pageWidth) / 2.0f - m_scrollOffsetX;
+        float pageY = currentY;
+        
+        qDebug() << "screenToPDFCoordinates DEBUG: page" << i << "pagePos(" << pageX << "," << pageY 
+                 << ") size(" << pageWidth << "," << pageHeight << ")";
+        
+        // Check if screen point is within this page
+        if (screenPoint.x() >= pageX && screenPoint.x() <= pageX + pageWidth &&
+            screenPoint.y() >= pageY && screenPoint.y() <= pageY + pageHeight) {
+            
+            // Convert screen coordinates to PDF page coordinates 
+            float pagePointX = (screenPoint.x() - pageX) / m_zoomLevel;
+            float pagePointY = (screenPoint.y() - pageY) / m_zoomLevel;
+            
+            qDebug() << "screenToPDFCoordinates DEBUG: FOUND page" << i << "-> pagePoint(" << pagePointX << "," << pagePointY << ")";
+            qDebug() << "COORDINATE FIX: Using synchronized PDF dimensions";
+            
+            // Return page coordinates in PDF coordinate system (same as text extraction)
+            return QPointF(pagePointX, pagePointY);
+        }
+        
+        // Move to next page
+        currentY += pageHeight + PAGE_MARGIN;
+    }
+    
+    // Point is not over any page
+    qDebug() << "screenToPDFCoordinates DEBUG: NO PAGE FOUND";
+    return QPointF();
 }
 
 QPointF PDFViewerWidget::pdfToPageCoordinates(const QPointF &pdfPoint, int pageIndex) const {
@@ -807,7 +877,7 @@ QPointF PDFViewerWidget::pdfToPageCoordinates(const QPointF &pdfPoint, int pageI
     // Calculate page offset in the document
     float pageOffsetY = 0.0f;
     for (int i = 0; i < pageIndex; ++i) {
-        if (i < m_pageHeights.size()) {
+        if (i < static_cast<int>(m_pageHeights.size())) {
             pageOffsetY += m_pageHeights[i] + PAGE_MARGIN;
         }
     }
@@ -816,30 +886,97 @@ QPointF PDFViewerWidget::pdfToPageCoordinates(const QPointF &pdfPoint, int pageI
     float x = pdfPoint.x();
     float y = pdfPoint.y() - pageOffsetY;
     
+    // Text coordinates are already flipped to top-left origin in text extraction,
+    // so mouse coordinates should match directly without additional flipping
+    qDebug() << "pdfToPageCoordinates: PDF point" << pdfPoint << "-> Page" << pageIndex << "-> Page point" << QPointF(x, y);
+    
     return QPointF(x, y);
 }
 
-int PDFViewerWidget::getPageAtPoint(const QPointF &pdfPoint) const {
+int PDFViewerWidget::getPageAtPoint(const QPointF &screenPoint) const {
     if (!m_isPDFLoaded || m_pageCount == 0) {
         return -1;
     }
     
-    float currentY = 0.0f;
+    // Use the EXACT same logic as renderPDF() to find which page the screen point is on
+    float currentY = -m_scrollOffsetY;
+    
+    qDebug() << "getPageAtPoint DEBUG: screen point" << screenPoint << "viewport" << m_viewportWidth << "x" << m_viewportHeight;
+    qDebug() << "getPageAtPoint DEBUG: scroll offsets X:" << m_scrollOffsetX << "Y:" << m_scrollOffsetY;
+    
     for (int i = 0; i < m_pageCount; ++i) {
-        float pageHeight = (i < m_pageHeights.size()) ? m_pageHeights[i] : 800.0f; // Default height
+        float pageWidth = m_pageWidths[i] * m_zoomLevel;
+        float pageHeight = m_pageHeights[i] * m_zoomLevel;
+        float pageX = (m_viewportWidth - pageWidth) / 2.0f - m_scrollOffsetX;
+        float pageY = currentY;
         
-        if (pdfPoint.y() >= currentY && pdfPoint.y() <= currentY + pageHeight) {
+        qDebug() << "getPageAtPoint DEBUG: page" << i << "bounds: X[" << pageX << "to" << (pageX + pageWidth) 
+                 << "] Y[" << pageY << "to" << (pageY + pageHeight) << "]";
+        
+        // Check both X and Y coordinates
+        if (screenPoint.x() >= pageX && screenPoint.x() <= pageX + pageWidth &&
+            screenPoint.y() >= pageY && screenPoint.y() <= pageY + pageHeight) {
+            qDebug() << "getPageAtPoint DEBUG: FOUND page" << i;
             return i;
         }
         
         currentY += pageHeight + PAGE_MARGIN;
     }
     
+    qDebug() << "getPageAtPoint DEBUG: NO PAGE FOUND";
     return -1; // Point is not over any page
 }
 
 void PDFViewerWidget::setupUI() 
 {
+    // Create selected text input box at the top
+    m_selectedTextInput = new QLineEdit(this);
+    m_selectedTextInput->setPlaceholderText("Selected text will appear here...");
+    m_selectedTextInput->setReadOnly(false); // Allow user to select and copy text
+    m_selectedTextInput->setStyleSheet(
+        "QLineEdit {"
+        "    background-color: #f8f9fa;"
+        "    border: 2px solid #dee2e6;"
+        "    border-radius: 6px;"
+        "    padding: 8px 12px;"
+        "    font-family: 'Segoe UI', Arial, sans-serif;"
+        "    font-size: 12px;"
+        "    color: #495057;"
+        "    selection-background-color: #007acc;"
+        "    selection-color: white;"
+        "}"
+        "QLineEdit:focus {"
+        "    border-color: #007acc;"
+        "    background-color: #ffffff;"
+        "    outline: none;"
+        "}"
+        "QLineEdit:hover {"
+        "    border-color: #adb5bd;"
+        "}"
+    );
+    m_selectedTextInput->setFixedHeight(40);
+    m_selectedTextInput->setVisible(true);
+    
+    // Add context menu for copy/select all
+    m_selectedTextInput->setContextMenuPolicy(Qt::ActionsContextMenu);
+    
+    QAction* copyAction = new QAction("Copy", m_selectedTextInput);
+    copyAction->setShortcut(QKeySequence::Copy);
+    connect(copyAction, &QAction::triggered, m_selectedTextInput, &QLineEdit::copy);
+    m_selectedTextInput->addAction(copyAction);
+    
+    QAction* selectAllAction = new QAction("Select All", m_selectedTextInput);
+    selectAllAction->setShortcut(QKeySequence::SelectAll);
+    connect(selectAllAction, &QAction::triggered, m_selectedTextInput, &QLineEdit::selectAll);
+    m_selectedTextInput->addAction(selectAllAction);
+    
+    QAction* clearAction = new QAction("Clear", m_selectedTextInput);
+    connect(clearAction, &QAction::triggered, [this]() {
+        m_selectedTextInput->clear();
+        clearTextSelection();
+    });
+    m_selectedTextInput->addAction(clearAction);
+
     // Create and setup vertical scroll bar
     m_verticalScrollBar = new QScrollBar(Qt::Vertical, this);
     m_verticalScrollBar->setVisible(false); // Hide initially until PDF is loaded
@@ -853,8 +990,7 @@ void PDFViewerWidget::setupUI()
     connect(m_verticalScrollBar, QOverload<int>::of(&QScrollBar::valueChanged),
             this, &PDFViewerWidget::onVerticalScrollBarChanged);
     
-    // Position the scroll bar on the right side
-    // This will be updated in resizeEvent
+    // Position the widgets - this will be updated in resizeEvent
 }
 
 void PDFViewerWidget::setupToolbar() { /* Implement toolbar setup */ }
@@ -1492,10 +1628,37 @@ void PDFViewerWidget::mousePressEvent(QMouseEvent *event)
         return;
     }
     
-    // Left mouse button can still be used for other interactions (like text selection in future)
+    // Left mouse button for text selection
     if (event->button() == Qt::LeftButton) {
-        // For now, left button doesn't do panning anymore
-        // This can be used for text selection or other features later
+        if (m_isPDFLoaded && m_textSelection) {
+            // Convert screen coordinates to page coordinates
+            QPointF pagePoint = screenToPDFCoordinates(QPointF(event->pos()));
+            int pageIndex = getPageAtPoint(QPointF(event->pos())); // Use screen coordinates for page detection
+            
+            qDebug() << "=== MOUSE CLICK DEBUG ===";
+            qDebug() << "Screen pos:" << event->pos();
+            qDebug() << "Page index:" << pageIndex;
+            qDebug() << "Page point:" << pagePoint;
+            if (pageIndex >= 0 && pageIndex < m_pageTexts.size()) {
+                qDebug() << "Page dimensions:" << m_pageTexts[pageIndex].pageWidth << "x" << m_pageTexts[pageIndex].pageHeight;
+                qDebug() << "Characters on page:" << m_pageTexts[pageIndex].characters.size();
+                if (!m_pageTexts[pageIndex].characters.empty()) {
+                    qDebug() << "First char bounds:" << m_pageTexts[pageIndex].characters[0].bounds;
+                    qDebug() << "Last char bounds:" << m_pageTexts[pageIndex].characters.back().bounds;
+                }
+            }
+            qDebug() << "======================";
+            
+            if (pageIndex >= 0) {
+                // Start text selection with page coordinates (no additional conversion needed)
+                m_textSelection->startSelection(pageIndex, pagePoint);
+                m_isTextSelecting = true;
+                m_lastMousePos = QPointF(event->pos());
+                
+                qDebug() << "Started text selection at page" << pageIndex << "Page point" << pagePoint;
+                update(); // Trigger repaint
+            }
+        }
         event->accept();
         return;
     }
@@ -1505,6 +1668,25 @@ void PDFViewerWidget::mousePressEvent(QMouseEvent *event)
 
 void PDFViewerWidget::mouseMoveEvent(QMouseEvent *event)
 {
+    // Handle text selection dragging
+    if (m_isTextSelecting && (event->buttons() & Qt::LeftButton)) {
+        if (m_textSelection) {
+            // Convert screen coordinates to page coordinates
+            QPointF pagePoint = screenToPDFCoordinates(QPointF(event->pos()));
+            int pageIndex = getPageAtPoint(QPointF(event->pos())); // Use screen coordinates for page detection
+            
+            qDebug() << "Mouse drag at screen:" << event->pos() << "-> Page:" << pageIndex << "-> PagePoint:" << pagePoint;
+            
+            if (pageIndex >= 0) {
+                // Update text selection with page coordinates (no additional conversion needed)
+                m_textSelection->updateSelection(pageIndex, pagePoint);
+                update(); // Trigger repaint to show selection
+            }
+        }
+        event->accept();
+        return;
+    }
+    
     // NEW KEY MAPPING: Right mouse button for panning
     if (m_isDragging && (event->buttons() & Qt::RightButton)) {
         QPoint delta = event->pos() - m_lastPanPoint;
@@ -1573,9 +1755,22 @@ void PDFViewerWidget::mouseReleaseEvent(QMouseEvent *event)
         return;
     }
     
-    // Handle left mouse button release (for future features like text selection)
+    // Handle left mouse button release for text selection
     if (event->button() == Qt::LeftButton) {
-        // Left button functionality can be added here later
+        if (m_isTextSelecting && m_textSelection) {
+            // End text selection
+            m_textSelection->endSelection();
+            m_isTextSelecting = false;
+            
+            // Get selected text and emit signal
+            QString selectedText = getSelectedText();
+            if (!selectedText.isEmpty()) {
+                emit textSelectionChanged(selectedText);
+                qDebug() << "Text selection completed:" << selectedText.left(50) + "...";
+            }
+            
+            update(); // Final repaint
+        }
         event->accept();
         return;
     }
@@ -1673,26 +1868,39 @@ void PDFViewerWidget::resizeEvent(QResizeEvent *event)
 {
     QOpenGLWidget::resizeEvent(event);
     
-    // Update viewport dimensions
+    const int selectedTextHeight = 40;
+    const int margin = 8;
+    
+    // Position the selected text input box at the top
+    if (m_selectedTextInput) {
+        m_selectedTextInput->setGeometry(
+            margin,
+            margin,
+            event->size().width() - 2 * margin,
+            selectedTextHeight
+        );
+    }
+    
+    // Update viewport dimensions (reserve space for selected text input)
     m_viewportWidth = event->size().width();
-    m_viewportHeight = event->size().height() - TOOLBAR_HEIGHT;
+    m_viewportHeight = event->size().height() - selectedTextHeight - 2 * margin;
     
     // Position the vertical scroll bar on the right side
     if (m_verticalScrollBar) {
         const int scrollBarWidth = 16; // Standard scroll bar width
-        const int margin = 2; // Small margin from edge
+        const int scrollBarMargin = 2; // Small margin from edge
         
         // Reserve space for scroll bar in viewport width
         if (m_verticalScrollBar->isVisible()) {
-            m_viewportWidth -= (scrollBarWidth + margin);
+            m_viewportWidth -= (scrollBarWidth + scrollBarMargin);
         }
         
-        // Position scroll bar at the right edge
+        // Position scroll bar at the right edge (below selected text input)
         m_verticalScrollBar->setGeometry(
-            width() - scrollBarWidth - margin,
-            TOOLBAR_HEIGHT,
+            width() - scrollBarWidth - scrollBarMargin,
+            selectedTextHeight + 2 * margin,
             scrollBarWidth,
-            height() - TOOLBAR_HEIGHT
+            height() - selectedTextHeight - 2 * margin
         );
     }
     
@@ -2445,12 +2653,12 @@ QString PDFViewerWidget::getSelectedText() const
             
             if (pageIndex == startPage) {
                 // First page: from start point to end of page
-                QPointF pageEnd(pageText.pageWidth, pageText.pageHeight);
-                selectedText += extractTextFromRegion(pageText, startPoint, pageEnd);
+                QPointF pageEndPoint(pageText.pageWidth, pageText.pageHeight);
+                selectedText += extractTextFromRegion(pageText, startPoint, pageEndPoint);
             } else if (pageIndex == endPage) {
                 // Last page: from beginning to end point
-                QPointF pageStart(0, 0);
-                selectedText += extractTextFromRegion(pageText, pageStart, endPoint);
+                QPointF pageStartPoint(0, 0);
+                selectedText += extractTextFromRegion(pageText, pageStartPoint, endPoint);
             } else {
                 // Middle pages: entire page
                 selectedText += pageText.fullText;
@@ -2474,20 +2682,47 @@ QString PDFViewerWidget::extractTextFromRegion(const PageTextContent& pageText,
                                                const QPointF& startPoint, 
                                                const QPointF& endPoint) const
 {
+    if (pageText.characters.empty()) {
+        return QString();
+    }
+    
     QString result;
     
-    // Normalize the selection rectangle
-    QRectF selectionRect(
-        qMin(startPoint.x(), endPoint.x()),
-        qMin(startPoint.y(), endPoint.y()),
-        qAbs(endPoint.x() - startPoint.x()),
-        qAbs(endPoint.y() - startPoint.y())
-    );
+    // Find start and end character indices based on proximity to selection points
+    int startCharIndex = -1;
+    int endCharIndex = -1;
+    double minStartDist = std::numeric_limits<double>::max();
+    double minEndDist = std::numeric_limits<double>::max();
     
-    // Find words that intersect with the selection rectangle
-    for (const auto& word : pageText.words) {
-        if (selectionRect.intersects(word.bounds)) {
-            result += word.text + " ";
+    for (size_t i = 0; i < pageText.characters.size(); ++i) {
+        const TextChar& ch = pageText.characters[i];
+        QPointF charCenter = ch.bounds.center();
+        
+        // Find closest character to start point
+        double startDist = QLineF(startPoint, charCenter).length();
+        if (startDist < minStartDist) {
+            minStartDist = startDist;
+            startCharIndex = static_cast<int>(i);
+        }
+        
+        // Find closest character to end point
+        double endDist = QLineF(endPoint, charCenter).length();
+        if (endDist < minEndDist) {
+            minEndDist = endDist;
+            endCharIndex = static_cast<int>(i);
+        }
+    }
+    
+    // If we found valid start and end characters
+    if (startCharIndex >= 0 && endCharIndex >= 0) {
+        // Ensure start comes before end in text order
+        if (startCharIndex > endCharIndex) {
+            std::swap(startCharIndex, endCharIndex);
+        }
+        
+        // Extract text from selected characters
+        for (int i = startCharIndex; i <= endCharIndex; ++i) {
+            result += pageText.characters[i].character;
         }
     }
     
@@ -2543,5 +2778,305 @@ void PDFViewerWidget::selectWordAtPosition(const QPointF &position) {
                 return;
             }
         }
+    }
+}
+
+void PDFViewerWidget::renderTextSelection()
+{
+    // Only render if we have an active text selection
+    if (!m_textSelection || !m_textSelection->hasSelection()) {
+        return;
+    }
+
+    // Disable texturing for selection overlay
+    glDisable(GL_TEXTURE_2D);
+    
+    // Set selection highlight color (semi-transparent blue)
+    glColor4f(0.2f, 0.4f, 0.8f, 0.3f);
+    
+    // Get selection bounds
+    std::vector<int> selectedPages = m_textSelection->getSelectedPages();
+    QPointF startPoint = m_textSelection->getStartPoint();
+    QPointF endPoint = m_textSelection->getEndPoint();
+    
+    // Render selection highlights for each selected page
+    for (int pageIndex : selectedPages) {
+        if (pageIndex < 0 || pageIndex >= m_pageCount) {
+            continue;
+        }
+        
+        // Calculate page position on screen
+        float pageWidth = m_pageWidths[pageIndex] * m_zoomLevel;
+        float pageHeight = m_pageHeights[pageIndex] * m_zoomLevel;
+        
+        // Calculate page Y position (sum of heights of previous pages)
+        float pageY = -m_scrollOffsetY;
+        for (int i = 0; i < pageIndex; ++i) {
+            pageY += (m_pageHeights[i] * m_zoomLevel) + PAGE_MARGIN;
+        }
+        
+        float pageX = (m_viewportWidth - pageWidth) / 2.0f - m_scrollOffsetX;
+        
+        // Skip pages not visible in viewport
+        if (pageY + pageHeight < 0 || pageY > m_viewportHeight) {
+            continue;
+        }
+        
+        // For single page selection, render character-based selection
+        if (m_textSelection->getStartPage() == m_textSelection->getEndPage()) {
+            // Selection points are already in page coordinates
+            renderTextBasedSelection(pageIndex, startPoint, endPoint, pageX, pageY, pageWidth, pageHeight);
+        } else {
+            // For multi-page selection, render different areas
+            if (pageIndex == m_textSelection->getStartPage()) {
+                // First page: from start point to end of page
+                QPointF pageEndPoint(m_pageWidths[pageIndex], m_pageHeights[pageIndex]);
+                renderTextBasedSelection(pageIndex, startPoint, pageEndPoint, pageX, pageY, pageWidth, pageHeight);
+            } else if (pageIndex == m_textSelection->getEndPage()) {
+                // Last page: from beginning to end point
+                QPointF pageStartPoint(0, 0);
+                renderTextBasedSelection(pageIndex, pageStartPoint, endPoint, pageX, pageY, pageWidth, pageHeight);
+            } else {
+                // Middle pages: entire page
+                QPointF pageStartPoint(0, 0);
+                QPointF pageEndPoint(m_pageWidths[pageIndex], m_pageHeights[pageIndex]);
+                renderTextBasedSelection(pageIndex, pageStartPoint, pageEndPoint, pageX, pageY, pageWidth, pageHeight);
+            }
+        }
+    }
+    
+    // Reset color
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+}
+
+void PDFViewerWidget::renderTextBasedSelection(int pageIndex, const QPointF& startPoint, const QPointF& endPoint, 
+                                              float pageX, float pageY, float pageWidth, float pageHeight)
+{
+    // Check if we have text content for this page
+    if (pageIndex >= static_cast<int>(m_pageTexts.size())) {
+        return;
+    }
+    
+    const PageTextContent& pageText = m_pageTexts[pageIndex];
+    if (pageText.lines.empty()) {
+        return;
+    }
+    
+    // Create selection rectangle in page coordinates
+    QRectF selectionRect(
+        qMin(startPoint.x(), endPoint.x()),
+        qMin(startPoint.y(), endPoint.y()),
+        qAbs(endPoint.x() - startPoint.x()),
+        qAbs(endPoint.y() - startPoint.y())
+    );
+    
+    // Set a nice selection color (semi-transparent blue)
+    glColor4f(0.2f, 0.5f, 0.9f, 0.4f);
+    
+    // For each line, if any part intersects with selection, highlight the intersected portion
+    for (const TextLine& line : pageText.lines) {
+        if (selectionRect.intersects(line.bounds)) {
+            // Calculate the intersection of selection rect with this line
+            QRectF intersection = selectionRect.intersected(line.bounds);
+            
+            // Convert PDF coordinates to screen coordinates
+            float screenLeft = pageX + (intersection.left() / pageText.pageWidth) * pageWidth;
+            float screenTop = pageY + (intersection.top() / pageText.pageHeight) * pageHeight;
+            float screenRight = pageX + (intersection.right() / pageText.pageWidth) * pageWidth;
+            float screenBottom = pageY + (intersection.bottom() / pageText.pageHeight) * pageHeight;
+            
+            // Add small padding to make selection more visible
+            screenLeft -= 1.0f;
+            screenTop -= 1.0f;
+            screenRight += 1.0f;
+            screenBottom += 1.0f;
+            
+            // Render clean rectangular highlight
+            glBegin(GL_QUADS);
+            glVertex2f(screenLeft, screenTop);
+            glVertex2f(screenRight, screenTop);
+            glVertex2f(screenRight, screenBottom);
+            glVertex2f(screenLeft, screenBottom);
+            glEnd();
+            
+            // Add a subtle border for better visibility
+            glColor4f(0.1f, 0.3f, 0.7f, 0.6f);
+            glLineWidth(1.0f);
+            glBegin(GL_LINE_LOOP);
+            glVertex2f(screenLeft, screenTop);
+            glVertex2f(screenRight, screenTop);
+            glVertex2f(screenRight, screenBottom);
+            glVertex2f(screenLeft, screenBottom);
+            glEnd();
+            
+            // Reset to fill color for next rectangle
+            glColor4f(0.2f, 0.5f, 0.9f, 0.4f);
+        }
+    }
+}
+
+std::vector<QRectF> PDFViewerWidget::mergeAdjacentRects(const std::vector<QRectF>& rects)
+{
+    if (rects.empty()) {
+        return {};
+    }
+    
+    std::vector<QRectF> merged = rects;
+    bool changed = true;
+    
+    // Simple merge algorithm - could be optimized further
+    while (changed) {
+        changed = false;
+        for (size_t i = 0; i < merged.size() && !changed; ++i) {
+            for (size_t j = i + 1; j < merged.size(); ++j) {
+                const QRectF& rect1 = merged[i];
+                const QRectF& rect2 = merged[j];
+                
+                // Check if rectangles can be merged (adjacent or overlapping on same line)
+                bool sameHeight = qAbs(rect1.height() - rect2.height()) < 2.0;
+                bool sameBaseline = qAbs(rect1.bottom() - rect2.bottom()) < 2.0;
+                bool adjacent = (rect1.right() >= rect2.left() - 5.0) && (rect2.right() >= rect1.left() - 5.0);
+                
+                if (sameHeight && sameBaseline && adjacent) {
+                    // Merge rectangles
+                    QRectF mergedRect = rect1.united(rect2);
+                    merged[i] = mergedRect;
+                    merged.erase(merged.begin() + j);
+                    changed = true;
+                    break;
+                }
+            }
+        }
+    }
+    
+    return merged;
+}
+
+void PDFViewerWidget::renderDebugTextHighlights()
+{
+    // Only render debug highlights if we have extracted text
+    if (m_pageTexts.empty()) {
+        return;
+    }
+
+    // Disable texturing for debug overlay
+    glDisable(GL_TEXTURE_2D);
+    
+    // Calculate visible page range for performance
+    int firstVisible = 0, lastVisible = m_pageCount - 1;
+    float currentY = -m_scrollOffsetY;
+    
+    for (int pageIndex = firstVisible; pageIndex <= lastVisible && pageIndex < m_pageCount; ++pageIndex) {
+        // Check if we have text data for this page
+        if (pageIndex >= static_cast<int>(m_pageTexts.size())) {
+            continue;
+        }
+        
+        const PageTextContent& pageText = m_pageTexts[pageIndex];
+        if (pageText.isEmpty()) {
+            // Skip to next page Y position
+            if (pageIndex < static_cast<int>(m_pageHeights.size())) {
+                currentY += (m_pageHeights[pageIndex] * m_zoomLevel) + PAGE_MARGIN;
+            }
+            continue;
+        }
+        
+        // Calculate page position on screen
+        float pageWidth = m_pageWidths[pageIndex] * m_zoomLevel;
+        float pageHeight = m_pageHeights[pageIndex] * m_zoomLevel;
+        float pageX = (m_viewportWidth - pageWidth) / 2.0f - m_scrollOffsetX;
+        float pageY = currentY;
+        
+        // Skip pages not visible in viewport
+        if (pageY + pageHeight < 0 || pageY > m_viewportHeight) {
+            currentY += pageHeight + PAGE_MARGIN;
+            continue;
+        }
+        
+        qDebug() << "Rendering debug text highlights for page" << pageIndex 
+                 << "with" << pageText.getCharacterCount() << "characters"
+                 << "," << pageText.getWordCount() << "words"
+                 << "," << pageText.getLineCount() << "lines"
+                 << "at position" << pageX << "," << pageY
+                 << "page size" << pageWidth << "x" << pageHeight
+                 << "PDF size" << pageText.pageWidth << "x" << pageText.pageHeight;
+        
+        // Render character highlights (red rectangles)
+        glColor4f(1.0f, 0.0f, 0.0f, 0.5f); // Semi-transparent red
+        renderTextElements(pageText.characters, pageIndex, pageX, pageY, pageWidth, pageHeight, pageText.pageWidth, pageText.pageHeight);
+        
+        // Render word highlights (green rectangles)
+        glColor4f(0.0f, 1.0f, 0.0f, 0.4f); // Semi-transparent green
+        renderTextElements(pageText.words, pageIndex, pageX, pageY, pageWidth, pageHeight, pageText.pageWidth, pageText.pageHeight);
+        
+        // Render line highlights (blue rectangles)
+        glColor4f(0.0f, 0.0f, 1.0f, 0.3f); // Semi-transparent blue
+        renderTextElements(pageText.lines, pageIndex, pageX, pageY, pageWidth, pageHeight, pageText.pageWidth, pageText.pageHeight);
+        
+        // Test: Render a fixed rectangle to verify rendering is working
+        glColor4f(1.0f, 1.0f, 0.0f, 0.8f); // Bright yellow
+        glBegin(GL_QUADS);
+        glVertex2f(pageX + 50, pageY + 50);
+        glVertex2f(pageX + 150, pageY + 50);
+        glVertex2f(pageX + 150, pageY + 100);
+        glVertex2f(pageX + 50, pageY + 100);
+        glEnd();
+        
+        currentY += pageHeight + PAGE_MARGIN;
+    }
+    
+    // Reset color
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+}
+
+template<typename T>
+void PDFViewerWidget::renderTextElements(const std::vector<T>& elements, int pageIndex, 
+                                        float pageX, float pageY, float pageWidth, float pageHeight,
+                                        float pdfPageWidth, float pdfPageHeight)
+{
+    qDebug() << "Rendering" << elements.size() << "text elements for page" << pageIndex;
+    
+    for (const auto& element : elements) {
+        const QRectF& bounds = element.bounds;
+        
+        // Debug: Print element bounds
+        qDebug() << "Element bounds:" << bounds << "PDF page size:" << pdfPageWidth << "x" << pdfPageHeight;
+        
+        // PDFium uses bottom-left origin, Qt/OpenGL uses top-left origin
+        // Convert PDF coordinates to screen coordinates with Y-axis flip
+        float normalizedLeft = bounds.left() / pdfPageWidth;
+        float normalizedTop = bounds.top() / pdfPageHeight;
+        float normalizedRight = bounds.right() / pdfPageWidth;
+        float normalizedBottom = bounds.bottom() / pdfPageHeight;
+        
+        // Apply Y-axis flip for PDFium's bottom-left origin
+        float screenLeft = pageX + normalizedLeft * pageWidth;
+        float screenRight = pageX + normalizedRight * pageWidth;
+        float screenTop = pageY + (1.0f - normalizedBottom) * pageHeight;    // Flip Y
+        float screenBottom = pageY + (1.0f - normalizedTop) * pageHeight;    // Flip Y
+        
+        // Ensure proper ordering after Y-flip
+        if (screenTop > screenBottom) {
+            std::swap(screenTop, screenBottom);
+        }
+        
+        // Ensure the rectangle has some minimum size for visibility
+        if (screenRight - screenLeft < 3.0f) {
+            screenRight = screenLeft + 3.0f;
+        }
+        if (screenBottom - screenTop < 3.0f) {
+            screenBottom = screenTop + 3.0f;
+        }
+        
+        // Debug: Print screen coordinates
+        qDebug() << "Screen coords:" << screenLeft << "," << screenTop << "to" << screenRight << "," << screenBottom;
+        
+        // Render highlight rectangle
+        glBegin(GL_QUADS);
+        glVertex2f(screenLeft, screenTop);
+        glVertex2f(screenRight, screenTop);
+        glVertex2f(screenRight, screenBottom);
+        glVertex2f(screenLeft, screenBottom);
+        glEnd();
     }
 }
