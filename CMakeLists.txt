@@ -66,6 +66,7 @@ set(UI_SOURCES
     ${SRC_DIR}/ui/mainwindow.cpp
     ${SRC_DIR}/ui/mainapplication.cpp
     ${SRC_DIR}/ui/pdfviewerwidget.cpp
+    ${SRC_DIR}/ui/textextraction.cpp
 )
 
 # Add hybrid PDF viewer only if Qt PDF modules are available
@@ -93,6 +94,7 @@ set(UI_HEADERS
     ${INCLUDE_DIR}/ui/mainapplication.h
     ${INCLUDE_DIR}/ui/pdfviewerwidget.h
     ${INCLUDE_DIR}/ui/pdfscrollstate.h
+    ${INCLUDE_DIR}/ui/textextraction.h
 )
 
 # Add hybrid PDF viewer header only if Qt PDF modules are available

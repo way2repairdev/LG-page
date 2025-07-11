@@ -1,5 +1,6 @@
 #include "ui/pdfviewerwidget.h"
 #include "ui/pdfscrollstate.h"
+#include "ui/textextraction.h"
 #include <QApplication>
 #include <QDir>
 #include <QMessageBox>
@@ -88,6 +89,9 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     : QOpenGLWidget(parent)
     , m_renderer(nullptr)
     , m_scrollState(nullptr)
+    , m_textExtractor(std::make_unique<TextExtractor>())
+    , m_textSelection(std::make_unique<TextSelection>())
+    , m_textExtractionComplete(false)
     , m_shaderProgram(nullptr)
     , m_toolbarWidget(nullptr)
     , m_toolbar(nullptr)
@@ -106,6 +110,8 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_immediateRenderRequired(false)
     , m_isDragging(false)
     , m_renderTimer(new QTimer(this))
+    , m_isTextSelecting(false)
+    , m_lastMousePos(0, 0)
     , m_viewportWidth(0)
     , m_viewportHeight(0)
     , m_scrollOffsetY(0.0f)
@@ -646,6 +652,9 @@ bool PDFViewerWidget::loadPDF(const QString &filePath)
             qDebug() << "Immediate OpenGL operations complete";
         }
         
+        // Extract text from all pages
+        extractTextFromAllPages();
+        
         emit pdfLoaded(filePath);
         emit pageChanged(m_currentPage + 1, m_pageCount);
         emit zoomChanged(m_zoomLevel);
@@ -775,6 +784,58 @@ QPoint PDFViewerWidget::documentToScreenCoordinates(const QPointF &docPos) const
     int screenY = static_cast<int>(docPos.y() * m_zoomLevel - m_scrollOffsetY);
     
     return QPoint(screenX, screenY);
+}
+
+QPointF PDFViewerWidget::screenToPDFCoordinates(const QPointF &screenPoint) const {
+    if (!m_isPDFLoaded || m_pageCount == 0) {
+        return QPointF();
+    }
+    
+    // Convert screen coordinates to PDF document coordinates
+    // Account for scroll position and zoom level
+    float x = (screenPoint.x() + m_scrollOffsetX) / m_zoomLevel;
+    float y = (screenPoint.y() + m_scrollOffsetY) / m_zoomLevel;
+    
+    return QPointF(x, y);
+}
+
+QPointF PDFViewerWidget::pdfToPageCoordinates(const QPointF &pdfPoint, int pageIndex) const {
+    if (!m_isPDFLoaded || pageIndex < 0 || pageIndex >= m_pageCount) {
+        return QPointF();
+    }
+    
+    // Calculate page offset in the document
+    float pageOffsetY = 0.0f;
+    for (int i = 0; i < pageIndex; ++i) {
+        if (i < m_pageHeights.size()) {
+            pageOffsetY += m_pageHeights[i] + PAGE_MARGIN;
+        }
+    }
+    
+    // Convert PDF coordinates to page-relative coordinates
+    float x = pdfPoint.x();
+    float y = pdfPoint.y() - pageOffsetY;
+    
+    return QPointF(x, y);
+}
+
+int PDFViewerWidget::getPageAtPoint(const QPointF &pdfPoint) const {
+    if (!m_isPDFLoaded || m_pageCount == 0) {
+        return -1;
+    }
+    
+    float currentY = 0.0f;
+    for (int i = 0; i < m_pageCount; ++i) {
+        float pageHeight = (i < m_pageHeights.size()) ? m_pageHeights[i] : 800.0f; // Default height
+        
+        if (pdfPoint.y() >= currentY && pdfPoint.y() <= currentY + pageHeight) {
+            return i;
+        }
+        
+        currentY += pageHeight + PAGE_MARGIN;
+    }
+    
+    return -1; // Point is not over any page
 }
 
 void PDFViewerWidget::setupUI() 
@@ -1740,7 +1801,6 @@ void PDFViewerWidget::cleanupUnusedTextures()
         }
         
         currentY += pageHeight + PAGE_MARGIN;
-        
         if (currentY > m_viewportHeight + 1000) { // Extended buffer
             break;
         }
@@ -2035,6 +2095,7 @@ void PDFViewerWidget::handleWheelEventBatch(double totalDelta, const QPoint& cur
     double newScrollX = (m_viewportWidth - newMaxPageWidth) / 2.0f - newPageX;
     double newScrollY = docY * newZoom - cursorPos.y();
     
+    // Clamp to valid scroll range using the updated limits
     m_scrollOffsetX = std::clamp(static_cast<float>(newScrollX), m_minScrollX, m_maxScrollX);
     m_scrollOffsetY = std::clamp(static_cast<float>(newScrollY), 0.0f, m_maxScrollY);
     
@@ -2242,5 +2303,245 @@ void PDFViewerWidget::resetPanThrottling()
     // If throttle is still active, process remaining events
     if (m_panThrottleActive) {
         processThrottledPanEvent();
+    }
+}
+
+// Text Extraction and Selection Methods
+void PDFViewerWidget::extractTextFromAllPages() {
+    if (!m_textExtractor || !m_renderer || !m_isPDFLoaded) {
+        return;
+    }
+
+    qDebug() << "Starting text extraction from" << m_pageCount << "pages";
+    
+    // Clear any existing text data
+    m_pageTexts.clear();
+    m_pageTexts.resize(m_pageCount);
+    
+    // Extract text from each page
+    for (int i = 0; i < m_pageCount; ++i) {
+        qDebug() << "Extracting text from page" << (i + 1);
+        
+        // Get PDFium document from renderer
+        void* document = m_renderer->GetDocument();
+        if (document) {
+            m_pageTexts[i] = m_textExtractor->extractPageText(document, i);
+            qDebug() << "Page" << (i + 1) << "text extraction complete. Lines:" << m_pageTexts[i].lines.size();
+        }
+    }
+    
+    m_textExtractionComplete = true;
+    qDebug() << "Text extraction from all pages complete";
+}
+
+void PDFViewerWidget::startTextSelection(const QPointF& startPoint)
+{
+    if (!m_isPDFLoaded || !m_textSelection) {
+        return;
+    }
+    
+    // Convert screen coordinates to PDF coordinates
+    QPointF pdfPoint = screenToPDFCoordinates(startPoint);
+    
+    // Determine which page the point is on
+    int pageIndex = getPageAtPoint(pdfPoint);
+    if (pageIndex < 0 || pageIndex >= m_pageCount) {
+        return;
+    }
+    
+    // Convert to page-relative coordinates
+    QPointF pagePoint = pdfToPageCoordinates(pdfPoint, pageIndex);
+    
+    m_textSelection->startSelection(pageIndex, pagePoint);
+    m_isTextSelecting = true;
+    
+    qDebug() << "Started text selection at page" << pageIndex << "point" << pagePoint;
+}
+
+void PDFViewerWidget::updateTextSelection(const QPointF& currentPoint)
+{
+    if (!m_isPDFLoaded || !m_textSelection || !m_isTextSelecting) {
+        return;
+    }
+    
+    // Convert screen coordinates to PDF coordinates
+    QPointF pdfPoint = screenToPDFCoordinates(currentPoint);
+    
+    // Determine which page the point is on
+    int pageIndex = getPageAtPoint(pdfPoint);
+    if (pageIndex < 0 || pageIndex >= m_pageCount) {
+        return;
+    }
+    
+    // Convert to page-relative coordinates
+    QPointF pagePoint = pdfToPageCoordinates(pdfPoint, pageIndex);
+    
+    m_textSelection->updateSelection(pageIndex, pagePoint);
+    
+    // Trigger repaint to show selection
+    update();
+}
+
+void PDFViewerWidget::endTextSelection()
+{
+    if (!m_isTextSelecting) {
+        return;
+    }
+    
+    m_isTextSelecting = false;
+    
+    if (m_textSelection && m_textSelection->hasSelection()) {
+        m_textSelection->endSelection();
+        
+        // Get selected text
+        QString selectedText = getSelectedText();
+        if (!selectedText.isEmpty()) {
+            qDebug() << "Text selection completed:" << selectedText;
+            emit textSelectionChanged(selectedText);
+        }
+    }
+}
+
+void PDFViewerWidget::clearTextSelection()
+{
+    if (m_textSelection) {
+        m_textSelection->clearSelection();
+        m_isTextSelecting = false;
+        update(); // Trigger repaint to clear selection highlight
+        emit textSelectionChanged(QString());
+    }
+}
+
+QString PDFViewerWidget::getSelectedText() const
+{
+    if (!m_textSelection || !m_textSelection->hasSelection() || !m_textExtractionComplete) {
+        return QString();
+    }
+    
+    // Get selection bounds
+    int startPage = m_textSelection->getStartPage();
+    int endPage = m_textSelection->getEndPage();
+    QPointF startPoint = m_textSelection->getStartPoint();
+    QPointF endPoint = m_textSelection->getEndPoint();
+    
+    QString selectedText;
+    
+    // Handle single page selection
+    if (startPage == endPage) {
+        if (startPage < 0 || startPage >= static_cast<int>(m_pageTexts.size())) {
+            return QString();
+        }
+        
+        const PageTextContent& pageText = m_pageTexts[startPage];
+        selectedText = extractTextFromRegion(pageText, startPoint, endPoint);
+    } else {
+        // Handle multi-page selection
+        for (int pageIndex = startPage; pageIndex <= endPage; ++pageIndex) {
+            if (pageIndex < 0 || pageIndex >= static_cast<int>(m_pageTexts.size())) {
+                continue;
+            }
+            
+            const PageTextContent& pageText = m_pageTexts[pageIndex];
+            
+            if (pageIndex == startPage) {
+                // First page: from start point to end of page
+                QPointF pageEnd(pageText.pageWidth, pageText.pageHeight);
+                selectedText += extractTextFromRegion(pageText, startPoint, pageEnd);
+            } else if (pageIndex == endPage) {
+                // Last page: from beginning to end point
+                QPointF pageStart(0, 0);
+                selectedText += extractTextFromRegion(pageText, pageStart, endPoint);
+            } else {
+                // Middle pages: entire page
+                selectedText += pageText.fullText;
+            }
+            
+            if (pageIndex < endPage) {
+                selectedText += "\n\n"; // Add page break
+            }
+        }
+    }
+    
+    return selectedText.trimmed();
+}
+
+bool PDFViewerWidget::hasTextSelection() const
+{
+    return m_textSelection && m_textSelection->hasSelection();
+}
+
+QString PDFViewerWidget::extractTextFromRegion(const PageTextContent& pageText, 
+                                               const QPointF& startPoint, 
+                                               const QPointF& endPoint) const
+{
+    QString result;
+    
+    // Normalize the selection rectangle
+    QRectF selectionRect(
+        qMin(startPoint.x(), endPoint.x()),
+        qMin(startPoint.y(), endPoint.y()),
+        qAbs(endPoint.x() - startPoint.x()),
+        qAbs(endPoint.y() - startPoint.y())
+    );
+    
+    // Find words that intersect with the selection rectangle
+    for (const auto& word : pageText.words) {
+        if (selectionRect.intersects(word.bounds)) {
+            result += word.text + " ";
+        }
+    }
+    
+    return result;
+}
+
+QPointF PDFViewerWidget::screenToPDF(const QPoint &screenPos) {
+    if (!m_isPDFLoaded || m_pageCount == 0) {
+        return QPointF();
+    }
+    
+    // Convert screen coordinates to PDF document coordinates
+    // Account for scroll position and zoom level
+    float x = (screenPos.x() + m_scrollOffsetX) / m_zoomLevel;
+    float y = (screenPos.y() + m_scrollOffsetY) / m_zoomLevel;
+    return QPointF(x, y);
+}
+
+void PDFViewerWidget::mouseDoubleClickEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton) {
+        QPointF pdfCoord = screenToPDF(event->pos());
+        selectWordAtPosition(pdfCoord);
+    }
+    QOpenGLWidget::mouseDoubleClickEvent(event);
+}
+
+void PDFViewerWidget::selectWordAtPosition(const QPointF &position) {
+    if (!m_textExtractor || m_pageTexts.empty()) {
+        return;
+    }
+
+    // Convert position to PDF coordinates
+    QPointF pdfCoord = screenToPDFCoordinates(position);
+    int page = getPageAtPoint(pdfCoord);
+    
+    if (page < 0 || page >= static_cast<int>(m_pageTexts.size())) {
+        return;
+    }
+
+    // Convert to page coordinates
+    QPointF pageCoord = pdfToPageCoordinates(pdfCoord, page);
+
+    // Find word at position
+    const PageTextContent& pageText = m_pageTexts[page];
+    for (const TextLine& line : pageText.lines) {
+        for (const TextWord& word : line.words) {
+            if (word.bounds.contains(pageCoord)) {
+                // Select this word by setting start and end to word bounds
+                m_textSelection->startSelection(page, word.bounds.topLeft());
+                m_textSelection->updateSelection(page, word.bounds.bottomRight());
+                m_textSelection->endSelection();
+                update();
+                return;
+            }
+        }
     }
 }

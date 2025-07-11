@@ -40,6 +40,9 @@ static constexpr int TOOLBAR_HEIGHT = 40;
 // Forward declarations for PDF viewer components
 class PDFRenderer;
 struct PDFScrollState;
+class TextExtractor;
+struct PageTextContent;
+class TextSelection;
 
 // Custom deleter for PDFRenderer to avoid incomplete type issues
 struct PDFRendererDeleter {
@@ -96,12 +99,26 @@ public:
     // Coordinate conversion
     QPointF screenToDocumentCoordinates(const QPoint &screenPos) const;
     QPoint documentToScreenCoordinates(const QPointF &docPos) const;
+    
+    // Text selection functionality
+    void startTextSelection(const QPointF& startPoint);
+    void updateTextSelection(const QPointF& currentPoint);
+    void endTextSelection();
+    void clearTextSelection();
+    QString getSelectedText() const;
+    bool hasTextSelection() const;
+    
+    // Text extraction and word selection
+    void selectWordAtPosition(const QPointF &position);
+    void extractTextFromAllPages();
+    QPointF screenToPDF(const QPoint &screenPos);
 
 signals:
     void pdfLoaded(const QString &filePath);
     void pdfClosed();
     void pageChanged(int currentPage, int totalPages);
     void zoomChanged(double zoomLevel);
+    void textSelectionChanged(const QString &selectedText);
     void errorOccurred(const QString &error);
 
 protected:
@@ -115,6 +132,7 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
@@ -146,6 +164,16 @@ private:
     void calculatePageLayout();
     void handlePanning(const QPoint &delta);
     void handleZooming(double factor, const QPoint &center);
+    
+    // Text extraction and selection
+    void renderTextSelection();
+    bool isPointOverText(const QPointF &pdfPoint, int pageIndex) const;
+    QPointF screenToPDFCoordinates(const QPointF &screenPoint) const;
+    QPointF pdfToPageCoordinates(const QPointF &pdfPoint, int pageIndex) const;
+    int getPageAtPoint(const QPointF &pdfPoint) const;
+    QString extractTextFromRegion(const PageTextContent& pageText, 
+                                  const QPointF& startPoint, 
+                                  const QPointF& endPoint) const;
 
     // Background texture loading for high zoom performance
     void loadTexturesInBackground(const std::vector<int>& pageIndices);
@@ -183,6 +211,12 @@ private:
     // PDF renderer components
     std::unique_ptr<PDFRenderer, PDFRendererDeleter> m_renderer;
     std::unique_ptr<PDFScrollState> m_scrollState;
+    
+    // Text extraction and selection
+    std::unique_ptr<TextExtractor> m_textExtractor;
+    std::vector<PageTextContent> m_pageTexts;
+    std::unique_ptr<TextSelection> m_textSelection;
+    bool m_textExtractionComplete;
 
     // OpenGL resources
     QOpenGLShaderProgram *m_shaderProgram;
@@ -222,6 +256,10 @@ private:
     bool m_isDragging;
     QPoint m_lastPanPoint;
     QTimer *m_renderTimer;
+    
+    // Text selection state
+    bool m_isTextSelecting;
+    QPointF m_lastMousePos;
 
     // View parameters
     int m_viewportWidth;
@@ -265,6 +303,9 @@ private:
     // Loading indicator
     QLabel *m_loadingLabel;
     bool m_isLoadingTextures;
+    
+    // Additional text selection data
+    bool m_selectionActive;
 };
 
 #endif // PDFVIEWERWIDGET_H
