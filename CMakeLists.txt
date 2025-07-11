@@ -93,7 +93,6 @@ set(UI_HEADERS
     ${INCLUDE_DIR}/ui/mainapplication.h
     ${INCLUDE_DIR}/ui/pdfviewerwidget.h
     ${INCLUDE_DIR}/ui/pdfscrollstate.h
-    ${INCLUDE_DIR}/ui/textsearch.h
 )
 
 # Add hybrid PDF viewer header only if Qt PDF modules are available

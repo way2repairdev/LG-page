@@ -36,12 +36,10 @@ static constexpr double DEFAULT_ZOOM = 0.8;  // Fit to screen better
 static constexpr double ZOOM_STEP = 0.1;
 static constexpr float PAGE_MARGIN = 10.0f;
 static constexpr int TOOLBAR_HEIGHT = 40;
-static constexpr int SEARCH_BAR_HEIGHT = 35;
 
 // Forward declarations for PDF viewer components
 class PDFRenderer;
 struct PDFScrollState;
-struct TextSearch;
 
 // Custom deleter for PDFRenderer to avoid incomplete type issues
 struct PDFRendererDeleter {
@@ -82,13 +80,6 @@ public:
     void goToLastPage();
     int getCurrentPage() const;
     int getPageCount() const;
-
-    // Search functionality
-    void startSearch();
-    void searchNext();
-    void searchPrevious();
-    void setSearchTerm(const QString &term);
-    void clearSearch();
     
     // Zoom fit functionality
     void fitToWidth();
@@ -111,7 +102,6 @@ signals:
     void pdfClosed();
     void pageChanged(int currentPage, int totalPages);
     void zoomChanged(double zoomLevel);
-    void searchResultsChanged(int currentResult, int totalResults);
     void errorOccurred(const QString &error);
 
 protected:
@@ -132,11 +122,6 @@ protected:
 private slots:
     void onZoomSliderChanged(int value);
     void onPageInputChanged();
-    void onSearchTextChanged(const QString &text);
-    void onSearchNext();
-    void onSearchPrevious();
-    void onToggleCaseSensitive(bool enabled);
-    void onToggleWholeWords(bool enabled);
     void onVerticalScrollBarChanged(int value);
     void updateRender();
 
@@ -145,7 +130,6 @@ private:
     void initializePDFRenderer();
     void setupUI();
     void setupToolbar();
-    void setupSearchBar();
     void createContextMenu();
 
     // OpenGL rendering
@@ -162,11 +146,6 @@ private:
     void calculatePageLayout();
     void handlePanning(const QPoint &delta);
     void handleZooming(double factor, const QPoint &center);
-
-    // Search helpers
-    void performSearch();
-    void highlightSearchResults();
-    void updateSearchUI();
 
     // Background texture loading for high zoom performance
     void loadTexturesInBackground(const std::vector<int>& pageIndices);
@@ -204,7 +183,6 @@ private:
     // PDF renderer components
     std::unique_ptr<PDFRenderer, PDFRendererDeleter> m_renderer;
     std::unique_ptr<PDFScrollState> m_scrollState;
-    std::unique_ptr<TextSearch> m_textSearch;
 
     // OpenGL resources
     QOpenGLShaderProgram *m_shaderProgram;
@@ -224,16 +202,6 @@ private:
     
     // Scroll bar
     QScrollBar *m_verticalScrollBar;
-    
-    // Search UI
-    QWidget *m_searchWidget;
-    QLineEdit *m_searchInput;
-    QPushButton *m_searchNextButton;
-    QPushButton *m_searchPrevButton;
-    QCheckBox *m_caseSensitiveCheck;
-    QCheckBox *m_wholeWordsCheck;
-    QLabel *m_searchResultsLabel;
-    QPushButton *m_closeSearchButton;
 
     // Context menu
     QMenu *m_contextMenu;
@@ -241,8 +209,6 @@ private:
     QAction *m_zoomOutAction;
     QAction *m_zoomFitAction;
     QAction *m_zoomWidthAction;
-    QAction *m_searchAction;
-    QAction *m_zoomModeAction;
 
     // State variables
     QString m_filePath;

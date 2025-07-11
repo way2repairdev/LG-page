@@ -1,6 +1,5 @@
 #include "ui/pdfviewerwidget.h"
 #include "ui/pdfscrollstate.h"
-#include "ui/textsearch.h"
 #include <QApplication>
 #include <QDir>
 #include <QMessageBox>
@@ -89,7 +88,6 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     : QOpenGLWidget(parent)
     , m_renderer(nullptr)
     , m_scrollState(nullptr)
-    , m_textSearch(nullptr)
     , m_shaderProgram(nullptr)
     , m_toolbarWidget(nullptr)
     , m_toolbar(nullptr)
@@ -98,14 +96,6 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_pageInput(nullptr)
     , m_pageCountLabel(nullptr)
     , m_verticalScrollBar(nullptr)
-    , m_searchWidget(nullptr)
-    , m_searchInput(nullptr)
-    , m_searchNextButton(nullptr)
-    , m_searchPrevButton(nullptr)
-    , m_caseSensitiveCheck(nullptr)
-    , m_wholeWordsCheck(nullptr)
-    , m_searchResultsLabel(nullptr)
-    , m_closeSearchButton(nullptr)
     , m_contextMenu(nullptr)
     , m_isPDFLoaded(false)
     , m_currentPage(0)
@@ -719,7 +709,7 @@ void PDFViewerWidget::initializeGL()
 void PDFViewerWidget::resizeGL(int w, int h)
 {
     m_viewportWidth = w;
-    m_viewportHeight = h - TOOLBAR_HEIGHT - (m_searchWidget && m_searchWidget->isVisible() ? SEARCH_BAR_HEIGHT : 0);
+    m_viewportHeight = h - TOOLBAR_HEIGHT;
     
     glViewport(0, 0, w, h);
     
@@ -807,7 +797,6 @@ void PDFViewerWidget::setupUI()
 }
 
 void PDFViewerWidget::setupToolbar() { /* Implement toolbar setup */ }
-void PDFViewerWidget::setupSearchBar() { /* Implement search bar setup */ }
 void PDFViewerWidget::createContextMenu() 
 { 
     m_contextMenu = new QMenu(this);
@@ -845,13 +834,6 @@ void PDFViewerWidget::createContextMenu()
     
     QAction* menuHelpAction = m_contextMenu->addAction("  • Ctrl + Right Click = Menu");
     menuHelpAction->setEnabled(false);
-    
-    m_contextMenu->addSeparator();
-    
-    // Search action
-    m_searchAction = m_contextMenu->addAction("Search...");
-    m_searchAction->setShortcut(QKeySequence("Ctrl+F"));
-    connect(m_searchAction, &QAction::triggered, this, &PDFViewerWidget::startSearch);
 }
 
 void PDFViewerWidget::closePDF() 
@@ -1273,44 +1255,6 @@ void PDFViewerWidget::resetZoom()
     update();
 }
 
-// Search methods
-void PDFViewerWidget::startSearch() 
-{
-    if (m_searchWidget) {
-        m_searchWidget->setVisible(true);
-        if (m_searchInput) {
-            m_searchInput->setFocus();
-        }
-    }
-}
-
-void PDFViewerWidget::searchNext() 
-{
-    // TODO: Implement search functionality
-}
-
-void PDFViewerWidget::searchPrevious() 
-{
-    // TODO: Implement search functionality
-}
-
-void PDFViewerWidget::setSearchTerm(const QString &term) 
-{
-    if (m_searchInput) {
-        m_searchInput->setText(term);
-    }
-}
-
-void PDFViewerWidget::clearSearch() 
-{
-    if (m_searchInput) {
-        m_searchInput->clear();
-    }
-    if (m_searchWidget) {
-        m_searchWidget->setVisible(false);
-    }
-}
-
 // Slot methods
 void PDFViewerWidget::onPageInputChanged()
 {
@@ -1335,31 +1279,6 @@ void PDFViewerWidget::onZoomSliderChanged(int value)
     }
     
     emit zoomChanged(newZoom);
-}
-
-void PDFViewerWidget::onSearchTextChanged(const QString &text) 
-{
-    // TODO: Implement search text changed
-}
-
-void PDFViewerWidget::onSearchNext() 
-{
-    searchNext();
-}
-
-void PDFViewerWidget::onSearchPrevious() 
-{
-    searchPrevious();
-}
-
-void PDFViewerWidget::onToggleCaseSensitive(bool enabled) 
-{
-    // TODO: Implement toggle case sensitive
-}
-
-void PDFViewerWidget::onToggleWholeWords(bool enabled) 
-{
-    // TODO: Implement toggle whole words
 }
 
 void PDFViewerWidget::onVerticalScrollBarChanged(int value)
@@ -1695,7 +1614,7 @@ void PDFViewerWidget::resizeEvent(QResizeEvent *event)
     
     // Update viewport dimensions
     m_viewportWidth = event->size().width();
-    m_viewportHeight = event->size().height() - TOOLBAR_HEIGHT - (m_searchWidget && m_searchWidget->isVisible() ? SEARCH_BAR_HEIGHT : 0);
+    m_viewportHeight = event->size().height() - TOOLBAR_HEIGHT;
     
     // Position the vertical scroll bar on the right side
     if (m_verticalScrollBar) {
@@ -1712,7 +1631,7 @@ void PDFViewerWidget::resizeEvent(QResizeEvent *event)
             width() - scrollBarWidth - margin,
             TOOLBAR_HEIGHT,
             scrollBarWidth,
-            height() - TOOLBAR_HEIGHT - (m_searchWidget && m_searchWidget->isVisible() ? SEARCH_BAR_HEIGHT : 0)
+            height() - TOOLBAR_HEIGHT
         );
     }
     
@@ -1738,9 +1657,6 @@ void PDFViewerWidget::resizeEvent(QResizeEvent *event)
  * 
  * PANNING:
  * - Right Mouse Button + Drag = Pan document
- * 
- * SEARCH:
- * - Ctrl + F = Open search
  */
 
 // Background texture loading for high zoom performance
