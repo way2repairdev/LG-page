@@ -2791,6 +2791,57 @@ void PDFViewerWidget::renderTextSelection()
     // Disable texturing for selection overlay
     glDisable(GL_TEXTURE_2D);
     
+    // If currently selecting (dragging), show immediate drag rectangle feedback
+    if (m_isTextSelecting && m_textSelection->isSelecting()) {
+        glColor4f(0.3f, 0.6f, 1.0f, 0.2f); // Light blue for drag indication
+        
+        QPointF start = m_textSelection->getStartPoint();
+        QPointF end = m_textSelection->getEndPoint();
+        int pageIndex = m_textSelection->getStartPage();
+        
+        if (pageIndex >= 0 && pageIndex < m_pageCount) {
+            // Calculate page position on screen
+            float pageWidth = m_pageWidths[pageIndex] * m_zoomLevel;
+            float pageHeight = m_pageHeights[pageIndex] * m_zoomLevel;
+            
+            float pageY = -m_scrollOffsetY;
+            for (int i = 0; i < pageIndex; ++i) {
+                pageY += (m_pageHeights[i] * m_zoomLevel) + PAGE_MARGIN;
+            }
+            float pageX = (m_viewportWidth - pageWidth) / 2.0f - m_scrollOffsetX;
+            
+            // Convert page coordinates to screen coordinates for drag rectangle
+            float screenStartX = pageX + (start.x() / m_pageWidths[pageIndex]) * pageWidth;
+            float screenStartY = pageY + (start.y() / m_pageHeights[pageIndex]) * pageHeight;
+            float screenEndX = pageX + (end.x() / m_pageWidths[pageIndex]) * pageWidth;
+            float screenEndY = pageY + (end.y() / m_pageHeights[pageIndex]) * pageHeight;
+            
+            // Draw drag selection rectangle
+            float left = qMin(screenStartX, screenEndX);
+            float top = qMin(screenStartY, screenEndY);
+            float right = qMax(screenStartX, screenEndX);
+            float bottom = qMax(screenStartY, screenEndY);
+            
+            // Fill rectangle
+            glBegin(GL_QUADS);
+            glVertex2f(left, top);
+            glVertex2f(right, top);
+            glVertex2f(right, bottom);
+            glVertex2f(left, bottom);
+            glEnd();
+            
+            // Border for drag rectangle
+            glColor4f(0.1f, 0.4f, 0.8f, 0.8f);
+            glLineWidth(1.5f);
+            glBegin(GL_LINE_LOOP);
+            glVertex2f(left, top);
+            glVertex2f(right, top);
+            glVertex2f(right, bottom);
+            glVertex2f(left, bottom);
+            glEnd();
+        }
+    }
+    
     // Set selection highlight color (semi-transparent blue)
     glColor4f(0.2f, 0.4f, 0.8f, 0.3f);
     
