@@ -830,13 +830,24 @@ QPointF PDFViewerWidget::screenToPDFCoordinates(const QPointF &screenPoint) cons
         return QPointF();
     }
     
+    // CRITICAL FIX: Account for the viewport adjustment made in resizeGL()
+    // The OpenGL viewport is reduced by selectedTextHeight + 2*margin at the bottom
+    const int selectedTextHeight = 40;
+    const int margin = 8;
+    const int viewportOffset = selectedTextHeight + 2 * margin; // 56 pixels
+    
+    // The mouse coordinates are relative to the full widget, but rendering uses adjusted viewport
+    // Since the viewport starts at (0,0) and excludes the bottom area, no Y adjustment needed
+    QPointF adjustedScreenPoint = screenPoint;
+    
     // Use the EXACT same logic as renderPDF() for coordinate conversion
     float currentY = -m_scrollOffsetY;
     
-    qDebug() << "screenToPDFCoordinates DEBUG: screen" << screenPoint << "zoom" << m_zoomLevel;
+    qDebug() << "screenToPDFCoordinates DEBUG: original screen" << screenPoint << "adjusted" << adjustedScreenPoint << "zoom" << m_zoomLevel;
+    qDebug() << "screenToPDFCoordinates DEBUG: viewport" << m_viewportWidth << "x" << m_viewportHeight << "scroll offset" << m_scrollOffsetX << "," << m_scrollOffsetY;
     
     for (int i = 0; i < m_pageCount; ++i) {
-        // NOW all page dimensions are synchronized - use m_pageWidths/Heights directly
+        // EXACT same calculation as renderPDF() - synchronized dimensions
         float pageWidth = m_pageWidths[i] * m_zoomLevel;
         float pageHeight = m_pageHeights[i] * m_zoomLevel;
         float pageX = (m_viewportWidth - pageWidth) / 2.0f - m_scrollOffsetX;
@@ -845,18 +856,23 @@ QPointF PDFViewerWidget::screenToPDFCoordinates(const QPointF &screenPoint) cons
         qDebug() << "screenToPDFCoordinates DEBUG: page" << i << "pagePos(" << pageX << "," << pageY 
                  << ") size(" << pageWidth << "," << pageHeight << ")";
         
-        // Check if screen point is within this page
-        if (screenPoint.x() >= pageX && screenPoint.x() <= pageX + pageWidth &&
-            screenPoint.y() >= pageY && screenPoint.y() <= pageY + pageHeight) {
+        // Check if adjusted screen point is within this page bounds
+        if (adjustedScreenPoint.x() >= pageX && adjustedScreenPoint.x() <= pageX + pageWidth &&
+            adjustedScreenPoint.y() >= pageY && adjustedScreenPoint.y() <= pageY + pageHeight) {
             
-            // Convert screen coordinates to PDF page coordinates 
-            float pagePointX = (screenPoint.x() - pageX) / m_zoomLevel;
-            float pagePointY = (screenPoint.y() - pageY) / m_zoomLevel;
+            // Convert screen coordinates to page coordinates (normalized 0-1)
+            float normalizedX = (adjustedScreenPoint.x() - pageX) / pageWidth;
+            float normalizedY = (adjustedScreenPoint.y() - pageY) / pageHeight;
             
-            qDebug() << "screenToPDFCoordinates DEBUG: FOUND page" << i << "-> pagePoint(" << pagePointX << "," << pagePointY << ")";
-            qDebug() << "COORDINATE FIX: Using synchronized PDF dimensions";
+            // COORDINATE SYSTEM FIX: Ensure consistent coordinate origin
+            // Convert normalized coordinates to PDF page coordinates in top-left origin system
+            float pagePointX = normalizedX * m_pageWidths[i];
+            float pagePointY = normalizedY * m_pageHeights[i];
             
-            // Return page coordinates in PDF coordinate system (same as text extraction)
+            qDebug() << "screenToPDFCoordinates DEBUG: FOUND page" << i << "-> normalized(" << normalizedX << "," << normalizedY << ") -> pagePoint(" << pagePointX << "," << pagePointY << ")";
+            qDebug() << "COORDINATE FIX: Using top-left origin coordinates (matching text extraction system)";
+            
+            // Return page coordinates in top-left origin system (consistent with text extraction)
             return QPointF(pagePointX, pagePointY);
         }
         
@@ -865,7 +881,7 @@ QPointF PDFViewerWidget::screenToPDFCoordinates(const QPointF &screenPoint) cons
     }
     
     // Point is not over any page
-    qDebug() << "screenToPDFCoordinates DEBUG: NO PAGE FOUND";
+    qDebug() << "screenToPDFCoordinates DEBUG: NO PAGE FOUND - point outside all pages";
     return QPointF();
 }
 
@@ -1631,31 +1647,27 @@ void PDFViewerWidget::mousePressEvent(QMouseEvent *event)
     // Left mouse button for text selection
     if (event->button() == Qt::LeftButton) {
         if (m_isPDFLoaded && m_textSelection) {
-            // Convert screen coordinates to page coordinates
-            QPointF pagePoint = screenToPDFCoordinates(QPointF(event->pos()));
-            int pageIndex = getPageAtPoint(QPointF(event->pos())); // Use screen coordinates for page detection
+            // CRITICAL COORDINATE FIX: Adjust mouse coordinates to match the OpenGL viewport
+            // The viewport is reduced by selectedTextHeight + 2*margin (56 pixels) in resizeGL()
+            const int selectedTextHeight = 40;
+            const int margin = 8;
+            const int viewportOffset = selectedTextHeight + 2 * margin; // 56 pixels
             
-            qDebug() << "=== MOUSE CLICK DEBUG ===";
-            qDebug() << "Screen pos:" << event->pos();
-            qDebug() << "Page index:" << pageIndex;
-            qDebug() << "Page point:" << pagePoint;
-            if (pageIndex >= 0 && pageIndex < m_pageTexts.size()) {
-                qDebug() << "Page dimensions:" << m_pageTexts[pageIndex].pageWidth << "x" << m_pageTexts[pageIndex].pageHeight;
-                qDebug() << "Characters on page:" << m_pageTexts[pageIndex].characters.size();
-                if (!m_pageTexts[pageIndex].characters.empty()) {
-                    qDebug() << "First char bounds:" << m_pageTexts[pageIndex].characters[0].bounds;
-                    qDebug() << "Last char bounds:" << m_pageTexts[pageIndex].characters.back().bounds;
-                }
-            }
-            qDebug() << "======================";
+            QPoint adjustedPos = event->pos();
+            // No adjustment needed - OpenGL viewport starts at (0,0) and mouse coords are already correct
+            // The issue was that we were overthinking the coordinate system
+            
+            // Convert screen coordinates to PDF coordinates using the proper conversion function
+            QPointF pdfPoint = screenToPDFCoordinates(QPointF(adjustedPos));
+            int pageIndex = getPageAtPoint(QPointF(adjustedPos)); // Use adjusted coordinates for page detection
             
             if (pageIndex >= 0) {
-                // Start text selection with page coordinates (no additional conversion needed)
-                m_textSelection->startSelection(pageIndex, pagePoint);
+                // Start text selection with PDF coordinates (already properly converted)
+                m_textSelection->startSelection(pageIndex, pdfPoint);
                 m_isTextSelecting = true;
-                m_lastMousePos = QPointF(event->pos());
+                m_lastMousePos = QPointF(adjustedPos);
                 
-                qDebug() << "Started text selection at page" << pageIndex << "Page point" << pagePoint;
+                qDebug() << "COORDINATE FIX: Started text selection at page" << pageIndex << "adjusted pos" << adjustedPos << "PDF point" << pdfPoint;
                 update(); // Trigger repaint
             }
         }
@@ -1671,15 +1683,24 @@ void PDFViewerWidget::mouseMoveEvent(QMouseEvent *event)
     // Handle text selection dragging
     if (m_isTextSelecting && (event->buttons() & Qt::LeftButton)) {
         if (m_textSelection) {
-            // Convert screen coordinates to page coordinates
-            QPointF pagePoint = screenToPDFCoordinates(QPointF(event->pos()));
-            int pageIndex = getPageAtPoint(QPointF(event->pos())); // Use screen coordinates for page detection
+            // CRITICAL COORDINATE FIX: Adjust mouse coordinates to match the OpenGL viewport
+            // The viewport is reduced by selectedTextHeight + 2*margin (56 pixels) in resizeGL()
+            const int selectedTextHeight = 40;
+            const int margin = 8;
+            const int viewportOffset = selectedTextHeight + 2 * margin; // 56 pixels
             
-            qDebug() << "Mouse drag at screen:" << event->pos() << "-> Page:" << pageIndex << "-> PagePoint:" << pagePoint;
+            QPoint adjustedPos = event->pos();
+            // No adjustment needed - OpenGL viewport starts at (0,0) and mouse coords are already correct
+            // The issue was that we were overthinking the coordinate system
+            
+            // Convert screen coordinates to PDF coordinates using the proper conversion function
+            QPointF pdfPoint = screenToPDFCoordinates(QPointF(adjustedPos));
+            int pageIndex = getPageAtPoint(QPointF(adjustedPos)); // Use adjusted coordinates for page detection
             
             if (pageIndex >= 0) {
-                // Update text selection with page coordinates (no additional conversion needed)
-                m_textSelection->updateSelection(pageIndex, pagePoint);
+                // Update text selection with PDF coordinates (already properly converted)
+                m_textSelection->updateSelection(pageIndex, pdfPoint);
+                qDebug() << "COORDINATE FIX: Updated text selection at page" << pageIndex << "adjusted pos" << adjustedPos << "PDF point" << pdfPoint;
                 update(); // Trigger repaint to show selection
             }
         }
@@ -2688,45 +2709,36 @@ QString PDFViewerWidget::extractTextFromRegion(const PageTextContent& pageText,
     
     QString result;
     
-    // Find start and end character indices based on proximity to selection points
-    int startCharIndex = -1;
-    int endCharIndex = -1;
-    double minStartDist = std::numeric_limits<double>::max();
-    double minEndDist = std::numeric_limits<double>::max();
+    // Create selection rectangle from start and end points
+    QRectF selectionRect(
+        QPointF(std::min(startPoint.x(), endPoint.x()),
+                std::min(startPoint.y(), endPoint.y())),
+        QPointF(std::max(startPoint.x(), endPoint.x()),
+                std::max(startPoint.y(), endPoint.y()))
+    );
+    
+    // Only select characters that intersect with the selection rectangle
+    std::vector<int> selectedCharIndices;
     
     for (size_t i = 0; i < pageText.characters.size(); ++i) {
         const TextChar& ch = pageText.characters[i];
-        QPointF charCenter = ch.bounds.center();
         
-        // Find closest character to start point
-        double startDist = QLineF(startPoint, charCenter).length();
-        if (startDist < minStartDist) {
-            minStartDist = startDist;
-            startCharIndex = static_cast<int>(i);
-        }
-        
-        // Find closest character to end point
-        double endDist = QLineF(endPoint, charCenter).length();
-        if (endDist < minEndDist) {
-            minEndDist = endDist;
-            endCharIndex = static_cast<int>(i);
+        // Check if character bounds intersect with selection rectangle
+        if (selectionRect.intersects(ch.bounds)) {
+            selectedCharIndices.push_back(static_cast<int>(i));
         }
     }
     
-    // If we found valid start and end characters
-    if (startCharIndex >= 0 && endCharIndex >= 0) {
-        // Ensure start comes before end in text order
-        if (startCharIndex > endCharIndex) {
-            std::swap(startCharIndex, endCharIndex);
-        }
-        
-        // Extract text from selected characters
-        for (int i = startCharIndex; i <= endCharIndex; ++i) {
-            result += pageText.characters[i].character;
-        }
+    // Sort indices to maintain text order
+    std::sort(selectedCharIndices.begin(), selectedCharIndices.end());
+    
+    // Extract text from selected characters
+    for (int index : selectedCharIndices) {
+        result += pageText.characters[index].character;
     }
     
-    return result;
+    // Clean up whitespace and return
+    return result.trimmed();
 }
 
 QPointF PDFViewerWidget::screenToPDF(const QPoint &screenPos) {
@@ -2811,10 +2823,17 @@ void PDFViewerWidget::renderTextSelection()
             float pageX = (m_viewportWidth - pageWidth) / 2.0f - m_scrollOffsetX;
             
             // Convert page coordinates to screen coordinates for drag rectangle
-            float screenStartX = pageX + (start.x() / m_pageWidths[pageIndex]) * pageWidth;
-            float screenStartY = pageY + (start.y() / m_pageHeights[pageIndex]) * pageHeight;
-            float screenEndX = pageX + (end.x() / m_pageWidths[pageIndex]) * pageWidth;
-            float screenEndY = pageY + (end.y() / m_pageHeights[pageIndex]) * pageHeight;
+            // COORDINATE SYSTEM FIX: No Y-axis flip needed since both systems use top-left origin
+            float normalizedStartX = start.x() / m_pageWidths[pageIndex];
+            float normalizedStartY = start.y() / m_pageHeights[pageIndex];
+            float normalizedEndX = end.x() / m_pageWidths[pageIndex];
+            float normalizedEndY = end.y() / m_pageHeights[pageIndex];
+            
+            // Convert to screen coordinates (no Y-flip needed)
+            float screenStartX = pageX + normalizedStartX * pageWidth;
+            float screenStartY = pageY + normalizedStartY * pageHeight;
+            float screenEndX = pageX + normalizedEndX * pageWidth;
+            float screenEndY = pageY + normalizedEndY * pageHeight;
             
             // Draw drag selection rectangle
             float left = qMin(screenStartX, screenEndX);
@@ -2930,11 +2949,25 @@ void PDFViewerWidget::renderTextBasedSelection(int pageIndex, const QPointF& sta
             // Calculate the intersection of selection rect with this line
             QRectF intersection = selectionRect.intersected(line.bounds);
             
-            // Convert PDF coordinates to screen coordinates
-            float screenLeft = pageX + (intersection.left() / pageText.pageWidth) * pageWidth;
-            float screenTop = pageY + (intersection.top() / pageText.pageHeight) * pageHeight;
-            float screenRight = pageX + (intersection.right() / pageText.pageWidth) * pageWidth;
-            float screenBottom = pageY + (intersection.bottom() / pageText.pageHeight) * pageHeight;
+            // COORDINATE SYSTEM FIX: Both selection coordinates and text bounds are now 
+            // in the same top-left origin system, so no Y-axis flipping is needed
+            
+            // Convert page coordinates to normalized coordinates (0 to 1)
+            float normalizedLeft = intersection.left() / pageText.pageWidth;
+            float normalizedRight = intersection.right() / pageText.pageWidth;
+            float normalizedTop = intersection.top() / pageText.pageHeight;
+            float normalizedBottom = intersection.bottom() / pageText.pageHeight;
+            
+            // Convert normalized coordinates to screen coordinates (no Y-flip needed)
+            float screenLeft = pageX + normalizedLeft * pageWidth;
+            float screenRight = pageX + normalizedRight * pageWidth;
+            float screenTop = pageY + normalizedTop * pageHeight;
+            float screenBottom = pageY + normalizedBottom * pageHeight;
+            
+            // Ensure proper ordering
+            if (screenTop > screenBottom) {
+                std::swap(screenTop, screenBottom);
+            }
             
             // Add small padding to make selection more visible
             screenLeft -= 1.0f;
@@ -3044,34 +3077,16 @@ void PDFViewerWidget::renderDebugTextHighlights()
             continue;
         }
         
-        qDebug() << "Rendering debug text highlights for page" << pageIndex 
+        qDebug() << "Rendering text content highlights for page" << pageIndex 
                  << "with" << pageText.getCharacterCount() << "characters"
-                 << "," << pageText.getWordCount() << "words"
-                 << "," << pageText.getLineCount() << "lines"
                  << "at position" << pageX << "," << pageY
                  << "page size" << pageWidth << "x" << pageHeight
                  << "PDF size" << pageText.pageWidth << "x" << pageText.pageHeight;
         
-        // Render character highlights (red rectangles)
-        glColor4f(1.0f, 0.0f, 0.0f, 0.5f); // Semi-transparent red
+        // SIMPLIFIED TEXT HIGHLIGHTING: Only highlight actual text content areas
+        // Use character-level highlighting with a single color to show where text exists
+        glColor4f(0.0f, 0.5f, 1.0f, 0.3f); // Semi-transparent light blue for all text
         renderTextElements(pageText.characters, pageIndex, pageX, pageY, pageWidth, pageHeight, pageText.pageWidth, pageText.pageHeight);
-        
-        // Render word highlights (green rectangles)
-        glColor4f(0.0f, 1.0f, 0.0f, 0.4f); // Semi-transparent green
-        renderTextElements(pageText.words, pageIndex, pageX, pageY, pageWidth, pageHeight, pageText.pageWidth, pageText.pageHeight);
-        
-        // Render line highlights (blue rectangles)
-        glColor4f(0.0f, 0.0f, 1.0f, 0.3f); // Semi-transparent blue
-        renderTextElements(pageText.lines, pageIndex, pageX, pageY, pageWidth, pageHeight, pageText.pageWidth, pageText.pageHeight);
-        
-        // Test: Render a fixed rectangle to verify rendering is working
-        glColor4f(1.0f, 1.0f, 0.0f, 0.8f); // Bright yellow
-        glBegin(GL_QUADS);
-        glVertex2f(pageX + 50, pageY + 50);
-        glVertex2f(pageX + 150, pageY + 50);
-        glVertex2f(pageX + 150, pageY + 100);
-        glVertex2f(pageX + 50, pageY + 100);
-        glEnd();
         
         currentY += pageHeight + PAGE_MARGIN;
     }
@@ -3093,20 +3108,21 @@ void PDFViewerWidget::renderTextElements(const std::vector<T>& elements, int pag
         // Debug: Print element bounds
         qDebug() << "Element bounds:" << bounds << "PDF page size:" << pdfPageWidth << "x" << pdfPageHeight;
         
-        // PDFium uses bottom-left origin, Qt/OpenGL uses top-left origin
-        // Convert PDF coordinates to screen coordinates with Y-axis flip
+        // COORDINATE FIX: Text extraction already converts to top-left origin system
+        // No need for Y-axis flipping here - use coordinates directly
         float normalizedLeft = bounds.left() / pdfPageWidth;
         float normalizedTop = bounds.top() / pdfPageHeight;
         float normalizedRight = bounds.right() / pdfPageWidth;
         float normalizedBottom = bounds.bottom() / pdfPageHeight;
         
-        // Apply Y-axis flip for PDFium's bottom-left origin
+        // Convert normalized coordinates directly to screen coordinates
+        // Both text extraction and rendering now use top-left origin consistently
         float screenLeft = pageX + normalizedLeft * pageWidth;
         float screenRight = pageX + normalizedRight * pageWidth;
-        float screenTop = pageY + (1.0f - normalizedBottom) * pageHeight;    // Flip Y
-        float screenBottom = pageY + (1.0f - normalizedTop) * pageHeight;    // Flip Y
+        float screenTop = pageY + normalizedTop * pageHeight;        // No Y flip
+        float screenBottom = pageY + normalizedBottom * pageHeight;  // No Y flip
         
-        // Ensure proper ordering after Y-flip
+        // Ensure proper ordering (top should be less than bottom for top-left origin)
         if (screenTop > screenBottom) {
             std::swap(screenTop, screenBottom);
         }
@@ -3120,6 +3136,7 @@ void PDFViewerWidget::renderTextElements(const std::vector<T>& elements, int pag
         }
         
         // Debug: Print screen coordinates
+        qDebug() << "COORDINATE FIX: Screen coords (no Y-flip):" << screenLeft << "," << screenTop << "to" << screenRight << "," << screenBottom;
         qDebug() << "Screen coords:" << screenLeft << "," << screenTop << "to" << screenRight << "," << screenBottom;
         
         // Render highlight rectangle
