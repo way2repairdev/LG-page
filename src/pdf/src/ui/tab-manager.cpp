@@ -9,10 +9,8 @@
 #include <algorithm>
 #include <iostream>
 
-// Global tab manager instance
-TabManager* g_tabManager = nullptr;
-
 // External references
+extern TabManager* g_tabManager;
 extern PDFScrollState* g_scrollState;
 extern PDFRenderer* g_renderer;
 extern std::vector<int>* g_pageHeights;

@@ -533,7 +533,7 @@ void MainApplication::openPDFInTab(const QString &filePath)
         return;
     }
     
-    // Create PDF viewer widget
+    // Create PDF viewer widget (using the existing PDFViewerWidget but without internal tabs)
     PDFViewerWidget *pdfViewer = new PDFViewerWidget();
     pdfViewer->setProperty("filePath", filePath);
     
@@ -565,17 +565,26 @@ void MainApplication::openPDFInTab(const QString &filePath)
     // Switch to the new tab
     m_tabWidget->setCurrentIndex(tabIndex);
     
-    // Note: Removed automatic tree view hiding - let user control when to hide/show
-    // Tree view will stay visible unless manually toggled
-    
-    // Use QTimer to delay PDF loading until the widget is shown and OpenGL context is ready
-    QTimer::singleShot(100, this, [this, pdfViewer, filePath, tabIndex]() {
+    // Load the PDF directly (the key fix is to bypass the internal tab system)
+    QTimer::singleShot(100, this, [this, pdfViewer, filePath, tabIndex, fileInfo]() {
         // Try to load the PDF after the widget is properly initialized
         if (!pdfViewer->loadPDF(filePath)) {
             // If loading fails, remove the tab and show error
             m_tabWidget->removeTab(tabIndex);
             statusBar()->showMessage("Error: Failed to load PDF file: " + filePath);
-            QMessageBox::warning(this, "PDF Error", "Failed to load PDF file:\n" + filePath);
+            
+            QString errorMessage = QString(
+                "Failed to load PDF file:\n\n"
+                "File: %1\n"
+                "Path: %2\n\n"
+                "This PDF file may be:\n"
+                "• Corrupted or invalid\n"
+                "• Incompatible with PDFium library\n" 
+                "• Not accessible due to permissions\n\n"
+                "The PDF viewer's internal tab system has been disabled to work with the main application tabs."
+            ).arg(fileInfo.fileName()).arg(filePath);
+            
+            QMessageBox::warning(this, "PDF Loading Error", errorMessage);
             return;
         }
     });

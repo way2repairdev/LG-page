@@ -14,6 +14,7 @@ class MenuIntegration {
 private:
     HWND hwnd;
     HMENU hMenu;
+    bool m_embeddedMode;  // Flag to disable internal tabs when embedded in Qt
     
 public:
     GLFWwindow* glfwWindow; // Make this public for access
@@ -31,7 +32,10 @@ public:
     ~MenuIntegration();
     
     // Initialize menu with GLFW window
-    bool Initialize(GLFWwindow* window);
+    bool Initialize(GLFWwindow* window, bool embeddedMode = true);
+    
+    // Set embedded mode (disables internal tab system)
+    void setEmbeddedMode(bool embedded) { m_embeddedMode = embedded; }
     
     // Handle menu commands
     bool HandleMenuCommand(WPARAM wParam);

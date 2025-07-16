@@ -29,7 +29,8 @@ extern std::vector<int>* g_pageHeights;
 
 MenuIntegration::MenuIntegration() : hwnd(nullptr), hMenu(nullptr), glfwWindow(nullptr), 
     searchToolbar(nullptr), searchEdit(nullptr), searchResults(nullptr),
-    prevButton(nullptr), nextButton(nullptr), caseCheck(nullptr), wholeCheck(nullptr) {
+    prevButton(nullptr), nextButton(nullptr), caseCheck(nullptr), wholeCheck(nullptr),
+    m_embeddedMode(true) {  // Default to embedded mode for Qt integration
 }
 
 MenuIntegration::~MenuIntegration() {
@@ -38,9 +39,10 @@ MenuIntegration::~MenuIntegration() {
     }
 }
 
-bool MenuIntegration::Initialize(GLFWwindow* window) {
+bool MenuIntegration::Initialize(GLFWwindow* window, bool embeddedMode) {
     glfwWindow = window;
     hwnd = glfwGetWin32Window(window);
+    m_embeddedMode = embeddedMode;
     
     if (!hwnd) {
         std::cerr << "Failed to get Win32 window handle from GLFW" << std::endl;
@@ -434,7 +436,15 @@ void MenuIntegration::ResizeSearchToolbar(int width, int height) {
 }
 
 void MenuIntegration::CreateTabsAndSearchToolbar() {
-    // Initialize tab manager
+    // Skip tab creation when in embedded mode (Qt handles tabs)
+    if (m_embeddedMode) {
+        std::cout << "MenuIntegration: Skipping internal tab creation (embedded in Qt)" << std::endl;
+        // Still create search toolbar for PDF search functionality
+        CreateSearchToolbar();
+        return;
+    }
+    
+    // Initialize tab manager (only for standalone mode)
     if (!g_tabManager) {
         g_tabManager = new TabManager();
         g_tabManager->Initialize(glfwWindow, hwnd);

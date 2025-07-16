@@ -15,17 +15,60 @@ PDFRenderer::~PDFRenderer() {
 }
 
 void PDFRenderer::Initialize() {
-    FPDF_InitLibrary();
+    try {
+        FPDF_InitLibrary();
+        std::cout << "PDFRenderer: PDFium library initialized successfully" << std::endl;
+    } catch (...) {
+        std::cerr << "PDFRenderer: Failed to initialize PDFium library" << std::endl;
+        std::cerr << "PDFRenderer: This is likely due to missing or incompatible PDFium DLL/library" << std::endl;
+        throw std::runtime_error("PDFium initialization failed");
+    }
 }
 
 bool PDFRenderer::LoadDocument(const std::string& filePath) {
     std::lock_guard<std::mutex> lock(document_mutex_); // Lock before accessing document_
-    document_ = FPDF_LoadDocument(filePath.c_str(), nullptr);
-    if (!document_) {
-        std::cerr << "Failed to load PDF document." << std::endl;
+    
+    try {
+        document_ = FPDF_LoadDocument(filePath.c_str(), nullptr);
+        if (!document_) {
+            unsigned long error = FPDF_GetLastError();
+            std::cerr << "Failed to load PDF document: " << filePath << std::endl;
+            std::cerr << "PDFium error code: " << error << std::endl;
+            
+            switch (error) {
+                case FPDF_ERR_SUCCESS:
+                    std::cerr << "Error: No error (this shouldn't happen)" << std::endl;
+                    break;
+                case FPDF_ERR_UNKNOWN:
+                    std::cerr << "Error: Unknown error" << std::endl;
+                    break;
+                case FPDF_ERR_FILE:
+                    std::cerr << "Error: File not found or could not be opened" << std::endl;
+                    break;
+                case FPDF_ERR_FORMAT:
+                    std::cerr << "Error: File not in PDF format or corrupted" << std::endl;
+                    break;
+                case FPDF_ERR_PASSWORD:
+                    std::cerr << "Error: Password required" << std::endl;
+                    break;
+                case FPDF_ERR_SECURITY:
+                    std::cerr << "Error: Unsupported security scheme" << std::endl;
+                    break;
+                case FPDF_ERR_PAGE:
+                    std::cerr << "Error: Page not found or content error" << std::endl;
+                    break;
+                default:
+                    std::cerr << "Error: Unknown error code: " << error << std::endl;
+                    break;
+            }
+            return false;
+        }
+        std::cout << "Successfully loaded PDF: " << filePath << std::endl;
+        return true;
+    } catch (...) {
+        std::cerr << "Exception occurred while loading PDF: " << filePath << std::endl;
         return false;
     }
-    return true;
 }
 
 FPDF_BITMAP PDFRenderer::RenderPageToBitmap(int pageIndex, int pixelWidth, int pixelHeight) {

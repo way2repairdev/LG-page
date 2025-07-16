@@ -1,58 +1,34 @@
 #ifndef PDFVIEWERWIDGET_H
 #define PDFVIEWERWIDGET_H
 
-#include <QObject>
-#include <QOpenGLWidget>
-#include <QOpenGLFunctions>
-#include <QOpenGLBuffer>
-#include <QOpenGLVertexArrayObject>
-#include <QOpenGLShaderProgram>
-#include <QOpenGLTexture>
+#include <QWidget>
 #include <QTimer>
-#include <QWheelEvent>
-#include <QMouseEvent>
-#include <QKeyEvent>
-#include <QFileInfo>
-#include <QString>
-#include <QMenu>
-#include <QAction>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QToolBar>
 #include <QPushButton>
-#include <QSlider>
 #include <QLabel>
 #include <QLineEdit>
-#include <QCheckBox>
-#include <QSplitter>
-#include <QScrollBar>
+#include <QSlider>
+#include <QSpinBox>
+#include <QProgressBar>
 #include <memory>
-#include <vector>
 
-// Constants for PDF viewing - matching standalone viewer limits
-static constexpr double MIN_ZOOM = 0.35;   // Match standalone viewer (35%)
-static constexpr double MAX_ZOOM = 5.0;    // Match standalone viewer (500%)
-static constexpr double DEFAULT_ZOOM = 0.8;  // Fit to screen better
-static constexpr double ZOOM_STEP = 0.1;
-static constexpr float PAGE_MARGIN = 10.0f;
-static constexpr int TOOLBAR_HEIGHT = 40;
+class PDFViewerEmbedder;
 
-// Forward declarations for PDF viewer components
-class PDFRenderer;
-struct PDFScrollState;
-class TextExtractor;
-struct PageTextContent;
-class TextSelection;
-
-// Custom deleter for PDFRenderer to avoid incomplete type issues
-struct PDFRendererDeleter {
-    void operator()(PDFRenderer* ptr) const;
-};
-
-QT_BEGIN_NAMESPACE
-QT_END_NAMESPACE
-
-class PDFViewerWidget : public QOpenGLWidget, protected QOpenGLFunctions
+/**
+ * PDFViewerWidget - High-performance PDF viewer widget using embedded native renderer
+ * 
+ * This widget integrates your existing standalone PDF viewer (built with OpenGL, GLFW, PDFium)
+ * into a Qt tabbed application. It preserves all advanced features like:
+ * - High-performance rendering with background processing
+ * - Smooth zooming and panning
+ * - Text selection and search
+ * - Scroll bars and navigation
+ * 
+ * The widget embeds the native Windows OpenGL renderer as a child window,
+ * providing Qt-based controls while maintaining full rendering performance.
+ */
+class PDFViewerWidget : public QWidget
 {
     Q_OBJECT
 
@@ -60,265 +36,148 @@ public:
     explicit PDFViewerWidget(QWidget *parent = nullptr);
     ~PDFViewerWidget();
 
-    // PDF loading and management
-    bool loadPDF(const QString &filePath);
-    void closePDF();
-    bool isPDFLoaded() const;
-    QString getCurrentFilePath() const;
+    /**
+     * Load a PDF file into the viewer
+     * @param filePath Path to the PDF file
+     * @return true if loaded successfully
+     */
+    bool loadPDF(const QString& filePath);
 
-    // View control
+    /**
+     * Check if a PDF is currently loaded
+     */
+    bool isPDFLoaded() const;
+
+    /**
+     * Get the current page count
+     */
+    int getPageCount() const;
+
+    /**
+     * Get current zoom level (1.0 = 100%)
+     */
+    double getCurrentZoom() const;
+
+    /**
+     * Get current page number (1-based)
+     */
+    int getCurrentPage() const;
+
+    /**
+     * Check if the viewer is ready for interaction
+     */
+    bool isReady() const;
+
+public slots:
+    // Navigation
     void zoomIn();
     void zoomOut();
     void zoomToFit();
-    void zoomToWidth();
-    void resetZoom();
-    void setZoomLevel(double zoom);
-    double getZoomLevel() const;
-
-    // Navigation
     void goToPage(int pageNumber);
     void nextPage();
     void previousPage();
-    void goToFirstPage();
-    void goToLastPage();
-    int getCurrentPage() const;
-    int getPageCount() const;
     
-    // Zoom fit functionality
-    void fitToWidth();
-    void fitToPage();
-    double calculateFitToWidthZoom() const;
-    double calculateFitToPageZoom() const;
+    // Search functionality
+    void findText(const QString& searchTerm);
+    void findNext();
+    void findPrevious();
+    void clearSelection();
     
-    // Cursor-based zoom functionality
-    void performCursorBasedZoom(const QPoint &cursorPos, bool zoomIn);
-    
-    // Auto-centering functionality
-    void autoCenter();
-    
-    // Coordinate conversion
-    QPointF screenToDocumentCoordinates(const QPoint &screenPos) const;
-    QPoint documentToScreenCoordinates(const QPointF &docPos) const;
-    
-    // Text selection functionality
-    void startTextSelection(const QPointF& startPoint);
-    void updateTextSelection(const QPointF& currentPoint);
-    void endTextSelection();
-    void clearTextSelection();
-    QString getSelectedText() const;
-    bool hasTextSelection() const;
-    
-    // Text extraction and word selection
-    void selectWordAtPosition(const QPointF &position);
-    void extractTextFromAllPages();
-    QPointF screenToPDF(const QPoint &screenPos);
+    // View controls
+    void setFullScreen(bool fullScreen);
+    void toggleControls(bool visible);
 
 signals:
-    void pdfLoaded(const QString &filePath);
-    void pdfClosed();
+    // Emitted when PDF is successfully loaded
+    void pdfLoaded(const QString& filePath);
+    
+    // Emitted when there's an error loading or rendering
+    void errorOccurred(const QString& error);
+    
+    // Emitted when the current page changes
     void pageChanged(int currentPage, int totalPages);
+    
+    // Emitted when zoom level changes
     void zoomChanged(double zoomLevel);
-    void textSelectionChanged(const QString &selectedText);
-    void errorOccurred(const QString &error);
+    
+    // Emitted when text is selected
+    void textSelected(const QString& selectedText);
+    
+    // Emitted when loading progress updates
+    void loadingProgress(int percentage);
 
 protected:
-    // QOpenGLWidget overrides
-    void initializeGL() override;
-    void resizeGL(int w, int h) override;
-    void paintGL() override;
-
-    // Event handling
-    void wheelEvent(QWheelEvent *event) override;
-    void mousePressEvent(QMouseEvent *event) override;
-    void mouseMoveEvent(QMouseEvent *event) override;
-    void mouseReleaseEvent(QMouseEvent *event) override;
-    void mouseDoubleClickEvent(QMouseEvent *event) override;
-    void keyPressEvent(QKeyEvent *event) override;
-    void contextMenuEvent(QContextMenuEvent *event) override;
-    void resizeEvent(QResizeEvent *event) override;
+    void resizeEvent(QResizeEvent* event) override;
+    void paintEvent(QPaintEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
+    void focusInEvent(QFocusEvent* event) override;
 
 private slots:
+    void updateViewer();
+    void onToolbarButtonClicked();
     void onZoomSliderChanged(int value);
-    void onPageInputChanged();
-    void onVerticalScrollBarChanged(int value);
-    void updateRender();
+    void onPageSpinBoxChanged(int value);
+    void onSearchTextChanged();
+    void onSearchButtonClicked();
 
 private:
-    // Initialization
-    void initializePDFRenderer();
     void setupUI();
     void setupToolbar();
-    void createContextMenu();
-
-    // OpenGL rendering
-    void renderPDF();
-    void updateTextures();
-    void updateVisibleTextures(); // Fast update for visible pages only
-    void createQuadGeometry();
-    GLuint createTextureFromPDFBitmap(void* bitmap, int width, int height);
-
-    // View management
-    void updateScrollState();
-    void updateViewport();
-    void updateScrollBar();
-    void calculatePageLayout();
-    void handlePanning(const QPoint &delta);
-    void handleZooming(double factor, const QPoint &center);
+    void setupViewerArea();
+    void initializePDFViewer();
+    void updateToolbarState();
+    void updatePageDisplay();
+    void updateZoomDisplay();
+    void showLoadingIndicator(bool show);
     
-    // Text extraction and selection
-    void renderTextSelection();
-    bool isPointOverText(const QPointF &pdfPoint, int pageIndex) const;
-    QPointF screenToPDFCoordinates(const QPointF &screenPoint) const;
-    QPointF pdfToPageCoordinates(const QPointF &pdfPoint, int pageIndex) const;
-    int getPageAtPoint(const QPointF &screenPoint) const;
-    QString extractTextFromRegion(const PageTextContent& pageText, 
-                                  const QPointF& startPoint, 
-                                  const QPointF& endPoint) const;
-
-    // Background texture loading for high zoom performance
-    void loadTexturesInBackground(const std::vector<int>& pageIndices);
-    void scheduleTextureUpdate(int pageIndex);
+    // Core PDF viewer component (your existing renderer)
+    std::unique_ptr<PDFViewerEmbedder> m_pdfEmbedder;
     
-    // Wheel event throttling and acceleration
-    void processThrottledWheelEvent();
-    void resetWheelAcceleration();
-    void handleWheelEventBatch(double totalDelta, const QPoint& cursorPos);
+    // UI Components
+    QVBoxLayout* m_mainLayout;
+    QWidget* m_toolbar;
+    QHBoxLayout* m_toolbarLayout;
+    QWidget* m_viewerContainer;
     
-    // Panning throttling and optimization
-    void processThrottledPanEvent();
-    void handlePanEventBatch(const QPoint& totalDelta);
-    void resetPanThrottling();
+    // Navigation controls
+    QPushButton* m_prevPageBtn;
+    QPushButton* m_nextPageBtn;
+    QSpinBox* m_pageSpinBox;
+    QLabel* m_pageLabel;
+    QPushButton* m_zoomInBtn;
+    QPushButton* m_zoomOutBtn;
+    QPushButton* m_zoomFitBtn;
+    QSlider* m_zoomSlider;
+    QLabel* m_zoomLabel;
     
-    // Progressive rendering for smooth high zoom experience
-    void startProgressiveRender();
-    void processProgressiveRender();
-    void cancelProgressiveRender();
+    // Search controls
+    QLineEdit* m_searchEdit;
+    QPushButton* m_searchBtn;
+    QPushButton* m_searchPrevBtn;
+    QPushButton* m_searchNextBtn;
+    QPushButton* m_clearBtn;
     
-    // Texture memory management
-    void cleanupUnusedTextures();
-    size_t calculateTextureMemoryUsage() const;
-    static constexpr size_t MAX_TEXTURE_MEMORY = 512 * 1024 * 1024; // 512MB limit
-
-    // Utility functions
-    QPoint mapToViewport(const QPoint &point);
-    int getPageAtPoint(const QPoint &point);
-    double calculateZoomToFit();
-    double calculateZoomToWidth();
-    QPointF screenToDocument(const QPoint &screenPoint) const;
-    QPointF documentToScreen(const QPointF &docPoint) const;
-
-private:
-    // PDF renderer components
-    std::unique_ptr<PDFRenderer, PDFRendererDeleter> m_renderer;
-    std::unique_ptr<PDFScrollState> m_scrollState;
+    // Status and progress
+    QProgressBar* m_progressBar;
+    QLabel* m_statusLabel;
     
-    // Text extraction and selection
-    std::unique_ptr<TextExtractor> m_textExtractor;
-    std::vector<PageTextContent> m_pageTexts;
-    std::unique_ptr<TextSelection> m_textSelection;
-    bool m_textExtractionComplete;
-
-    // OpenGL resources
-    QOpenGLShaderProgram *m_shaderProgram;
-    QOpenGLVertexArrayObject m_vao;
-    QOpenGLBuffer m_vertexBuffer;
-    std::vector<GLuint> m_pageTextures;
-    std::vector<int> m_pageWidths;
-    std::vector<int> m_pageHeights;
-
-    // UI components
-    QWidget *m_toolbarWidget;
-    QToolBar *m_toolbar;
-    QSlider *m_zoomSlider;
-    QLabel *m_zoomLabel;
-    QLineEdit *m_pageInput;
-    QLabel *m_pageCountLabel;
-    QLineEdit *m_selectedTextInput;  // Input box to display selected text
+    // Update timer for the embedded viewer
+    QTimer* m_updateTimer;
     
-    // Scroll bar
-    QScrollBar *m_verticalScrollBar;
-
-    // Context menu
-    QMenu *m_contextMenu;
-    QAction *m_zoomInAction;
-    QAction *m_zoomOutAction;
-    QAction *m_zoomFitAction;
-    QAction *m_zoomWidthAction;
-
-    // State variables
-    QString m_filePath;
-    bool m_isPDFLoaded;
-    int m_currentPage;
-    int m_pageCount;
-    double m_zoomLevel;
-    double m_lastRenderedZoom;  // Track last zoom level for texture updates
-    bool m_zoomChanged;         // Flag for zoom change detection
-    bool m_immediateRenderRequired; // Flag for immediate visible page updates
-    bool m_isDragging;
-    QPoint m_lastPanPoint;
-    QTimer *m_renderTimer;
+    // State tracking
+    bool m_viewerInitialized;
+    bool m_pdfLoaded;
+    bool m_usingFallback;
+    bool m_toolbarVisible;
+    QString m_currentFilePath;
+    int m_lastPageCount;
+    double m_lastZoomLevel;
+    int m_lastCurrentPage;
     
-    // Text selection state
-    bool m_isTextSelecting;
-    QPointF m_lastMousePos;
-
-    // View parameters
-    int m_viewportWidth;
-    int m_viewportHeight;
-    float m_scrollOffsetY;
-    float m_scrollOffsetX;
-    float m_maxScrollY;
-    float m_maxScrollX;
-    float m_minScrollX;  // Minimum scroll X position (can be negative for centering)
-    
-    // Performance optimization flags
-    bool m_useBackgroundLoading;
-    bool m_highZoomMode;           // Enables optimizations at high zoom levels
-    
-    // Wheel event throttling and acceleration for high zoom performance
-    QTimer* m_wheelThrottleTimer;
-    QTimer* m_wheelAccelTimer;
-    double m_pendingZoomDelta;
-    QPoint m_pendingWheelCursor;
-    int m_wheelEventCount;
-    qint64 m_lastWheelTime;
-    bool m_wheelThrottleActive;
-    static constexpr int WHEEL_THROTTLE_MS = 5; // 5ms throttle at high zoom
-    static constexpr int WHEEL_ACCEL_RESET_MS = 150; // Reset acceleration after 150ms
-    static constexpr int MAX_WHEEL_EVENTS_PER_BATCH = 3; // Max events per batch
-
-    // Panning throttling and optimization for high zoom performance
-    QTimer* m_panThrottleTimer;
-    QPoint m_pendingPanDelta;
-    bool m_panThrottleActive;
-    qint64 m_lastPanTime;
-    int m_panEventCount;
-    static constexpr int PAN_THROTTLE_MS = 8; // 8ms throttle at high zoom (slightly slower than wheel)
-    static constexpr int MAX_PAN_EVENTS_PER_BATCH = 5; // Max pan events per batch
-    
-    // Progressive rendering for smooth experience
-    QTimer* m_progressiveRenderTimer;
-    std::vector<int> m_pendingTextureUpdates;
-    bool m_progressiveRenderActive;
-    
-    // Loading indicator
-    QLabel *m_loadingLabel;
-    bool m_isLoadingTextures;
-    
-    // Additional text selection data
-    bool m_selectionActive;
-
-    // Text selection rendering
-    void renderTextBasedSelection(int pageIndex, const QPointF& startPoint, const QPointF& endPoint, 
-                                 float pageX, float pageY, float pageWidth, float pageHeight);
-    std::vector<QRectF> mergeAdjacentRects(const std::vector<QRectF>& rects);
-
-    // Debug text visualization
-    void renderDebugTextHighlights();
-    template<typename T>
-    void renderTextElements(const std::vector<T>& elements, int pageIndex, 
-                           float pageX, float pageY, float pageWidth, float pageHeight,
-                           float pdfPageWidth, float pdfPageHeight);
+    // Constants
+    static constexpr int UPDATE_INTERVAL_MS = 16; // ~60 FPS
+    static constexpr int TOOLBAR_HEIGHT = 45;
 };
 
 #endif // PDFVIEWERWIDGET_H

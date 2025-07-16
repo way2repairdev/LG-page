@@ -50,9 +50,11 @@ include_directories(
     ${INCLUDE_DIR}/ui
     ${INCLUDE_DIR}/database
     ${INCLUDE_DIR}/network
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/pdfium/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glew/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glfw_mingw/include
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -66,7 +68,8 @@ set(UI_SOURCES
     ${SRC_DIR}/ui/mainwindow.cpp
     ${SRC_DIR}/ui/mainapplication.cpp
     ${SRC_DIR}/ui/pdfviewerwidget.cpp
-    ${SRC_DIR}/ui/textextraction.cpp
+    ${SRC_DIR}/ui/PDFViewerEmbedder.cpp
+    ${SRC_DIR}/ui/QtPDFViewerWidget.cpp
 )
 
 # Add hybrid PDF viewer only if Qt PDF modules are available
@@ -77,6 +80,10 @@ endif()
 # PDF viewer sources
 set(PDF_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/src/rendering/pdf-render.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/src/core/feature.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/src/ui/menu-integration.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/src/ui/tab-manager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/src/globals.cpp
 )
 
 set(DATABASE_SOURCES
@@ -93,8 +100,8 @@ set(UI_HEADERS
     ${INCLUDE_DIR}/ui/mainwindow.h
     ${INCLUDE_DIR}/ui/mainapplication.h
     ${INCLUDE_DIR}/ui/pdfviewerwidget.h
-    ${INCLUDE_DIR}/ui/pdfscrollstate.h
-    ${INCLUDE_DIR}/ui/textextraction.h
+    ${SRC_DIR}/ui/PDFViewerEmbedder.h
+    ${SRC_DIR}/ui/QtPDFViewerWidget.h
 )
 
 # Add hybrid PDF viewer header only if Qt PDF modules are available
@@ -105,6 +112,9 @@ endif()
 # PDF viewer headers
 set(PDF_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/include/rendering/pdf-render.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/include/core/feature.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/include/ui/menu-integration.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/include/ui/tab-manager.h
 )
 
 set(DATABASE_HEADERS
@@ -178,9 +188,10 @@ if(HAVE_QT_PDF)
     target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_QT_PDF)
 endif()
 
-# Add PDFium and GLEW library paths and link (conditionally)
+# Add PDFium, GLEW, and GLFW library paths and link (conditionally)
 set(PDFIUM_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/pdfium/lib")
 set(GLEW_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glew/lib/Release/x64")
+set(GLFW_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glfw/lib-vc2022")
 
 # Check if PDFium library exists
 if(EXISTS "${PDFIUM_LIB_PATH}/pdfium.lib")
@@ -204,6 +215,24 @@ if(EXISTS "${GLEW_LIB_PATH}/glew32.lib")
 else()
     message(STATUS "GLEW library not found - using basic OpenGL")
     set(HAVE_GLEW FALSE)
+endif()
+
+# Check if GLFW library exists (using MinGW-compatible build)
+set(GLFW_MINGW_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glfw_mingw/lib")
+set(GLFW_MINGW_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glfw_mingw/include")
+
+if(EXISTS "${GLFW_MINGW_LIB_PATH}/libglfw3.a")
+    message(STATUS "MinGW-compatible GLFW library found - enabling GLFW window management")
+    target_link_directories(Way2RepairLoginSystem PRIVATE "${GLFW_MINGW_LIB_PATH}")
+    target_include_directories(Way2RepairLoginSystem PRIVATE "${GLFW_MINGW_INCLUDE_PATH}")
+    target_link_libraries(Way2RepairLoginSystem PRIVATE glfw3)
+    # Link additional Windows libraries required by GLFW
+    target_link_libraries(Way2RepairLoginSystem PRIVATE opengl32 gdi32 user32 kernel32 shell32)
+    target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_GLFW)
+    set(HAVE_GLFW TRUE)
+else()
+    message(STATUS "MinGW-compatible GLFW library not found - using Qt native embedding")
+    set(HAVE_GLFW FALSE)
 endif()
 
 # Set target properties
