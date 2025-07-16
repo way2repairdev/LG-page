@@ -344,6 +344,7 @@ void PDFViewerEmbedder::zoomIn()
     if (newZoom > 5.0f) newZoom = 5.0f; // Max zoom limit
     
     m_scrollState->zoomScale = newZoom;
+    m_scrollState->zoomChanged = true;
     m_needsFullRegeneration = true;
 }
 
@@ -355,6 +356,7 @@ void PDFViewerEmbedder::zoomOut()
     if (newZoom < 0.2f) newZoom = 0.2f; // Min zoom limit
     
     m_scrollState->zoomScale = newZoom;
+    m_scrollState->zoomChanged = true;
     m_needsFullRegeneration = true;
 }
 
@@ -366,6 +368,7 @@ void PDFViewerEmbedder::setZoom(float zoomLevel)
     if (zoomLevel > 5.0f) zoomLevel = 5.0f;
     
     m_scrollState->zoomScale = zoomLevel;
+    m_scrollState->zoomChanged = true;
     m_needsFullRegeneration = true;
 }
 
@@ -898,25 +901,33 @@ void PDFViewerEmbedder::onMouseButton(int button, int action, int /*mods*/)
     // Reuse your existing mouse button handling logic
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         if (action == GLFW_PRESS) {
-            // For now, skip scroll bar detection and use simple text selection
-            // TODO: Implement scroll bar detection if needed
-            bool isOverScrollBar = false; // Simplified for now
+            // Calculate scroll bar position for detection
+            float barMargin = 0.01f * m_windowWidth;
+            float barWidth = 0.025f * m_windowWidth;
+            float barX = m_windowWidth - barMargin - barWidth;
+            bool isOverScrollBar = (mouseX >= barX && mouseX <= m_windowWidth - barMargin);
             
             if (isOverScrollBar) {
+                // Start scroll bar dragging
                 StartScrollBarDragging(*m_scrollState, mouseY);
             } else {
-                // Text selection logic
+                // Text selection logic with double-click detection
                 double currentTime = glfwGetTime();
                 if (DetectDoubleClick(*m_scrollState, mouseX, mouseY, currentTime)) {
+                    // Double-click: select word at position
                     SelectWordAtPosition(*m_scrollState, mouseX, mouseY, (float)m_windowWidth, (float)m_windowHeight, 
                                          m_pageHeights, m_pageWidths);
                 } else {
+                    // Single click: start text selection
                     StartTextSelection(*m_scrollState, mouseX, mouseY, (float)m_windowWidth, (float)m_windowHeight, 
                                        m_pageHeights, m_pageWidths);
                 }
             }
         } else if (action == GLFW_RELEASE) {
+            // Stop scroll bar dragging
             StopScrollBarDragging(*m_scrollState);
+            
+            // End text selection (but not for double-click word selection)
             if (!m_scrollState->textSelection.isDoubleClick) {
                 EndTextSelection(*m_scrollState);
             }
@@ -924,6 +935,21 @@ void PDFViewerEmbedder::onMouseButton(int button, int action, int /*mods*/)
         }
     } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
         if (action == GLFW_PRESS) {
+            // Start panning with right mouse button
+            StartPanning(*m_scrollState, mouseX, mouseY);
+            
+            // Change cursor to hand cursor for panning
+            glfwSetCursor(m_glfwWindow, glfwCreateStandardCursor(GLFW_HAND_CURSOR));
+        } else if (action == GLFW_RELEASE) {
+            // Stop panning
+            StopPanning(*m_scrollState);
+            
+            // Restore default cursor
+            glfwSetCursor(m_glfwWindow, nullptr);
+        }
+    } else if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
+        if (action == GLFW_PRESS) {
+            // Middle click for panning (alternative to right click)
             StartPanning(*m_scrollState, mouseX, mouseY);
             glfwSetCursor(m_glfwWindow, glfwCreateStandardCursor(GLFW_HAND_CURSOR));
         } else if (action == GLFW_RELEASE) {
@@ -933,43 +959,163 @@ void PDFViewerEmbedder::onMouseButton(int button, int action, int /*mods*/)
     }
 }
 
-void PDFViewerEmbedder::onScroll(double /*xoffset*/, double yoffset)
+void PDFViewerEmbedder::onScroll(double xoffset, double yoffset)
 {
     if (!m_scrollState) return;
     
-    // Use the correct function name from feature.h
-    HandleScroll(*m_scrollState, (float)yoffset);
+    // Get cursor position for cursor-based zooming
+    double cursorX = m_scrollState->lastCursorX;
+    double cursorY = m_scrollState->lastCursorY;
     
-    // Check if zoom changed and force regeneration
-    if (m_scrollState->zoomChanged) {
-        m_needsVisibleRegeneration = true;
-        m_scrollState->zoomChanged = false;
+    // Check if cursor is over the scroll bar area (right side of window)
+    float barMargin = 0.01f * m_windowWidth;
+    float barWidth = 0.025f * m_windowWidth;
+    float barX = m_windowWidth - barMargin - barWidth;
+    
+    // If cursor is over scroll bar area, disable mouse wheel input
+    bool isOverScrollBar = (cursorX >= barX && cursorX <= m_windowWidth - barMargin);
+    
+    if (isOverScrollBar) {
+        return; // Don't handle scroll when over scroll bar
+    }
+    
+    // Get key modifier states for different scroll behaviors
+    bool shiftPressed = (glfwGetKey(m_glfwWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || 
+                        glfwGetKey(m_glfwWindow, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
+    
+    if (shiftPressed) {
+        // Horizontal scrolling with Shift + mouse wheel
+        HandleHorizontalScroll(*m_scrollState, (float)yoffset, (float)m_windowWidth);
+    } else {
+        // Always zoom with mouse wheel (no Ctrl modifier required)
+        // Use zoom FACTOR not delta - same as standalone PDF viewer
+        float zoomFactor = (yoffset > 0) ? 1.1f : 1.0f / 1.1f;
+        
+        HandleZoom(*m_scrollState, zoomFactor, (float)cursorX, (float)cursorY, 
+                   (float)m_windowWidth, (float)m_windowHeight, m_pageHeights, m_pageWidths);
+        
+        // Check if zoom changed and force regeneration
+        if (m_scrollState->zoomChanged) {
+            m_needsVisibleRegeneration = true;
+            m_scrollState->zoomChanged = false;
+        }
     }
 }
 
-void PDFViewerEmbedder::onKey(int key, int /*scancode*/, int action, int mods)
+void PDFViewerEmbedder::onKey(int key, int scancode, int action, int mods)
 {
     if (!m_scrollState) return;
     
     if (action == GLFW_PRESS) {
-        // Reuse your existing keyboard handling logic
+        // Enhanced keyboard handling from standalone PDF viewer
         if (key >= 32 && key <= 126) {
+            // Printable characters for search input
             HandleSearchInput(*m_scrollState, key, mods);
         } else if (key == GLFW_KEY_BACKSPACE) {
+            // Backspace for search editing
             HandleSearchInput(*m_scrollState, key, mods);
+        } else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
+            // Enter for search navigation
+            if (mods & GLFW_MOD_SHIFT) {
+                NavigateToPreviousSearchResult(*m_scrollState, m_pageHeights);
+            } else {
+                NavigateToNextSearchResult(*m_scrollState, m_pageHeights);
+            }
         } else if (key == GLFW_KEY_F3) {
+            // F3 for search navigation
             if (mods & GLFW_MOD_SHIFT) {
                 NavigateToPreviousSearchResult(*m_scrollState, m_pageHeights);
             } else {
                 NavigateToNextSearchResult(*m_scrollState, m_pageHeights);
             }
         } else if (key == GLFW_KEY_C && (mods & GLFW_MOD_CONTROL)) {
+            // Ctrl+C for copying selected text
             std::string selectedText = GetSelectedText(*m_scrollState);
             if (!selectedText.empty()) {
                 glfwSetClipboardString(m_glfwWindow, selectedText.c_str());
             }
+        } else if (key == GLFW_KEY_A && (mods & GLFW_MOD_CONTROL)) {
+            // Ctrl+A for select all (select all text on current page)
+            // TODO: Implement select all functionality
+        } else if (key == GLFW_KEY_F && (mods & GLFW_MOD_CONTROL)) {
+            // Ctrl+F for search (toggle search box focus)
+            ToggleSearchBox(*m_scrollState);
         } else if (key == GLFW_KEY_ESCAPE) {
+            // Escape to clear text selection and search
             ClearTextSelection(*m_scrollState);
+            ClearSearchResults(*m_scrollState);
+        } else if (key == GLFW_KEY_HOME) {
+            // Home key navigation
+            if (mods & GLFW_MOD_CONTROL) {
+                // Ctrl+Home: Go to first page
+                goToPage(1);
+            } else {
+                // Home: Go to top of current page
+                m_scrollState->scrollOffset = 0.0f;
+                m_scrollState->forceRedraw = true;
+            }
+        } else if (key == GLFW_KEY_END) {
+            // End key navigation
+            if (mods & GLFW_MOD_CONTROL) {
+                // Ctrl+End: Go to last page
+                goToPage(getPageCount());
+            } else {
+                // End: Go to bottom of document
+                m_scrollState->scrollOffset = m_scrollState->maxOffset;
+                m_scrollState->forceRedraw = true;
+            }
+        } else if (key == GLFW_KEY_PAGE_UP) {
+            // Page Up: Scroll up by page height
+            float pageHeight = m_windowHeight * 0.9f; // 90% of window height
+            m_scrollState->scrollOffset = std::max(0.0f, m_scrollState->scrollOffset - pageHeight);
+            m_scrollState->forceRedraw = true;
+        } else if (key == GLFW_KEY_PAGE_DOWN) {
+            // Page Down: Scroll down by page height
+            float pageHeight = m_windowHeight * 0.9f; // 90% of window height
+            m_scrollState->scrollOffset = std::min(m_scrollState->maxOffset, 
+                                                    m_scrollState->scrollOffset + pageHeight);
+            m_scrollState->forceRedraw = true;
+        } else if (key == GLFW_KEY_UP) {
+            // Arrow up: Fine scroll up
+            float scrollAmount = 50.0f; // pixels
+            m_scrollState->scrollOffset = std::max(0.0f, m_scrollState->scrollOffset - scrollAmount);
+            m_scrollState->forceRedraw = true;
+        } else if (key == GLFW_KEY_DOWN) {
+            // Arrow down: Fine scroll down
+            float scrollAmount = 50.0f; // pixels
+            m_scrollState->scrollOffset = std::min(m_scrollState->maxOffset, 
+                                                    m_scrollState->scrollOffset + scrollAmount);
+            m_scrollState->forceRedraw = true;
+        } else if (key == GLFW_KEY_LEFT) {
+            // Arrow left: Horizontal scroll or previous page
+            if (mods & GLFW_MOD_CONTROL) {
+                previousPage();
+            } else {
+                HandleHorizontalScroll(*m_scrollState, -1.0f, (float)m_windowWidth);
+            }
+        } else if (key == GLFW_KEY_RIGHT) {
+            // Arrow right: Horizontal scroll or next page
+            if (mods & GLFW_MOD_CONTROL) {
+                nextPage();
+            } else {
+                HandleHorizontalScroll(*m_scrollState, 1.0f, (float)m_windowWidth);
+            }
+        } else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_9 && (mods & GLFW_MOD_CONTROL)) {
+            // Ctrl+1-9: Quick zoom levels
+            float zoomLevels[] = {0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 2.5f, 3.0f};
+            int index = key - GLFW_KEY_1;
+            if (index < 9) {
+                setZoom(zoomLevels[index]);
+            }
+        } else if (key == GLFW_KEY_0 && (mods & GLFW_MOD_CONTROL)) {
+            // Ctrl+0: Zoom to fit
+            zoomToFit();
+        } else if (key == GLFW_KEY_EQUAL && (mods & GLFW_MOD_CONTROL)) {
+            // Ctrl+= (Plus): Zoom in
+            zoomIn();
+        } else if (key == GLFW_KEY_MINUS && (mods & GLFW_MOD_CONTROL)) {
+            // Ctrl+- (Minus): Zoom out
+            zoomOut();
         }
     }
 }
