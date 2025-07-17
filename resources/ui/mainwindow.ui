@@ -16,7 +16,7 @@
   <property name="styleSheet">
    <string notr="true">QMainWindow {
     background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
-                               stop: 0 #4285f4, stop: 1 #34a853);
+                               stop: 0 #667eea, stop: 1 #764ba2);
 }</string>
   </property>
   <widget class="QWidget" name="centralwidget">
@@ -28,17 +28,18 @@
    <widget class="QWidget" name="loginContainer" native="true">
     <property name="geometry">
      <rect>
-      <x>40</x>
-      <y>20</y>
-      <width>500</width>
-      <height>340</height>
+      <x>50</x>
+      <y>30</y>
+      <width>480</width>
+      <height>320</height>
      </rect>
     </property>
     <property name="styleSheet">
      <string notr="true">QWidget#loginContainer {
-    background-color: rgba(255, 255, 255, 0.98);
-    border: 1px solid rgba(200, 200, 200, 0.3);
-    border-radius: 15px;
+    background-color: rgba(255, 255, 255, 0.95);
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }</string>
     </property>
     <widget class="QLabel" name="titleLabel">
@@ -65,7 +66,7 @@ QLabel {
 }</string>
      </property>
      <property name="text">
-      <string>Way2Repair</string>
+      <string>Way2Repair Solutions</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignLeft|Qt::AlignVCenter</set>
@@ -97,7 +98,7 @@ QLabel {
 }</string>
      </property>
      <property name="text">
-      <string>V4.75</string>
+      <string>V1.0</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
@@ -108,7 +109,7 @@ QLabel {
       <rect>
        <x>30</x>
        <y>75</y>
-       <width>440</width>
+       <width>420</width>
        <height>30</height>
       </rect>
      </property>
@@ -126,9 +127,8 @@ QLabel {
     font-family: 'Segoe UI', Arial, sans-serif;
 }</string>
      </property>
-     <property name="text">
-      <string>Inquiry System for Intelligent Terminal
-Equipment Maintenance</string>
+    <property name="text">
+     <string>India's NO.1 Schemetics tools</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignLeft|Qt::AlignTop</set>
@@ -140,8 +140,8 @@ Equipment Maintenance</string>
     <widget class="QLabel" name="quickLoginLabel">
      <property name="geometry">
       <rect>
-       <x>330</x>
-       <y>110</y>
+       <x>310</x>
+       <y>100</y>
        <width>140</width>
        <height>16</height>
       </rect>
@@ -171,8 +171,8 @@ Equipment Maintenance</string>
      <property name="geometry">
       <rect>
        <x>30</x>
-       <y>145</y>
-       <width>440</width>
+       <y>125</y>
+       <width>420</width>
        <height>35</height>
       </rect>
      </property>
@@ -208,8 +208,8 @@ QLineEdit:hover {
      <property name="geometry">
       <rect>
        <x>30</x>
-       <y>195</y>
-       <width>440</width>
+       <y>170</y>
+       <width>420</width>
        <height>35</height>
       </rect>
      </property>
@@ -248,8 +248,8 @@ QLineEdit:hover {
      <property name="geometry">
       <rect>
        <x>30</x>
-       <y>250</y>
-       <width>440</width>
+       <y>220</y>
+       <width>420</width>
        <height>35</height>
       </rect>
      </property>
@@ -293,7 +293,7 @@ QPushButton:disabled {
      <property name="geometry">
       <rect>
        <x>30</x>
-       <y>300</y>
+       <y>270</y>
        <width>120</width>
        <height>20</height>
       </rect>
@@ -330,8 +330,8 @@ QCheckBox::indicator:checked {
     <widget class="QLabel" name="recoverLabel">
      <property name="geometry">
       <rect>
-       <x>390</x>
-       <y>300</y>
+       <x>370</x>
+       <y>270</y>
        <width>80</width>
        <height>20</height>
       </rect>
@@ -357,6 +357,46 @@ QLabel:hover {
      </property>
      <property name="alignment">
       <set>Qt::AlignRight|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="closeButton">
+     <property name="geometry">
+      <rect>
+       <x>440</x>
+       <y>10</y>
+       <width>30</width>
+       <height>30</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>14</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="cursor">
+      <cursorShape>PointingHandCursor</cursorShape>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QPushButton {
+    background-color: transparent;
+    color: #999999;
+    border: none;
+    border-radius: 15px;
+    padding: 0px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #ff4757;
+    color: white;
+}
+QPushButton:pressed {
+    background-color: #ff3742;
+}</string>
+     </property>
+     <property name="text">
+      <string>×</string>
      </property>
     </widget>
    </widget>

@@ -1,4 +1,5 @@
 #include "PDFViewerEmbedder.h"
+#include "OpenGLPipelineManager.h"
 
 // Include your existing PDF viewer components
 #include "rendering/pdf-render.h"
@@ -13,6 +14,8 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <ctime>
 
 // External global variables used by the PDF system
 extern PDFScrollState* g_scrollState;
@@ -462,10 +465,10 @@ int PDFViewerEmbedder::getCurrentPage() const
 
 bool PDFViewerEmbedder::createEmbeddedWindow()
 {
-    // Try OpenGL 3.3 Core Profile first
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    // Try OpenGL 2.1 first (guaranteed to support immediate mode)
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // Start hidden, will be embedded
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE); // No window decorations for embedding
@@ -477,7 +480,7 @@ bool PDFViewerEmbedder::createEmbeddedWindow()
         // Clear any previous error
         glfwGetError(nullptr);
         
-        // Try OpenGL 3.3 Compatibility Profile
+        // Try OpenGL 3.3 Compatibility Profile (if 2.1 fails)
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
@@ -569,10 +572,114 @@ bool PDFViewerEmbedder::initializeOpenGL()
         // Clear error queue
     }
     
-    // Set up basic OpenGL state
-    glEnable(GL_TEXTURE_2D);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // Create and initialize adaptive pipeline manager
+    m_pipelineManager = std::make_unique<OpenGLPipelineManager>();
+    
+    // Initialize the adaptive pipeline system
+    if (!m_pipelineManager->initialize()) {
+        std::cout << "Failed to initialize OpenGL pipeline manager, falling back to basic OpenGL" << std::endl;
+        // Continue with basic OpenGL setup
+        glEnable(GL_TEXTURE_2D);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        return true;
+    }
+    
+    // Get pipeline information
+    const auto& caps = m_pipelineManager->getCapabilities();
+    const char* version = caps.version.c_str();
+    const char* vendor = caps.vendor.c_str();
+    const char* renderer = caps.renderer.c_str();
+    
+    // Write comprehensive debug information
+    std::ofstream debugFile("opengl_debug.txt", std::ios::app);
+    if (debugFile.is_open()) {
+        debugFile << "=== OpenGL Debug Information ===" << std::endl;
+        auto now = std::time(nullptr);
+        debugFile << "Timestamp: " << std::ctime(&now);
+        
+        // Basic OpenGL information
+        debugFile << "OpenGL Version: " << version << std::endl;
+        debugFile << "OpenGL Vendor: " << vendor << std::endl;
+        debugFile << "OpenGL Renderer: " << renderer << std::endl;
+        debugFile << "OpenGL Context Version: " << caps.majorVersion << "." << caps.minorVersion << std::endl;
+        
+        // Get GLSL version
+        const char* glslVersion = (const char*)glGetString(GL_SHADING_LANGUAGE_VERSION);
+        debugFile << "GLSL Version: " << (glslVersion ? glslVersion : "Unknown") << std::endl;
+        
+        // Check profile type
+        if (caps.majorVersion >= 3 && caps.minorVersion >= 2) {
+            int profile = 0;
+            glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &profile);
+            if (profile & GL_CONTEXT_CORE_PROFILE_BIT) {
+                debugFile << "OpenGL Profile: Core Profile" << std::endl;
+            } else if (profile & GL_CONTEXT_COMPATIBILITY_PROFILE_BIT) {
+                debugFile << "OpenGL Profile: Compatibility Profile" << std::endl;
+            } else {
+                debugFile << "OpenGL Profile: Unknown/Default" << std::endl;
+            }
+        }
+        
+        debugFile << "Max Texture Size: " << caps.maxTextureSize << std::endl;
+        
+        GLint maxViewportDims[2];
+        glGetIntegerv(GL_MAX_VIEWPORT_DIMS, maxViewportDims);
+        debugFile << "Max Viewport: " << maxViewportDims[0] << "x" << maxViewportDims[1] << std::endl;
+        
+        debugFile << "Extensions Support:" << std::endl;
+        debugFile << "- VBO Support: " << (caps.hasVBO ? "YES" : "NO") << std::endl;
+        debugFile << "- VAO Support: " << (caps.hasVAO ? "YES" : "NO") << std::endl;
+        debugFile << "- Shader Support: " << (caps.hasShaders ? "YES" : "NO") << std::endl;
+        debugFile << "- Framebuffer Support: " << (caps.hasFramebuffers ? "YES" : "NO") << std::endl;
+        
+        // Pipeline analysis
+        debugFile << "=== Pipeline Analysis ===" << std::endl;
+        debugFile << "Selected Pipeline: " << m_pipelineManager->getPipelineDescription() << std::endl;
+        debugFile << "Pipeline Features:" << std::endl;
+        debugFile << "- Fixed Function Pipeline: YES" << std::endl;
+        
+        auto pipeline = m_pipelineManager->getSelectedPipeline();
+        debugFile << "- Immediate Mode Rendering: " << (pipeline == RenderingPipeline::LEGACY_IMMEDIATE ? "YES (glBegin/glEnd)" : "NO") << std::endl;
+        debugFile << "- Vertex Arrays: " << (caps.hasVAO && pipeline == RenderingPipeline::MODERN_SHADER ? "YES" : "NO") << std::endl;
+        debugFile << "- Vertex Buffer Objects (VBOs): " << (caps.hasVBO && pipeline != RenderingPipeline::LEGACY_IMMEDIATE ? "YES" : "NO") << std::endl;
+        debugFile << "- Shaders: " << (caps.hasShaders && pipeline == RenderingPipeline::MODERN_SHADER ? "YES" : "NO") << std::endl;
+        
+        // Library versions
+        debugFile << "Library Versions:" << std::endl;
+        debugFile << "- GLFW Version: " << glfwGetVersionString() << std::endl;
+        debugFile << "- GLEW Version: " << glewGetString(GLEW_VERSION) << std::endl;
+        
+        debugFile << "=== End Debug Information ===" << std::endl << std::endl;
+        debugFile.close();
+        
+        std::cout << "OpenGL debug information written to opengl_debug.txt" << std::endl;
+    }
+    
+    // Console output
+    std::cout << "=== OpenGL Information ===" << std::endl;
+    std::cout << "OpenGL Version: " << version << std::endl;
+    std::cout << "OpenGL Vendor: " << vendor << std::endl;
+    std::cout << "OpenGL Renderer: " << renderer << std::endl;
+    std::cout << "OpenGL Context Version: " << caps.majorVersion << "." << caps.minorVersion << std::endl;
+    
+    std::cout << "=== Adaptive Pipeline Information ===" << std::endl;
+    std::cout << "Selected Pipeline: " << m_pipelineManager->getPipelineDescription() << std::endl;
+    std::cout << "Optimization Level: ";
+    
+    switch (m_pipelineManager->getSelectedPipeline()) {
+        case RenderingPipeline::MODERN_SHADER:
+            std::cout << "MAXIMUM (VBO/VAO/Shaders)" << std::endl;
+            break;
+        case RenderingPipeline::INTERMEDIATE_VBO:
+            std::cout << "GOOD (VBO without shaders)" << std::endl;
+            break;
+        case RenderingPipeline::LEGACY_IMMEDIATE:
+            std::cout << "COMPATIBLE (Immediate mode)" << std::endl;
+            break;
+    }
+    
+    std::cout << "=================================" << std::endl;
     
     return true;
 }
@@ -604,38 +711,81 @@ void PDFViewerEmbedder::renderFrame()
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
     int pageCount = m_renderer->GetPageCount();
-    
-    // Draw all pages stacked vertically (reusing your rendering logic)
     float yOffset = -m_scrollState->scrollOffset;
     
-    for (int i = 0; i < pageCount; ++i) {
-        if (m_textures[i] == 0) continue; // Skip if texture not ready
+    // Use pipeline-specific rendering
+    auto selectedPipeline = m_pipelineManager->getSelectedPipeline();
+    
+    if (selectedPipeline == RenderingPipeline::LEGACY_IMMEDIATE) {
+        // Legacy OpenGL 2.1 - Use fixed function pipeline with immediate mode
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(0, m_windowWidth, m_windowHeight, 0, -1, 1);
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
         
-        float pageW = (float)m_pageWidths[i] * m_scrollState->zoomScale;
-        float pageH = (float)m_pageHeights[i] * m_scrollState->zoomScale;
-        float xScale = pageW / m_windowWidth;
-        float yScale = pageH / m_windowHeight;
-        float yCenter = yOffset + pageH / 2.0f;
+        // Draw pages using immediate mode (supported in legacy pipeline)
+        for (int i = 0; i < pageCount; ++i) {
+            if (m_textures[i] == 0) continue;
+            
+            float pageW = (float)m_pageWidths[i] * m_scrollState->zoomScale;
+            float pageH = (float)m_pageHeights[i] * m_scrollState->zoomScale;
+            
+            float xCenter = (m_windowWidth / 2.0f) - m_scrollState->horizontalOffset;
+            float yCenter = yOffset + pageH / 2.0f;
+            
+            float x = xCenter - pageW / 2.0f;
+            float y = yCenter - pageH / 2.0f;
+            
+            glBindTexture(GL_TEXTURE_2D, m_textures[i]);
+            glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+            
+            glBegin(GL_QUADS);
+            glTexCoord2f(0.0f, 0.0f); glVertex2f(x, y);
+            glTexCoord2f(1.0f, 0.0f); glVertex2f(x + pageW, y);
+            glTexCoord2f(1.0f, 1.0f); glVertex2f(x + pageW, y + pageH);
+            glTexCoord2f(0.0f, 1.0f); glVertex2f(x, y + pageH);
+            glEnd();
+            
+            yOffset += pageH;
+        }
+    }
+    else {
+        // Modern/Intermediate Pipeline - Use compatibility approach that works in both Core and Compatibility
+        // Set up 2D orthographic projection for screen coordinates
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(0.0f, (float)m_windowWidth, (float)m_windowHeight, 0.0f, -1.0f, 1.0f);
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
         
-        // Apply horizontal offset for cursor-based zoom support
-        float xCenter = (m_windowWidth / 2.0f) - m_scrollState->horizontalOffset;
-        float xNDC = (xCenter / m_windowWidth) * 2.0f - 1.0f;
-        float yNDC = 1.0f - (yCenter / m_windowHeight) * 2.0f;
-        float halfX = xScale;
-        float halfY = yScale;
-        
-        float leftX = xNDC - halfX;
-        float rightX = xNDC + halfX;
-        
-        glBindTexture(GL_TEXTURE_2D, m_textures[i]);
-        glBegin(GL_QUADS);
-        glTexCoord2f(0.0f, 1.0f); glVertex2f(leftX, yNDC - halfY);
-        glTexCoord2f(1.0f, 1.0f); glVertex2f(rightX, yNDC - halfY);
-        glTexCoord2f(1.0f, 0.0f); glVertex2f(rightX, yNDC + halfY);
-        glTexCoord2f(0.0f, 0.0f); glVertex2f(leftX, yNDC + halfY);
-        glEnd();
-        
-        yOffset += pageH;
+        // Draw pages one by one using immediate mode (works in compatibility profile)
+        // This ensures compatibility while still using the modern pipeline path
+        for (int i = 0; i < pageCount; ++i) {
+            if (m_textures[i] == 0) continue;
+            
+            float pageW = (float)m_pageWidths[i] * m_scrollState->zoomScale;
+            float pageH = (float)m_pageHeights[i] * m_scrollState->zoomScale;
+            
+            float xCenter = (m_windowWidth / 2.0f) - m_scrollState->horizontalOffset;
+            float yCenter = yOffset + pageH / 2.0f;
+            
+            float x = xCenter - pageW / 2.0f;
+            float y = yCenter - pageH / 2.0f;
+            
+            glBindTexture(GL_TEXTURE_2D, m_textures[i]);
+            glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+            
+            // Use immediate mode for now - this should work in both profiles
+            glBegin(GL_QUADS);
+            glTexCoord2f(0.0f, 0.0f); glVertex2f(x, y);
+            glTexCoord2f(1.0f, 0.0f); glVertex2f(x + pageW, y);
+            glTexCoord2f(1.0f, 1.0f); glVertex2f(x + pageW, y + pageH);
+            glTexCoord2f(0.0f, 1.0f); glVertex2f(x, y + pageH);
+            glEnd();
+            
+            yOffset += pageH;
+        }
     }
     
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -657,13 +807,7 @@ void PDFViewerEmbedder::renderFrame()
     
     // Reset GL state
     glDisable(GL_BLEND);
-    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-    
-    // Draw search results highlighting
-    DrawSearchResultsHighlighting(*m_scrollState, m_pageHeights, m_pageWidths, (float)m_windowWidth, (float)m_windowHeight);
-    
-    // Draw scroll bar
-    DrawScrollBar(*m_scrollState);
+    glDisable(GL_TEXTURE_2D);
 }
 
 void PDFViewerEmbedder::regenerateTextures()

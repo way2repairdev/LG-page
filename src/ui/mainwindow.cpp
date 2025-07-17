@@ -1,12 +1,16 @@
 #include "ui/mainwindow.h"
 #include "ui_mainwindow.h"
 #include "ui/mainapplication.h"
+#include <QApplication>
+#include <QMouseEvent>
+#include <QKeyEvent>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , m_dbManager(new DatabaseManager(this))
     , m_mainApp(nullptr)
+    , m_dragging(false)
 {
     ui->setupUi(this);
     setupLoginConnections();
@@ -15,7 +19,7 @@ MainWindow::MainWindow(QWidget *parent)
     // Set window properties for compact dialog
     setWindowTitle("Way2Repair - Login System");
     setFixedSize(580, 380);  // Compact size matching the screenshot
-    setWindowFlags(Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint | Qt::WindowCloseButtonHint);
+    setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
     
     // Center the window on screen
     QWidget *parentWidget = qobject_cast<QWidget*>(parent);
@@ -57,6 +61,9 @@ void MainWindow::setupLoginConnections()
     // Connect text change signals for validation
     connect(ui->usernameLineEdit, &QLineEdit::textChanged, this, &MainWindow::onUsernameChanged);
     connect(ui->passwordLineEdit, &QLineEdit::textChanged, this, &MainWindow::onPasswordChanged);
+    
+    // Connect close button to quit application
+    connect(ui->closeButton, &QPushButton::clicked, this, &QApplication::quit);
 }
 
 void MainWindow::setupDatabaseConnection()
@@ -307,4 +314,40 @@ void MainWindow::closeLoginWindow()
     this->activateWindow();
     
     qDebug() << "User logged out, login window restored";
+}
+
+// Mouse event handlers for frameless window dragging
+void MainWindow::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton) {
+        m_dragging = true;
+        m_dragPosition = event->globalPosition().toPoint() - frameGeometry().topLeft();
+        event->accept();
+    }
+}
+
+void MainWindow::mouseMoveEvent(QMouseEvent *event)
+{
+    if (event->buttons() & Qt::LeftButton && m_dragging) {
+        move(event->globalPosition().toPoint() - m_dragPosition);
+        event->accept();
+    }
+}
+
+void MainWindow::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton) {
+        m_dragging = false;
+        event->accept();
+    }
+}
+
+void MainWindow::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Escape) {
+        // Allow ESC key to close the application
+        QApplication::quit();
+    } else {
+        QMainWindow::keyPressEvent(event);
+    }
 }

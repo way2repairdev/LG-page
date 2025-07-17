@@ -11,12 +11,19 @@ if(MSVC)
     add_compile_options(/Zc:__cplusplus /permissive-)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     add_compile_options(-Wall -Wextra)
+    # Fix for AutoMoc with MinGW
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_WIN32_WINNT=0x0601")
 endif()
 
 # Qt configuration
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
+
+# Ensure Qt tools can be found
+if(NOT Qt${QT_VERSION_MAJOR}_FOUND)
+    set(CMAKE_PREFIX_PATH "C:/Qt/6.9.1/mingw_64;${CMAKE_PREFIX_PATH}")
+endif()
 
 # Find Qt6 packages
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets Sql Network OpenGL OpenGLWidgets)
@@ -70,6 +77,7 @@ set(UI_SOURCES
     ${SRC_DIR}/ui/pdfviewerwidget.cpp
     ${SRC_DIR}/ui/PDFViewerEmbedder.cpp
     ${SRC_DIR}/ui/QtPDFViewerWidget.cpp
+    ${SRC_DIR}/ui/OpenGLPipelineManager.cpp
 )
 
 # Add hybrid PDF viewer only if Qt PDF modules are available
@@ -102,6 +110,7 @@ set(UI_HEADERS
     ${INCLUDE_DIR}/ui/pdfviewerwidget.h
     ${SRC_DIR}/ui/PDFViewerEmbedder.h
     ${SRC_DIR}/ui/QtPDFViewerWidget.h
+    ${SRC_DIR}/ui/OpenGLPipelineManager.h
 )
 
 # Add hybrid PDF viewer header only if Qt PDF modules are available
@@ -205,11 +214,16 @@ else()
     set(HAVE_PDFIUM FALSE)
 endif()
 
-# Check if GLEW library exists
+# Check if GLEW library exists and set up MinGW-compatible linking
 if(EXISTS "${GLEW_LIB_PATH}/glew32.lib")
     message(STATUS "GLEW library found - enabling OpenGL features")
     target_link_directories(Way2RepairLoginSystem PRIVATE "${GLEW_LIB_PATH}")
-    target_link_libraries(Way2RepairLoginSystem PRIVATE glew32)
+    # For MinGW, we need to link with the static library and OpenGL32
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_link_libraries(Way2RepairLoginSystem PRIVATE glew32 opengl32)
+    else()
+        target_link_libraries(Way2RepairLoginSystem PRIVATE glew32)
+    endif()
     target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_GLEW)
     set(HAVE_GLEW TRUE)
 else()
@@ -225,9 +239,12 @@ if(EXISTS "${GLFW_MINGW_LIB_PATH}/libglfw3.a")
     message(STATUS "MinGW-compatible GLFW library found - enabling GLFW window management")
     target_link_directories(Way2RepairLoginSystem PRIVATE "${GLFW_MINGW_LIB_PATH}")
     target_include_directories(Way2RepairLoginSystem PRIVATE "${GLFW_MINGW_INCLUDE_PATH}")
-    target_link_libraries(Way2RepairLoginSystem PRIVATE glfw3)
-    # Link additional Windows libraries required by GLFW
-    target_link_libraries(Way2RepairLoginSystem PRIVATE opengl32 gdi32 user32 kernel32 shell32)
+    # For MinGW, link with static library and Windows libraries
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_link_libraries(Way2RepairLoginSystem PRIVATE glfw3 opengl32 gdi32 user32 kernel32 shell32)
+    else()
+        target_link_libraries(Way2RepairLoginSystem PRIVATE glfw3)
+    endif()
     target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_GLFW)
     set(HAVE_GLFW TRUE)
 else()

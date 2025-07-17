@@ -9,6 +9,8 @@
 #include <QProgressBar>
 #include <QTimer>
 #include <QDateTime>
+#include <QMouseEvent>
+#include <QKeyEvent>
 #include "database/databasemanager.h"
 
 // Forward declaration
@@ -48,5 +50,16 @@ private:
     void enableLoginControls(bool enabled);
     void launchMainApplication(const QString &username, const UserInfo &userInfo);
     void closeLoginWindow();
+    
+    // Mouse event handlers for frameless window
+protected:
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+
+private:
+    QPoint m_dragPosition;
+    bool m_dragging;
 };
 #endif // MAINWINDOW_H

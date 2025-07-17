@@ -11,6 +11,7 @@
 class PDFRenderer;
 struct PDFScrollState;
 class MenuIntegration;
+class OpenGLPipelineManager;
 
 /**
  * PDFViewerEmbedder - Wraps the existing standalone PDF viewer for embedding in Qt applications
@@ -115,6 +116,7 @@ private:
     std::unique_ptr<PDFRenderer> m_renderer;
     std::unique_ptr<PDFScrollState> m_scrollState;
     std::unique_ptr<MenuIntegration> m_menuIntegration;
+    std::unique_ptr<OpenGLPipelineManager> m_pipelineManager;
     
     // OpenGL state
     std::vector<unsigned int> m_textures;
