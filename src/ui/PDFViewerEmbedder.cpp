@@ -17,6 +17,14 @@
 #include <fstream>
 #include <ctime>
 
+// Prevent Windows min/max macros from conflicting with std::min/max
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+
 // External global variables used by the PDF system
 extern PDFScrollState* g_scrollState;
 extern PDFRenderer* g_renderer;
@@ -208,16 +216,24 @@ bool PDFViewerEmbedder::loadPDF(const std::string& filePath)
     m_scrollState->originalPageWidths = &m_originalPageWidths;
     m_scrollState->originalPageHeights = &m_originalPageHeights;
     
+    std::cout << "PDFViewerEmbedder: Initializing with " << pageCount << " pages" << std::endl;
+    std::cout << "PDFViewerEmbedder: Original page dimensions: " << m_originalPageWidths[0] << "x" << m_originalPageHeights[0] << std::endl;
+    
     // Initialize text extraction and search capabilities (missing from original implementation)
     try {
         InitializeTextExtraction(*m_scrollState, pageCount);
+        std::cout << "PDFViewerEmbedder: Text extraction initialized" << std::endl;
     } catch (const std::exception& e) {
+        std::cerr << "PDFViewerEmbedder: Failed to initialize text extraction: " << e.what() << std::endl;
         return false;
     }
     
+    // Initialize text search capabilities
     try {
         InitializeTextSearch(*m_scrollState);
+        std::cout << "PDFViewerEmbedder: Text search initialized" << std::endl;
     } catch (const std::exception& e) {
+        std::cerr << "PDFViewerEmbedder: Failed to initialize text search: " << e.what() << std::endl;
         return false;
     }
     
@@ -230,9 +246,14 @@ bool PDFViewerEmbedder::loadPDF(const std::string& filePath)
             if (page) {
                 LoadTextPage(*m_scrollState, i, page);
                 FPDF_ClosePage(page);
+                std::cout << "PDFViewerEmbedder: Loaded text page " << i << std::endl;
+            } else {
+                std::cerr << "PDFViewerEmbedder: Failed to load page " << i << " for text extraction" << std::endl;
             }
         }
+        std::cout << "PDFViewerEmbedder: Text pages loaded for " << pageCount << " pages" << std::endl;
     } catch (const std::exception& e) {
+        std::cerr << "PDFViewerEmbedder: Failed to load text pages: " << e.what() << std::endl;
         return false;
     }
 
@@ -283,6 +304,12 @@ void PDFViewerEmbedder::update()
         } else {
             regenerateVisibleTextures();
         }
+    }
+
+    // IMPORTANT: Update search state and trigger search if needed
+    // This ensures that search highlighting works properly
+    if (m_scrollState->textSearch.needsUpdate && !m_scrollState->textSearch.searchTerm.empty()) {
+        PerformTextSearch(*m_scrollState, m_pageHeights, m_pageWidths);
     }
 
     // Render the frame
@@ -793,6 +820,23 @@ void PDFViewerEmbedder::renderFrame()
     // Draw text selection highlighting (reuse your existing functions)
     // Note: These functions need to be available - they're from your main.cpp
     try {
+        // Save current OpenGL state
+        glPushMatrix();
+        
+        // Switch to normalized coordinates (-1 to 1) for text selection drawing
+        // This matches what the standalone viewer uses
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+        
+        // Debug: Check if we have an active text selection
+        if (m_scrollState->textSelection.isActive) {
+            std::cout << "PDFViewerEmbedder: Drawing text selection - startChar=" << m_scrollState->textSelection.startCharIndex 
+                      << ", endChar=" << m_scrollState->textSelection.endCharIndex << std::endl;
+        }
+        
         DrawTextSelection(*m_scrollState, m_pageHeights, m_pageWidths, (float)m_windowWidth, (float)m_windowHeight);
         
         // Draw search results highlighting
@@ -800,6 +844,16 @@ void PDFViewerEmbedder::renderFrame()
         
         // Draw scroll bar overlay
         DrawScrollBar(*m_scrollState);
+        
+        // Restore OpenGL state
+        glPopMatrix();
+        
+        // Restore the screen coordinate system for future rendering
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(0.0f, (float)m_windowWidth, (float)m_windowHeight, 0.0f, -1.0f, 1.0f);
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
     } catch (...) {
         // If the drawing functions aren't available, continue without them
         // This ensures basic PDF rendering still works
@@ -1022,6 +1076,7 @@ void PDFViewerEmbedder::onCursorPos(double xpos, double ypos)
                                  m_pageHeights, m_pageWidths);
     
     if (m_scrollState->textSelection.isDragging) {
+        std::cout << "PDFViewerEmbedder: Updating text selection at (" << xpos << ", " << ypos << ")" << std::endl;
         UpdateTextSelection(*m_scrollState, xpos, ypos, (float)m_windowWidth, (float)m_windowHeight, 
                             m_pageHeights, m_pageWidths);
     }
@@ -1063,6 +1118,7 @@ void PDFViewerEmbedder::onMouseButton(int button, int action, int /*mods*/)
                                          m_pageHeights, m_pageWidths);
                 } else {
                     // Single click: start text selection
+                    std::cout << "PDFViewerEmbedder: Starting text selection at (" << mouseX << ", " << mouseY << ")" << std::endl;
                     StartTextSelection(*m_scrollState, mouseX, mouseY, (float)m_windowWidth, (float)m_windowHeight, 
                                        m_pageHeights, m_pageWidths);
                 }
@@ -1073,7 +1129,15 @@ void PDFViewerEmbedder::onMouseButton(int button, int action, int /*mods*/)
             
             // End text selection (but not for double-click word selection)
             if (!m_scrollState->textSelection.isDoubleClick) {
+                std::cout << "PDFViewerEmbedder: Ending text selection" << std::endl;
                 EndTextSelection(*m_scrollState);
+                
+                // IMPORTANT: Trigger the search immediately after text selection
+                // This ensures that the selected text gets highlighted in yellow
+                if (m_scrollState->textSearch.needsUpdate) {
+                    std::cout << "PDFViewerEmbedder: Triggering search for selected text: '" << m_scrollState->textSearch.searchTerm << "'" << std::endl;
+                    PerformTextSearch(*m_scrollState, m_pageHeights, m_pageWidths);
+                }
             }
             m_scrollState->textSelection.isDoubleClick = false;
         }
