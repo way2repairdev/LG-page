@@ -152,22 +152,6 @@ void PDFViewerWidget::setupToolbar()
         "    border-color: #4285f4;"
         "    outline: none;"
         "}"
-        "QSlider::groove:horizontal {"
-        "    height: 6px;"
-        "    background: #e9ecef;"
-        "    border-radius: 3px;"
-        "}"
-        "QSlider::handle:horizontal {"
-        "    background: #4285f4;"
-        "    border: 1px solid #4285f4;"
-        "    width: 16px;"
-        "    height: 16px;"
-        "    border-radius: 8px;"
-        "    margin: -5px 0;"
-        "}"
-        "QSlider::handle:horizontal:hover {"
-        "    background: #1a73e8;"
-        "}"
     );
     
     m_toolbarLayout = new QHBoxLayout(m_toolbar);
@@ -213,18 +197,6 @@ void PDFViewerWidget::setupToolbar()
     m_zoomFitBtn->setShortcut(QKeySequence("Ctrl+0"));
     connect(m_zoomFitBtn, &QPushButton::clicked, this, &PDFViewerWidget::zoomToFit);
     
-    m_zoomSlider = new QSlider(Qt::Horizontal);
-    m_zoomSlider->setRange(25, 400); // 25% to 400%
-    m_zoomSlider->setValue(100);
-    m_zoomSlider->setFixedWidth(120);
-    m_zoomSlider->setToolTip("Zoom Level");
-    connect(m_zoomSlider, &QSlider::valueChanged, this, &PDFViewerWidget::onZoomSliderChanged);
-    
-    m_zoomLabel = new QLabel("100%");
-    m_zoomLabel->setMinimumWidth(45);
-    m_zoomLabel->setAlignment(Qt::AlignCenter);
-    m_zoomLabel->setStyleSheet("QLabel { color: #495057; font-size: 12px; font-weight: 500; }");
-    
     // Search controls group
     m_searchEdit = new QLineEdit();
     m_searchEdit->setPlaceholderText("Search in document...");
@@ -248,16 +220,6 @@ void PDFViewerWidget::setupToolbar()
     m_clearBtn->setShortcut(QKeySequence("Esc"));
     connect(m_clearBtn, &QPushButton::clicked, this, &PDFViewerWidget::clearSelection);
     
-    // Progress bar (hidden by default)
-    m_progressBar = new QProgressBar();
-    m_progressBar->setVisible(false);
-    m_progressBar->setFixedWidth(100);
-    m_progressBar->setFixedHeight(20);
-    
-    // Status label
-    m_statusLabel = new QLabel("Ready");
-    m_statusLabel->setStyleSheet("QLabel { color: #6c757d; font-size: 11px; }");
-    
     // Add separators and widgets to toolbar
     m_toolbarLayout->addWidget(m_prevPageBtn);
     m_toolbarLayout->addWidget(m_nextPageBtn);
@@ -272,8 +234,6 @@ void PDFViewerWidget::setupToolbar()
     m_toolbarLayout->addWidget(m_zoomOutBtn);
     m_toolbarLayout->addWidget(m_zoomInBtn);
     m_toolbarLayout->addWidget(m_zoomFitBtn);
-    m_toolbarLayout->addWidget(m_zoomSlider);
-    m_toolbarLayout->addWidget(m_zoomLabel);
     
     // Add separator
     QLabel* sep2 = new QLabel("|");
@@ -287,8 +247,6 @@ void PDFViewerWidget::setupToolbar()
     m_toolbarLayout->addWidget(m_clearBtn);
     
     m_toolbarLayout->addStretch(); // Push remaining widgets to the right
-    m_toolbarLayout->addWidget(m_progressBar);
-    m_toolbarLayout->addWidget(m_statusLabel);
 }
 
 void PDFViewerWidget::setupViewerArea()
@@ -327,10 +285,8 @@ bool PDFViewerWidget::loadPDF(const QString& filePath)
     WriteQtDebugToFile("File validation passed - Size: " + QString::number(fileInfo.size()) + " bytes");
     WriteQtDebugToFile("File is readable: " + QString(fileInfo.isReadable() ? "true" : "false"));
     
-    WriteQtDebugToFile("Step 2: Showing loading indicator...");
-    // Show loading indicator
-    showLoadingIndicator(true);
-    m_statusLabel->setText("Loading PDF...");
+    WriteQtDebugToFile("Step 2: Starting PDF loading process...");
+    // PDF loading process started
     
     WriteQtDebugToFile("Step 3: Checking PDF viewer initialization...");
     // Initialize the embedded PDF viewer if not already done
@@ -342,8 +298,6 @@ bool PDFViewerWidget::loadPDF(const QString& filePath)
         if (!m_viewerInitialized) {
             WriteQtDebugToFile("ERROR: PDF viewer initialization failed");
             QString error = "Failed to initialize PDF viewer";
-            showLoadingIndicator(false);
-            m_statusLabel->setText("Initialization failed");
             emit errorOccurred(error);
             return false;
         }
@@ -360,8 +314,6 @@ bool PDFViewerWidget::loadPDF(const QString& filePath)
         QString error = QString("Failed to load PDF: %1").arg(filePath);
         WriteQtDebugToFile("ERROR: PDFEmbedder->loadPDF() returned false - " + error);
         qWarning() << error;
-        showLoadingIndicator(false);
-        m_statusLabel->setText("Load failed");
         emit errorOccurred(error);
         return false;
     }
@@ -378,10 +330,7 @@ bool PDFViewerWidget::loadPDF(const QString& filePath)
     updatePageDisplay();
     updateZoomDisplay();
     
-    WriteQtDebugToFile("Step 7: Hiding loading indicator...");
-    // Hide loading indicator
-    showLoadingIndicator(false);
-    m_statusLabel->setText(QString("Loaded: %1").arg(QFileInfo(filePath).fileName()));
+    WriteQtDebugToFile("Step 7: PDF loading completed successfully");
     
     WriteQtDebugToFile("Step 8: Emitting signals...");
     // Emit success signal
@@ -630,31 +579,6 @@ void PDFViewerWidget::onToolbarButtonClicked()
     updateToolbarState();
 }
 
-void PDFViewerWidget::onZoomSliderChanged(int value)
-{
-    if (!isPDFLoaded()) return;
-    
-    // Convert slider value to zoom level and apply
-    double targetZoom = value / 100.0;
-    double currentZoom = getCurrentZoom();
-    
-    // Only update if there's a significant difference
-    if (std::abs(targetZoom - currentZoom) > 0.05) {
-        // Apply zoom change through the embedder
-        // Note: You might need to add a setZoom method to PDFViewerEmbedder
-        // For now, use the existing zoom in/out methods
-        if (targetZoom > currentZoom) {
-            while (getCurrentZoom() < targetZoom - 0.1) {
-                zoomIn();
-            }
-        } else {
-            while (getCurrentZoom() > targetZoom + 0.1) {
-                zoomOut();
-            }
-        }
-    }
-}
-
 void PDFViewerWidget::onPageSpinBoxChanged(int value)
 {
     goToPage(value);
@@ -692,7 +616,6 @@ void PDFViewerWidget::updateToolbarState()
     m_zoomInBtn->setEnabled(pdfLoaded);
     m_zoomOutBtn->setEnabled(pdfLoaded);
     m_zoomFitBtn->setEnabled(pdfLoaded);
-    m_zoomSlider->setEnabled(pdfLoaded);
     
     // Enable/disable search controls
     m_searchEdit->setEnabled(pdfLoaded);
@@ -719,26 +642,6 @@ void PDFViewerWidget::updatePageDisplay()
 
 void PDFViewerWidget::updateZoomDisplay()
 {
-    if (isPDFLoaded()) {
-        double zoomLevel = getCurrentZoom();
-        int zoomPercent = static_cast<int>(zoomLevel * 100);
-        
-        // Update slider and label without triggering signals
-        m_zoomSlider->blockSignals(true);
-        m_zoomSlider->setValue(zoomPercent);
-        m_zoomSlider->blockSignals(false);
-        
-        m_zoomLabel->setText(QString("%1%").arg(zoomPercent));
-    } else {
-        m_zoomSlider->setValue(100);
-        m_zoomLabel->setText("100%");
-    }
-}
-
-void PDFViewerWidget::showLoadingIndicator(bool show)
-{
-    m_progressBar->setVisible(show);
-    if (show) {
-        m_progressBar->setRange(0, 0); // Indeterminate progress
-    }
+    // No zoom display widgets to update since we removed zoom slider and label
+    // Zoom functionality is still available through buttons and keyboard shortcuts
 }

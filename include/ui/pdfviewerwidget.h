@@ -116,7 +116,6 @@ protected:
 private slots:
     void updateViewer();
     void onToolbarButtonClicked();
-    void onZoomSliderChanged(int value);
     void onPageSpinBoxChanged(int value);
     void onSearchTextChanged();
     void onSearchButtonClicked();
@@ -129,7 +128,6 @@ private:
     void updateToolbarState();
     void updatePageDisplay();
     void updateZoomDisplay();
-    void showLoadingIndicator(bool show);
     
     // Core PDF viewer component (your existing renderer)
     std::unique_ptr<PDFViewerEmbedder> m_pdfEmbedder;
@@ -148,8 +146,6 @@ private:
     QPushButton* m_zoomInBtn;
     QPushButton* m_zoomOutBtn;
     QPushButton* m_zoomFitBtn;
-    QSlider* m_zoomSlider;
-    QLabel* m_zoomLabel;
     
     // Search controls
     QLineEdit* m_searchEdit;
@@ -157,10 +153,6 @@ private:
     QPushButton* m_searchPrevBtn;
     QPushButton* m_searchNextBtn;
     QPushButton* m_clearBtn;
-    
-    // Status and progress
-    QProgressBar* m_progressBar;
-    QLabel* m_statusLabel;
     
     // Update timer for the embedded viewer
     QTimer* m_updateTimer;
