@@ -1,4 +1,4 @@
-#include "QtPDFViewerWidget.h"
+#include "viewers/pdf/QtPDFViewerWidget.h"
 #include "PDFViewerEmbedder.h"
 
 #include <QResizeEvent>

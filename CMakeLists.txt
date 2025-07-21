@@ -22,7 +22,13 @@ set(CMAKE_AUTORCC ON)
 
 # Ensure Qt tools can be found
 if(NOT Qt${QT_VERSION_MAJOR}_FOUND)
-    set(CMAKE_PREFIX_PATH "C:/Qt/6.9.1/mingw_64;${CMAKE_PREFIX_PATH}")
+    if(WIN32 AND MSVC)
+        # For Visual Studio, we need to find the MSVC version of Qt
+        # If not available, we'll disable the PDF viewer features that require MinGW libraries
+        set(CMAKE_PREFIX_PATH "C:/Qt/6.9.1/msvc2019_64;C:/Qt/6.9.1/msvc2022_64;${CMAKE_PREFIX_PATH}")
+    else()
+        set(CMAKE_PREFIX_PATH "C:/Qt/6.9.1/mingw_64;${CMAKE_PREFIX_PATH}")
+    endif()
 endif()
 
 # Find Qt6 packages
@@ -57,11 +63,12 @@ include_directories(
     ${INCLUDE_DIR}/ui
     ${INCLUDE_DIR}/database
     ${INCLUDE_DIR}/network
+    ${INCLUDE_DIR}/viewers/pdf
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/pdfium/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glew/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glfw_mingw/include
+    ${SRC_DIR}/viewers/pdf/third_party/include
+    ${SRC_DIR}/viewers/pdf/third_party/third_party/extern/pdfium/include
+    ${SRC_DIR}/viewers/pdf/third_party/third_party/extern/glew/include
+    ${SRC_DIR}/viewers/pdf/third_party/third_party/extern/glfw/include
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -74,10 +81,10 @@ set(CORE_SOURCES
 set(UI_SOURCES
     ${SRC_DIR}/ui/mainwindow.cpp
     ${SRC_DIR}/ui/mainapplication.cpp
-    ${SRC_DIR}/ui/pdfviewerwidget.cpp
-    ${SRC_DIR}/ui/PDFViewerEmbedder.cpp
-    ${SRC_DIR}/ui/QtPDFViewerWidget.cpp
-    ${SRC_DIR}/ui/OpenGLPipelineManager.cpp
+    ${SRC_DIR}/viewers/pdf/ui/pdfviewerwidget.cpp
+    ${SRC_DIR}/viewers/pdf/core/PDFViewerEmbedder.cpp
+    ${SRC_DIR}/viewers/pdf/ui/QtPDFViewerWidget.cpp
+    ${SRC_DIR}/viewers/pdf/rendering/OpenGLPipelineManager.cpp
 )
 
 # Add hybrid PDF viewer only if Qt PDF modules are available
@@ -87,11 +94,11 @@ endif()
 
 # PDF viewer sources
 set(PDF_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/src/rendering/pdf-render.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/src/core/feature.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/src/ui/menu-integration.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/src/ui/tab-manager.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/src/globals.cpp
+    ${SRC_DIR}/viewers/pdf/third_party/src/rendering/pdf-render.cpp
+    ${SRC_DIR}/viewers/pdf/third_party/src/core/feature.cpp
+    ${SRC_DIR}/viewers/pdf/third_party/src/ui/menu-integration.cpp
+    ${SRC_DIR}/viewers/pdf/third_party/src/ui/tab-manager.cpp
+    ${SRC_DIR}/viewers/pdf/third_party/src/globals.cpp
 )
 
 set(DATABASE_SOURCES
@@ -107,10 +114,10 @@ set(NETWORK_SOURCES
 set(UI_HEADERS
     ${INCLUDE_DIR}/ui/mainwindow.h
     ${INCLUDE_DIR}/ui/mainapplication.h
-    ${INCLUDE_DIR}/ui/pdfviewerwidget.h
-    ${SRC_DIR}/ui/PDFViewerEmbedder.h
-    ${SRC_DIR}/ui/QtPDFViewerWidget.h
-    ${SRC_DIR}/ui/OpenGLPipelineManager.h
+    ${INCLUDE_DIR}/viewers/pdf/pdfviewerwidget.h
+    ${INCLUDE_DIR}/viewers/pdf/PDFViewerEmbedder.h
+    ${INCLUDE_DIR}/viewers/pdf/QtPDFViewerWidget.h
+    ${INCLUDE_DIR}/viewers/pdf/OpenGLPipelineManager.h
 )
 
 # Add hybrid PDF viewer header only if Qt PDF modules are available
@@ -120,10 +127,10 @@ endif()
 
 # PDF viewer headers
 set(PDF_HEADERS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/include/rendering/pdf-render.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/include/core/feature.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/include/ui/menu-integration.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/include/ui/tab-manager.h
+    ${SRC_DIR}/viewers/pdf/third_party/include/rendering/pdf-render.h
+    ${SRC_DIR}/viewers/pdf/third_party/include/core/feature.h
+    ${SRC_DIR}/viewers/pdf/third_party/include/ui/menu-integration.h
+    ${SRC_DIR}/viewers/pdf/third_party/include/ui/tab-manager.h
 )
 
 set(DATABASE_HEADERS
@@ -198,57 +205,53 @@ if(HAVE_QT_PDF)
 endif()
 
 # Add PDFium, GLEW, and GLFW library paths and link (conditionally)
-set(PDFIUM_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/pdfium/lib")
-set(GLEW_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glew/lib/Release/x64")
-set(GLFW_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glfw/lib-vc2022")
+# Skip third-party libraries for Visual Studio due to MinGW/MSVC compatibility issues
+if(NOT MSVC)
+    set(PDFIUM_LIB_PATH "${SRC_DIR}/viewers/pdf/third_party/third_party/extern/pdfium/lib")
+    set(GLEW_LIB_PATH "${SRC_DIR}/viewers/pdf/third_party/third_party/extern/glew/lib/Release/x64")
+    set(GLFW_LIB_PATH "${SRC_DIR}/viewers/pdf/third_party/third_party/extern/glfw_mingw/lib")
 
-# Check if PDFium library exists
-if(EXISTS "${PDFIUM_LIB_PATH}/pdfium.lib")
-    message(STATUS "PDFium library found - enabling custom PDF viewer")
-    target_link_directories(Way2RepairLoginSystem PRIVATE "${PDFIUM_LIB_PATH}")
-    target_link_libraries(Way2RepairLoginSystem PRIVATE pdfium)
-    target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_PDFIUM)
-    set(HAVE_PDFIUM TRUE)
-else()
-    message(STATUS "PDFium library not found - using Qt PDF module only")
-    set(HAVE_PDFIUM FALSE)
-endif()
+    # Check if PDFium library exists
+    if(EXISTS "${PDFIUM_LIB_PATH}/pdfium.lib")
+        message(STATUS "PDFium library found - enabling custom PDF viewer")
+        target_link_directories(Way2RepairLoginSystem PRIVATE "${PDFIUM_LIB_PATH}")
+        target_link_libraries(Way2RepairLoginSystem PRIVATE pdfium)
+        target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_PDFIUM)
+        set(HAVE_PDFIUM TRUE)
+    else()
+        message(STATUS "PDFium library not found - using Qt PDF module only")
+        set(HAVE_PDFIUM FALSE)
+    endif()
 
-# Check if GLEW library exists and set up MinGW-compatible linking
-if(EXISTS "${GLEW_LIB_PATH}/glew32.lib")
-    message(STATUS "GLEW library found - enabling OpenGL features")
-    target_link_directories(Way2RepairLoginSystem PRIVATE "${GLEW_LIB_PATH}")
-    # For MinGW, we need to link with the static library and OpenGL32
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    # Check if GLEW library exists and set up MinGW-compatible linking
+    if(EXISTS "${GLEW_LIB_PATH}/glew32.lib")
+        message(STATUS "GLEW library found - enabling OpenGL features")
+        target_link_directories(Way2RepairLoginSystem PRIVATE "${GLEW_LIB_PATH}")
         target_link_libraries(Way2RepairLoginSystem PRIVATE glew32 opengl32)
+        target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_GLEW)
+        set(HAVE_GLEW TRUE)
     else()
-        target_link_libraries(Way2RepairLoginSystem PRIVATE glew32)
+        message(STATUS "GLEW library not found - using basic OpenGL")
+        set(HAVE_GLEW FALSE)
     endif()
-    target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_GLEW)
-    set(HAVE_GLEW TRUE)
-else()
-    message(STATUS "GLEW library not found - using basic OpenGL")
-    set(HAVE_GLEW FALSE)
-endif()
 
-# Check if GLFW library exists (using MinGW-compatible build)
-set(GLFW_MINGW_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glfw_mingw/lib")
-set(GLFW_MINGW_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glfw_mingw/include")
-
-if(EXISTS "${GLFW_MINGW_LIB_PATH}/libglfw3.a")
-    message(STATUS "MinGW-compatible GLFW library found - enabling GLFW window management")
-    target_link_directories(Way2RepairLoginSystem PRIVATE "${GLFW_MINGW_LIB_PATH}")
-    target_include_directories(Way2RepairLoginSystem PRIVATE "${GLFW_MINGW_INCLUDE_PATH}")
-    # For MinGW, link with static library and Windows libraries
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    # Check if GLFW library exists (using MinGW compatible build)
+    if(EXISTS "${GLFW_LIB_PATH}/libglfw3.a")
+        message(STATUS "GLFW library found - enabling GLFW window management")
+        target_link_directories(Way2RepairLoginSystem PRIVATE "${GLFW_LIB_PATH}")
+        target_include_directories(Way2RepairLoginSystem PRIVATE "${SRC_DIR}/viewers/pdf/third_party/third_party/extern/glfw_mingw/include")
         target_link_libraries(Way2RepairLoginSystem PRIVATE glfw3 opengl32 gdi32 user32 kernel32 shell32)
+        target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_GLFW)
+        set(HAVE_GLFW TRUE)
     else()
-        target_link_libraries(Way2RepairLoginSystem PRIVATE glfw3)
+        message(STATUS "GLFW library not found - using Qt native embedding")
+        set(HAVE_GLFW FALSE)
     endif()
-    target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_GLFW)
-    set(HAVE_GLFW TRUE)
 else()
-    message(STATUS "MinGW-compatible GLFW library not found - using Qt native embedding")
+    message(STATUS "Visual Studio detected - skipping third-party libraries due to MinGW/MSVC compatibility")
+    message(STATUS "PDF viewer will use Qt-only implementation")
+    set(HAVE_PDFIUM FALSE)
+    set(HAVE_GLEW FALSE)
     set(HAVE_GLFW FALSE)
 endif()
 
@@ -309,8 +312,8 @@ if(WIN32)
     endif()
     
     # Copy PDFium and GLEW DLLs if they exist
-    set(PDFIUM_DLL "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/pdfium/bin/pdfium.dll")
-    set(GLEW_DLL "${CMAKE_CURRENT_SOURCE_DIR}/src/pdf/third_party/extern/glew/bin/Release/x64/glew32.dll")
+    set(PDFIUM_DLL "${SRC_DIR}/viewers/pdf/third_party/third_party/extern/pdfium/bin/pdfium.dll")
+    set(GLEW_DLL "${SRC_DIR}/viewers/pdf/third_party/third_party/extern/glew/bin/Release/x64/glew32.dll")
     
     if(EXISTS ${PDFIUM_DLL})
         add_custom_command(TARGET Way2RepairLoginSystem POST_BUILD

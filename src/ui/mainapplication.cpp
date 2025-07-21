@@ -1,5 +1,5 @@
 #include "ui/mainapplication.h"
-#include "ui/pdfviewerwidget.h"
+#include "viewers/pdf/pdfviewerwidget.h"
 #include <QApplication>
 #include <QScreen>
 #include <QHeaderView>

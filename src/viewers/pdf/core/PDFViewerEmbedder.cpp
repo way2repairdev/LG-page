@@ -1,10 +1,10 @@
-#include "PDFViewerEmbedder.h"
-#include "OpenGLPipelineManager.h"
+#include "viewers/pdf/PDFViewerEmbedder.h"
+#include "viewers/pdf/OpenGLPipelineManager.h"
 
 // Include your existing PDF viewer components
-#include "rendering/pdf-render.h"
-#include "core/feature.h"
-#include "ui/menu-integration.h"
+#include "../third_party/include/rendering/pdf-render.h"
+#include "../third_party/include/core/feature.h"
+#include "../third_party/include/ui/menu-integration.h"
 
 // GLFW includes
 #include <GLFW/glfw3.h>

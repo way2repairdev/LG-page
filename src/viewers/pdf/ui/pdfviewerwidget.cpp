@@ -1,5 +1,5 @@
-#include "ui/pdfviewerwidget.h"
-#include "PDFViewerEmbedder.h"
+#include "viewers/pdf/pdfviewerwidget.h"
+#include "viewers/pdf/PDFViewerEmbedder.h"
 
 #include <QResizeEvent>
 #include <QPaintEvent>

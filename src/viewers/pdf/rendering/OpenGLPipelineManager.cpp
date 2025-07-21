@@ -1,4 +1,4 @@
-#include "OpenGLPipelineManager.h"
+#include "viewers/pdf/OpenGLPipelineManager.h"
 #include <iostream>
 #include <chrono>
 #include <fstream>
