@@ -66,6 +66,7 @@ private slots:
     void onAboutClicked();
     void onLogoutClicked();
     void onTabCloseRequested(int index);
+    void onTabChanged(int index);
     // Server-side slots (commented out for local file loading)
     //void onHttpRequestFinished(QNetworkReply *reply);
     //void onNetworkError(QNetworkReply::NetworkError error);
@@ -122,6 +123,9 @@ private:
     void updateTreeItemIcon(QTreeWidgetItem *item, bool isExpanded);
     void setTreeViewVisible(bool visible);
     bool isTreeViewVisible() const;
+    void hideAllViewerToolbars();
+    void debugToolbarStates(); // Debug helper method
+    void forceToolbarIsolation(); // Complete toolbar isolation method
     
     // Server-side methods (commented out for local file loading)
     //void loadFileList();

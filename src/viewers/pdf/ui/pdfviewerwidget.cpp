@@ -489,8 +489,48 @@ void PDFViewerWidget::setFullScreen(bool fullScreen)
 
 void PDFViewerWidget::toggleControls(bool visible)
 {
+    qDebug() << "PDF toggleControls called with visible:" << visible;
+    
     m_toolbarVisible = visible;
-    m_toolbar->setVisible(visible);
+    if (m_toolbar) {
+        // Aggressive toolbar management
+        if (visible) {
+            qDebug() << "Showing PDF toolbar";
+            m_toolbar->setVisible(true);
+            m_toolbar->raise(); // Bring toolbar to front when showing
+            m_toolbar->setEnabled(true);
+            m_toolbar->activateWindow();
+            m_toolbar->update(); // Force repaint
+            
+            // Ensure parent widget is also visible and raised
+            this->setVisible(true);
+            this->raise();
+            
+        } else {
+            qDebug() << "Hiding PDF toolbar";
+            m_toolbar->setVisible(false);
+            m_toolbar->lower(); // Send toolbar to back when hiding
+            m_toolbar->setEnabled(false);
+            m_toolbar->clearFocus();
+        }
+        
+        // Force layout recalculation with multiple update cycles
+        updateGeometry();
+        update();
+        repaint(); // Force immediate repaint
+        
+        // Process events to ensure UI update
+        QApplication::processEvents();
+        
+        qDebug() << "PDF toolbar visibility set to:" << m_toolbar->isVisible();
+    } else {
+        qDebug() << "PDF toolbar is null!";
+    }
+}
+
+bool PDFViewerWidget::isToolbarVisible() const
+{
+    return m_toolbarVisible;
 }
 
 // Event handlers

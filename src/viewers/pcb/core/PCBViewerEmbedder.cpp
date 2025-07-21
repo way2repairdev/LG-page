@@ -36,6 +36,7 @@ PCBViewerEmbedder::PCBViewerEmbedder()
     , m_pdfLoaded(false) // Keep same name for compatibility
     , m_usingFallback(false)
     , m_visible(false)
+    , m_imguiUIEnabled(false) // Disable ImGui UI by default - use Qt toolbar only
     , m_currentFilePath("")
     , m_windowWidth(800)
     , m_windowHeight(600)
@@ -100,7 +101,7 @@ void PCBViewerEmbedder::cleanup()
 
     handleStatus("Cleaning up PCB viewer embedder...");
 
-    // Cleanup ImGui if it was initialized
+    // Cleanup ImGui - always initialized for GLFW compatibility
     if (m_glfwWindow) {
         glfwMakeContextCurrent(m_glfwWindow);
         ImGui_ImplOpenGL3_Shutdown();
@@ -200,7 +201,7 @@ void PCBViewerEmbedder::render()
     // Clear the framebuffer
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Start ImGui frame - matching main.cpp sequence
+    // Always start ImGui frame for GLFW compatibility
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
@@ -210,10 +211,12 @@ void PCBViewerEmbedder::render()
         m_renderer->Render(m_windowWidth, m_windowHeight);
     }
 
-    // Display hover information like in main.cpp - this was missing!
-    displayPinHoverInfo();
+    // Display hover information only if ImGui UI is enabled
+    if (m_imguiUIEnabled) {
+        displayPinHoverInfo();
+    }
 
-    // Render ImGui - matching main.cpp sequence
+    // Always render ImGui (even if no UI elements) for GLFW compatibility
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -542,7 +545,7 @@ bool PCBViewerEmbedder::initializeGLFW(void* parentHandle, int width, int height
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // Initialize ImGui - matching main.cpp initialization sequence
+    // Always initialize ImGui for GLFW event handling, but control UI rendering separately
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
@@ -558,6 +561,12 @@ bool PCBViewerEmbedder::initializeGLFW(void* parentHandle, int width, int height
     if (!ImGui_ImplOpenGL3_Init("#version 330")) {
         handleError("Failed to initialize ImGui OpenGL3 backend");
         return false;
+    }
+    
+    if (m_imguiUIEnabled) {
+        handleStatus("ImGui UI enabled (will show pin hover/selection overlays)");
+    } else {
+        handleStatus("ImGui UI disabled (using Qt toolbar only) - ImGui initialized for GLFW compatibility");
     }
 
 #ifdef _WIN32
@@ -602,7 +611,11 @@ bool PCBViewerEmbedder::initializeRenderer()
         return false;
     }
 
-    handleStatus("PCB renderer initialized successfully");
+    // Apply ImGui UI setting to renderer after initialization
+    m_renderer->GetSettings().enable_imgui_overlay = m_imguiUIEnabled;
+    handleStatus(std::string("PCB renderer initialized successfully with ImGui overlay ") + 
+                (m_imguiUIEnabled ? "enabled" : "disabled"));
+    
     return true;
 }
 
@@ -833,8 +846,36 @@ std::vector<std::string> PCBViewerEmbedder::getComponentList() const
     return components;
 }
 
+void PCBViewerEmbedder::setImGuiUIEnabled(bool enabled)
+{
+    m_imguiUIEnabled = enabled;
+    handleStatus("setImGuiUIEnabled called with: " + std::string(enabled ? "true" : "false"));
+    
+    // Also control PCBRenderer's ImGui overlay
+    if (m_renderer) {
+        m_renderer->GetSettings().enable_imgui_overlay = enabled;
+        handleStatus("PCBRenderer overlay setting updated to: " + std::string(enabled ? "true" : "false"));
+    } else {
+        handleStatus("PCBRenderer not available yet - setting will be applied after initialization");
+    }
+    
+    LOG_INFO("ImGui UI enabled set to: " + std::string(enabled ? "true" : "false"));
+    handleStatus("ImGui UI " + std::string(enabled ? "enabled" : "disabled"));
+}
+
 void PCBViewerEmbedder::displayPinHoverInfo()
 {
+    // Skip ImGui UI rendering if disabled (using Qt toolbar only)
+    if (!m_imguiUIEnabled) {
+        // Debug: This should be printed when ImGui UI is disabled
+        static bool debugOnce = false;
+        if (!debugOnce) {
+            LOG_INFO("ImGui UI is disabled - skipping pin hover info display");
+            debugOnce = true;
+        }
+        return;
+    }
+
     // Get current mouse position - matching main.cpp exactly
     double mouseX, mouseY;
     if (m_glfwWindow) {

@@ -94,6 +94,10 @@ public:
     bool isUsingFallback() const { return m_usingFallback; }
     void enableFallbackMode();
 
+    // ImGui UI control
+    void setImGuiUIEnabled(bool enabled);
+    bool isImGuiUIEnabled() const { return m_imguiUIEnabled; }
+
 private:
     // GLFW window management
     GLFWwindow* m_glfwWindow;
@@ -109,6 +113,7 @@ private:
     bool m_pdfLoaded; // Keep same name for compatibility
     bool m_usingFallback;
     bool m_visible;
+    bool m_imguiUIEnabled; // Control ImGui UI rendering
     std::string m_currentFilePath;
 
     // Window dimensions

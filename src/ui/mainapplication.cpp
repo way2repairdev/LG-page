@@ -15,6 +15,7 @@
 #include <QStandardPaths>
 #include <QTimer>
 #include <QShortcut>
+#include <QThread>
 
 MainApplication::MainApplication(const UserSession &userSession, QWidget *parent)
     : QMainWindow(parent)
@@ -349,6 +350,9 @@ void MainApplication::setupTabWidget()
     
     // Connect tab close signal
     connect(m_tabWidget, &QTabWidget::tabCloseRequested, this, &MainApplication::onTabCloseRequested);
+    
+    // Connect tab change signal to manage toolbar visibility
+    connect(m_tabWidget, &QTabWidget::currentChanged, this, &MainApplication::onTabChanged);
 }
 
 void MainApplication::loadLocalFiles()
@@ -544,6 +548,9 @@ void MainApplication::openPDFInTab(const QString &filePath)
     PDFViewerWidget *pdfViewer = new PDFViewerWidget();
     pdfViewer->setProperty("filePath", filePath);
     
+    // Start with toolbar hidden - it will be shown when tab becomes active
+    pdfViewer->toggleControls(false);
+    
     // Connect PDF viewer signals
     connect(pdfViewer, &PDFViewerWidget::pdfLoaded, this, [this, filePath](const QString &loadedPath) {
         Q_UNUSED(loadedPath)
@@ -634,6 +641,9 @@ void MainApplication::openPCBInTab(const QString &filePath)
     PCBViewerWidget *pcbViewer = new PCBViewerWidget();
     pcbViewer->setProperty("filePath", filePath);
     
+    // Start with toolbar hidden - it will be shown when tab becomes active
+    pcbViewer->setToolbarVisible(false);
+    
     // Connect PCB viewer signals
     connect(pcbViewer, &PCBViewerWidget::pcbLoaded, this, [this, filePath](const QString &loadedPath) {
         Q_UNUSED(loadedPath)
@@ -717,6 +727,214 @@ void MainApplication::onTabCloseRequested(int index)
             statusBar()->showMessage("Closed tab");
         }
     }
+}
+
+void MainApplication::onTabChanged(int index)
+{
+    qDebug() << "=== Tab Changed to Index:" << index << "===";
+    
+    // Use aggressive toolbar isolation
+    forceToolbarIsolation();
+    
+    // If no valid tab is selected, return
+    if (index < 0 || index >= m_tabWidget->count()) {
+        statusBar()->showMessage("No active tab");
+        qDebug() << "Invalid tab index, returning";
+        return;
+    }
+    
+    // Get the current widget
+    QWidget *currentWidget = m_tabWidget->widget(index);
+    if (!currentWidget) {
+        statusBar()->showMessage("Invalid tab selected");
+        qDebug() << "Current widget is null, returning";
+        return;
+    }
+    
+    QString tabName = m_tabWidget->tabText(index);
+    qDebug() << "Switching to tab:" << tabName;
+    
+    // Force focus and bring current widget to front
+    currentWidget->setFocus();
+    currentWidget->raise();
+    currentWidget->activateWindow();
+    
+    // Small delay before showing toolbar
+    QThread::msleep(50);
+    
+    // Show appropriate toolbar based on widget type with enhanced management
+    if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(currentWidget)) {
+        qDebug() << "Activating PDF viewer for tab:" << tabName;
+        
+        // Ensure PDF viewer is properly initialized and visible
+        pdfViewer->setVisible(true);
+        pdfViewer->raise();
+        
+        // Show PDF toolbar with enhanced visibility management
+        pdfViewer->toggleControls(true);
+        
+        // Force layout updates
+        pdfViewer->updateGeometry();
+        pdfViewer->update();
+        
+        statusBar()->showMessage("PDF viewer active - Page navigation and search available");
+        
+    } else if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(currentWidget)) {
+        qDebug() << "Activating PCB viewer for tab:" << tabName;
+        
+        // Ensure PCB viewer is properly initialized and visible
+        pcbViewer->setVisible(true);
+        pcbViewer->raise();
+        
+        // Enable PCB Qt toolbar - Qt toolbar enabled for PCB viewer
+        pcbViewer->setToolbarVisible(true);
+        
+        // Force layout updates
+        pcbViewer->updateGeometry();
+        pcbViewer->update();
+        
+        statusBar()->showMessage("PCB viewer active - Qt toolbar controls available");
+        
+    } else {
+        qDebug() << "Activating standard tab:" << tabName;
+        // For other tab types (welcome, text editors, etc.), no special toolbar needed
+        currentWidget->setVisible(true);
+        currentWidget->raise();
+        statusBar()->showMessage("Document tab active - " + tabName);
+    }
+    
+    // Force multiple event processing cycles to ensure complete showing
+    QApplication::processEvents();
+    QApplication::processEvents(); // Double processing for complex layouts
+    
+    // Force repaint of the entire tab widget to prevent visual artifacts
+    m_tabWidget->repaint();
+    
+    // Debug: Print toolbar states after changes
+    debugToolbarStates();
+    
+    qDebug() << "=== Tab Change Complete ===";
+}
+
+void MainApplication::hideAllViewerToolbars()
+{
+    qDebug() << "=== Hiding All Viewer Toolbars ===";
+    
+    // Iterate through all tabs and aggressively hide viewer toolbars
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+        QWidget *widget = m_tabWidget->widget(i);
+        if (!widget) continue;
+        
+        QString tabName = m_tabWidget->tabText(i);
+        
+        // Hide PDF viewer toolbar with enhanced cleanup
+        if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(widget)) {
+            qDebug() << "Hiding PDF viewer toolbar for tab:" << tabName;
+            
+            // Force hide with multiple methods
+            pdfViewer->toggleControls(false);
+            pdfViewer->setVisible(false); // Temporarily hide entire widget
+            pdfViewer->lower(); // Send to back
+            
+            // Force layout update
+            pdfViewer->updateGeometry();
+            pdfViewer->update();
+            
+            qDebug() << "PDF toolbar hidden for tab:" << i;
+        }
+        // Hide PCB viewer toolbar with enhanced cleanup
+        else if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(widget)) {
+            qDebug() << "Hiding PCB viewer toolbar for tab:" << tabName;
+            
+            // Force hide with multiple methods
+            pcbViewer->setToolbarVisible(false);
+            pcbViewer->setVisible(false); // Temporarily hide entire widget
+            pcbViewer->lower(); // Send to back
+            
+            // Force layout update
+            pcbViewer->updateGeometry();
+            pcbViewer->update();
+            
+            qDebug() << "PCB toolbar hidden for tab:" << i;
+        }
+    }
+    
+    // Force immediate processing of hide events multiple times
+    QApplication::processEvents();
+    QApplication::processEvents(); // Extra processing for complex layouts
+    
+    // Force repaint of tab widget
+    m_tabWidget->repaint();
+    
+    qDebug() << "=== All Viewer Toolbars Hidden ===";
+}
+
+void MainApplication::debugToolbarStates()
+{
+    qDebug() << "=== Toolbar Debug Info ===";
+    qDebug() << "Current tab index:" << m_tabWidget->currentIndex();
+    qDebug() << "Total tabs:" << m_tabWidget->count();
+    
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+        QWidget *widget = m_tabWidget->widget(i);
+        QString tabName = m_tabWidget->tabText(i);
+        
+        if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(widget)) {
+            bool toolbarVisible = pdfViewer->isToolbarVisible();
+            qDebug() << "Tab" << i << "(" << tabName << "): PDF Viewer, toolbar visible:" << toolbarVisible;
+        } else if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(widget)) {
+            bool toolbarVisible = pcbViewer->isToolbarVisible();
+            qDebug() << "Tab" << i << "(" << tabName << "): PCB Viewer, toolbar visible:" << toolbarVisible;
+        } else {
+            qDebug() << "Tab" << i << "(" << tabName << "): Other widget type";
+        }
+    }
+    qDebug() << "=========================";
+}
+
+void MainApplication::forceToolbarIsolation()
+{
+    qDebug() << "=== Force Toolbar Isolation ===";
+    
+    // Step 1: Hide ALL widgets completely
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+        QWidget *widget = m_tabWidget->widget(i);
+        if (widget) {
+            widget->hide();
+            widget->setEnabled(false);
+            widget->clearFocus();
+        }
+    }
+    
+    // Step 2: Force complete event processing
+    QApplication::processEvents();
+    QApplication::processEvents();
+    QThread::msleep(20); // Longer delay
+    
+    // Step 3: Force aggressive toolbar hiding
+    hideAllViewerToolbars();
+    
+    // Step 4: Force complete event processing again
+    QApplication::processEvents();
+    QApplication::processEvents();
+    
+    // Step 5: Now show only the current tab
+    int currentIndex = m_tabWidget->currentIndex();
+    if (currentIndex >= 0 && currentIndex < m_tabWidget->count()) {
+        QWidget *currentWidget = m_tabWidget->widget(currentIndex);
+        if (currentWidget) {
+            currentWidget->show();
+            currentWidget->setEnabled(true);
+            currentWidget->raise();
+            currentWidget->activateWindow();
+        }
+    }
+    
+    // Final event processing
+    QApplication::processEvents();
+    QApplication::processEvents();
+    
+    qDebug() << "=== Toolbar Isolation Complete ===";
 }
 
 /*

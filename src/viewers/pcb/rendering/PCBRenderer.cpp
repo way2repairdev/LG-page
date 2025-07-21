@@ -123,26 +123,39 @@ void PCBRenderer::Render(int window_width, int window_height) {
     
     // Apply camera transformation
 
-    // Create a fullscreen ImGui window for PCB rendering
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(window_width, window_height));
+    // Only create ImGui window if overlay is enabled
+    bool window_open = true;
+    ImDrawList* draw_list = nullptr;
     
-    bool window_open = ImGui::Begin("PCB View", nullptr, 
-                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
-                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                 ImGuiWindowFlags_NoBackground);
+    if (settings.enable_imgui_overlay) {
+        // Create a fullscreen ImGui window for PCB rendering
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(window_width, window_height));
+        
+        window_open = ImGui::Begin("PCB View", nullptr, 
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
+                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                     ImGuiWindowFlags_NoBackground);
 
-    if (!window_open) {
-        LOG_ERROR("Failed to create ImGui window");
-        ImGui::End();
-        return;
-    }
+        if (!window_open) {
+            LOG_ERROR("Failed to create ImGui window");
+            ImGui::End();
+            return;
+        }
 
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    if (!draw_list) {
-        LOG_ERROR("Failed to get ImGui draw list");
-        ImGui::End();
-        return;
+        draw_list = ImGui::GetWindowDrawList();
+        if (!draw_list) {
+            LOG_ERROR("Failed to get ImGui draw list");
+            ImGui::End();
+            return;
+        }
+    } else {
+        // Use background draw list when ImGui overlay is disabled
+        draw_list = ImGui::GetBackgroundDrawList();
+        if (!draw_list) {
+            LOG_ERROR("Failed to get ImGui background draw list");
+            return;
+        }
     }    // Use structured ImGui rendering methods (like original OpenBoardView)
     RenderOutlineImGui(draw_list, zoom, offset_x, offset_y);
     RenderCirclePinsImGui(draw_list, zoom, offset_x, offset_y);
@@ -158,7 +171,10 @@ void PCBRenderer::Render(int window_width, int window_height) {
     // Render pin numbers as text overlays
     RenderPinNumbersAsText(draw_list, zoom, offset_x, offset_y);
 
-    ImGui::End();
+    // Only end ImGui window if overlay was enabled
+    if (settings.enable_imgui_overlay) {
+        ImGui::End();
+    }
 }
 
 void PCBRenderer::SetCamera(float x, float y, float zoom) {

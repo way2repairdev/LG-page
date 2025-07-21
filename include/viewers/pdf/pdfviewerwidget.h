@@ -86,6 +86,7 @@ public slots:
     // View controls
     void setFullScreen(bool fullScreen);
     void toggleControls(bool visible);
+    bool isToolbarVisible() const;
 
 signals:
     // Emitted when PDF is successfully loaded

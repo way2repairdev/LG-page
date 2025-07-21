@@ -69,6 +69,10 @@ public:
     void setToolbarVisible(bool visible);
     bool isToolbarVisible() const;
     void setStatusMessage(const QString &message);
+    
+    // ImGui UI control (for debugging/advanced features)
+    void setImGuiUIEnabled(bool enabled);
+    bool isImGuiUIEnabled() const;
 
 signals:
     // File events

@@ -17,6 +17,7 @@ struct RenderSettings {
     bool show_pins = true;
     bool show_outline = true;
     bool show_nets = false;
+    bool enable_imgui_overlay = true;  // Control ImGui overlay windows
     
     float part_alpha = 1.0f;
     float pin_alpha = 1.0f;

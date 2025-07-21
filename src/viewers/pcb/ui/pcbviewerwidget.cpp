@@ -263,9 +263,50 @@ QStringList PCBViewerWidget::getLayerNames() const
 
 void PCBViewerWidget::setToolbarVisible(bool visible)
 {
+    WritePCBDebugToFile("Setting PCB toolbar visible: " + QString(visible ? "true" : "false"));
+    qDebug() << "PCB setToolbarVisible called with visible:" << visible;
+    
     m_toolbarVisible = visible;
     if (m_toolbar) {
-        m_toolbar->setVisible(visible);
+        // Aggressive toolbar management
+        if (visible) {
+            WritePCBDebugToFile("Showing PCB toolbar");
+            qDebug() << "Showing PCB toolbar";
+            
+            m_toolbar->setVisible(true);
+            m_toolbar->raise(); // Bring toolbar to front when showing
+            m_toolbar->setEnabled(true);
+            m_toolbar->activateWindow();
+            m_toolbar->update(); // Force repaint
+            
+            // Ensure parent widget is also visible and raised
+            this->setVisible(true);
+            this->raise();
+            
+        } else {
+            WritePCBDebugToFile("Hiding PCB toolbar");
+            qDebug() << "Hiding PCB toolbar";
+            
+            m_toolbar->setVisible(false);
+            m_toolbar->lower(); // Send toolbar to back when hiding
+            m_toolbar->setEnabled(false);
+            m_toolbar->clearFocus();
+        }
+        
+        // Force layout recalculation with multiple update cycles
+        updateGeometry();
+        update();
+        repaint(); // Force immediate repaint
+        
+        // Process events to ensure UI update
+        QApplication::processEvents();
+        
+        qDebug() << "PCB toolbar visibility set to:" << m_toolbar->isVisible();
+        WritePCBDebugToFile("PCB toolbar visibility: " + QString(m_toolbar->isVisible() ? "true" : "false"));
+        
+    } else {
+        WritePCBDebugToFile("PCB toolbar is null!");
+        qDebug() << "PCB toolbar is null!";
     }
 }
 
@@ -277,10 +318,24 @@ bool PCBViewerWidget::isToolbarVisible() const
 void PCBViewerWidget::setStatusMessage(const QString &message)
 {
     m_lastStatusMessage = message;
-    if (m_statusLabel) {
-        m_statusLabel->setText(message);
-    }
+    // Status label was removed - only emit signal now
     emit statusMessage(message);
+}
+
+void PCBViewerWidget::setImGuiUIEnabled(bool enabled)
+{
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->setImGuiUIEnabled(enabled);
+        WritePCBDebugToFile("ImGui UI " + QString(enabled ? "enabled" : "disabled"));
+    }
+}
+
+bool PCBViewerWidget::isImGuiUIEnabled() const
+{
+    if (m_pcbEmbedder) {
+        return m_pcbEmbedder->isImGuiUIEnabled();
+    }
+    return false;
 }
 
 // Public slots
@@ -503,6 +558,10 @@ void PCBViewerWidget::initializePCBViewer()
         }, Qt::QueuedConnection);
     });
     
+    // Disable ImGui UI - use Qt toolbar instead
+    m_pcbEmbedder->setImGuiUIEnabled(false);
+    WritePCBDebugToFile("ImGui UI disabled - using Qt toolbar only");
+    
     // Initialize the embedder
     bool success = m_pcbEmbedder->initialize(windowHandle, containerSize.width(), containerSize.height());
     
@@ -554,57 +613,43 @@ void PCBViewerWidget::setupToolbar()
     WritePCBDebugToFile("Setting up PCB viewer toolbar");
     
     m_toolbar = new QToolBar(this);
-    m_toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     m_toolbar->setFloatable(false);
     m_toolbar->setMovable(false);
+    m_toolbar->setFixedHeight(42); // Fixed height to prevent layout issues
+    m_toolbar->setIconSize(QSize(16, 16)); // Smaller icons for compact layout
     
-    // Zoom controls
-    m_zoomInAction = m_toolbar->addAction(QIcon(), "Zoom In");
-    m_zoomOutAction = m_toolbar->addAction(QIcon(), "Zoom Out");
-    m_zoomToFitAction = m_toolbar->addAction(QIcon(), "Zoom to Fit");
-    m_resetViewAction = m_toolbar->addAction(QIcon(), "Reset View");
+    // Set toolbar-wide stylesheet for consistent spacing
+    m_toolbar->setStyleSheet(
+        "QToolBar { spacing: 2px; padding: 2px; }"
+        "QToolBar::separator { width: 1px; background-color: #C0C0C0; margin: 2px; }"
+    );
     
-    m_toolbar->addSeparator();
+    // Zoom controls with compact buttons - only buttons remain
+    m_zoomInAction = m_toolbar->addAction(QIcon(), "In");
+    m_zoomInAction->setToolTip("Zoom In");
+    m_zoomOutAction = m_toolbar->addAction(QIcon(), "Out");
+    m_zoomOutAction->setToolTip("Zoom Out");
+    m_zoomToFitAction = m_toolbar->addAction(QIcon(), "Fit");
+    m_zoomToFitAction->setToolTip("Zoom to Fit");
+    m_resetViewAction = m_toolbar->addAction(QIcon(), "Reset");
+    m_resetViewAction->setToolTip("Reset View");
     
-    // Zoom slider
-    m_toolbar->addWidget(new QLabel("Zoom:"));
-    m_zoomSlider = new QSlider(Qt::Horizontal);
-    m_zoomSlider->setRange(0, 200);
-    m_zoomSlider->setValue(100); // 1.0x zoom
-    m_zoomSlider->setFixedWidth(150);
-    m_toolbar->addWidget(m_zoomSlider);
+    // Set all other UI element pointers to nullptr since they're removed
+    m_zoomSlider = nullptr;
+    m_zoomLabel = nullptr;
+    m_layerCombo = nullptr;
+    m_statusLabel = nullptr;
+    m_progressBar = nullptr;
     
-    m_zoomLabel = new QLabel("100%");
-    m_zoomLabel->setMinimumWidth(50);
-    m_toolbar->addWidget(m_zoomLabel);
-    
-    m_toolbar->addSeparator();
-    
-    // Layer controls
-    m_toolbar->addWidget(new QLabel("Layer:"));
-    m_layerCombo = new QComboBox();
-    m_layerCombo->setMinimumWidth(100);
-    m_toolbar->addWidget(m_layerCombo);
-    
-    m_toolbar->addSeparator();
-    
-    // Status label
-    m_statusLabel = new QLabel("Ready");
-    m_toolbar->addWidget(m_statusLabel);
-    
-    // Progress bar (for future use)
-    m_progressBar = new QProgressBar();
-    m_progressBar->setVisible(false);
-    m_toolbar->addWidget(m_progressBar);
-    
-    WritePCBDebugToFile("PCB viewer toolbar setup completed");
+    WritePCBDebugToFile("PCB viewer toolbar setup completed - simplified to buttons only");
 }
 
 void PCBViewerWidget::connectSignals()
 {
     WritePCBDebugToFile("Connecting PCB viewer signals");
     
-    // Connect toolbar actions
+    // Connect toolbar actions - only zoom buttons remain
     if (m_zoomInAction) {
         connect(m_zoomInAction, &QAction::triggered, this, &PCBViewerWidget::onZoomInClicked);
     }
@@ -618,18 +663,9 @@ void PCBViewerWidget::connectSignals()
         connect(m_resetViewAction, &QAction::triggered, this, &PCBViewerWidget::onResetViewClicked);
     }
     
-    // Connect zoom slider
-    if (m_zoomSlider) {
-        connect(m_zoomSlider, &QSlider::valueChanged, this, &PCBViewerWidget::onZoomSliderChanged);
-    }
+    // Note: m_zoomSlider, m_layerCombo, m_statusLabel, and m_progressBar have been removed
     
-    // Connect layer combo
-    if (m_layerCombo) {
-        connect(m_layerCombo, QOverload<const QString &>::of(&QComboBox::currentTextChanged),
-                this, &PCBViewerWidget::onLayerComboChanged);
-    }
-    
-    WritePCBDebugToFile("PCB viewer signals connected");
+    WritePCBDebugToFile("PCB viewer signals connected - simplified toolbar");
 }
 
 void PCBViewerWidget::updateToolbarState()
@@ -638,39 +674,19 @@ void PCBViewerWidget::updateToolbarState()
     
     bool pcbLoaded = isPCBLoaded();
     
-    // Enable/disable toolbar actions based on PCB state
+    // Enable/disable toolbar actions based on PCB state - only zoom buttons remain
     if (m_zoomInAction) m_zoomInAction->setEnabled(pcbLoaded);
     if (m_zoomOutAction) m_zoomOutAction->setEnabled(pcbLoaded);
     if (m_zoomToFitAction) m_zoomToFitAction->setEnabled(pcbLoaded);
     if (m_resetViewAction) m_resetViewAction->setEnabled(pcbLoaded);
-    if (m_zoomSlider) m_zoomSlider->setEnabled(pcbLoaded);
     
-    // Update layer combo with available layers
-    if (m_layerCombo && pcbLoaded) {
-        m_layerCombo->clear();
-        QStringList layers = getLayerNames();
-        m_layerCombo->addItems(layers);
-        m_layerCombo->setEnabled(!layers.isEmpty());
-    } else if (m_layerCombo) {
-        m_layerCombo->clear();
-        m_layerCombo->setEnabled(false);
-    }
+    // Note: m_zoomSlider, m_layerCombo removed - no longer updating them
 }
 
 void PCBViewerWidget::updateZoomSlider()
 {
-    if (m_zoomSlider && m_zoomLabel) {
-        double zoom = getZoomLevel();
-        
-        // Convert zoom level (0.1-5.0) to slider value (0-200)
-        int sliderValue = static_cast<int>((zoom - 0.1) / 4.9 * 200.0);
-        
-        m_zoomSlider->blockSignals(true);
-        m_zoomSlider->setValue(sliderValue);
-        m_zoomSlider->blockSignals(false);
-        
-        m_zoomLabel->setText(QString("%1%").arg(static_cast<int>(zoom * 100)));
-    }
+    // Method now empty since zoom slider was removed
+    // This method is kept for compatibility but does nothing
 }
 
 void PCBViewerWidget::handleViewerError(const QString &error)
