@@ -161,6 +161,7 @@ bool XZZPCBFile::ParseXZZPCBOriginal(std::vector<char>& buf) {
     
     FindXYTranslation();
     TranslateSegments();
+    TranslatePartOutlineSegments();
     TranslatePins();
     TranslateCircles();
     TranslateRectangles();
@@ -173,6 +174,7 @@ bool XZZPCBFile::ParseXZZPCBOriginal(std::vector<char>& buf) {
     std::cout << "  Parts: " << num_parts << std::endl;
     std::cout << "  Pins: " << num_pins << std::endl;
     std::cout << "  Outline segments: " << outline_segments.size() << std::endl;
+    std::cout << "  Part outline segments: " << part_outline_segments.size() << std::endl;
     std::cout << "  Circles: " << circles.size() << std::endl;
     std::cout << "  Rectangles: " << rectangles.size() << std::endl;
     std::cout << "  Ovals: " << ovals.size() << std::endl;
@@ -190,6 +192,15 @@ bool XZZPCBFile::ParseXZZPCBOriginal(std::vector<char>& buf) {
         for (size_t i = 0; i < std::min((size_t)3, outline_segments.size()); i++) {
             std::cout << "  Segment " << i << ": (" << outline_segments[i].first.x << ", " << outline_segments[i].first.y << ") to (" 
                      << outline_segments[i].second.x << ", " << outline_segments[i].second.y << ")" << std::endl;
+        }
+    }
+
+    // Debug: Print first few part outline segments
+    if (!part_outline_segments.empty()) {
+        std::cout << "First few part outline segments:" << std::endl;
+        for (size_t i = 0; i < std::min((size_t)3, part_outline_segments.size()); i++) {
+            std::cout << "  Part segment " << i << ": (" << part_outline_segments[i].first.x << ", " << part_outline_segments[i].first.y << ") to (" 
+                     << part_outline_segments[i].second.x << ", " << part_outline_segments[i].second.y << ")" << std::endl;
         }
     }
 
@@ -451,8 +462,8 @@ void XZZPCBFile::ParsePartBlockOriginal(std::vector<char>& buf) {
                     point2.x = static_cast<int>(static_cast<double>(x2) / static_cast<double>(scale));
                     point2.y = static_cast<int>(static_cast<double>(y2) / static_cast<double>(scale));
                     
-                    // Add to outline segments for rendering (these will be part outlines, not board outlines)
-                    outline_segments.push_back({point1, point2});
+                    // Add to part outline segments for rendering (these are part outlines, not board outlines)
+                    part_outline_segments.push_back({point1, point2});
                     
                     //std::cout << "DEBUG: Added part outline segment from (" << point1.x << ", " << point1.y 
                              //<< ") to (" << point2.x << ", " << point2.y << ") for part: " << part_name << std::endl;
@@ -861,6 +872,13 @@ void XZZPCBFile::TranslatePoints(BRDPoint& point) const {
 
 void XZZPCBFile::TranslateSegments() {
     for (auto& segment : outline_segments) {
+        TranslatePoints(segment.first);
+        TranslatePoints(segment.second);
+    }
+}
+
+void XZZPCBFile::TranslatePartOutlineSegments() {
+    for (auto& segment : part_outline_segments) {
         TranslatePoints(segment.first);
         TranslatePoints(segment.second);
     }

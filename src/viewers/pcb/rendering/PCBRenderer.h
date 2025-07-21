@@ -16,12 +16,14 @@ struct RenderSettings {
     bool show_parts = true;
     bool show_pins = true;
     bool show_outline = true;
+    bool show_part_outlines = true;
     bool show_nets = false;
-    bool enable_imgui_overlay = true;  // Control ImGui overlay windows
+    bool enable_imgui_overlay = false;  // Added ImGui overlay control
     
     float part_alpha = 1.0f;
     float pin_alpha = 1.0f;
     float outline_alpha = 1.0f;
+    float part_outline_alpha = 1.0f;
     
     struct {
         float r = 0.2f, g = 0.8f, b = 0.2f;  // Green
@@ -34,6 +36,10 @@ struct RenderSettings {
     struct {
         float r = 1.0f, g = 1.0f, b = 1.0f;  // White
     } outline_color;
+
+    struct {
+        float r = 1.0f, g = 1.0f, b = 1.0f;  // White
+    } part_outline_color;
       struct {
         float r = 0.0f, g = 0.3f, b = 0.0f;  // Dark green PCB background
     } background_color;
@@ -76,12 +82,14 @@ public:
     
     // ImGui-based rendering methods (like original OpenBoardView)
     void RenderOutlineImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y);
+    void RenderPartOutlineImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y);
     void RenderCirclePinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y);
     void RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y);
     void RenderOvalPinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y);
     void RenderPartNamesOnTop(ImDrawList* draw_list);  // Render collected part names on top
     void RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, float offset_x, float offset_y); // Render pin numbers as text overlays
     void CollectPartNamesForRendering(float zoom, float offset_x, float offset_y); // Collect part names for rendering
+    void RenderPartHighlighting(ImDrawList* draw_list, float zoom, float offset_x, float offset_y); // Render part highlighting on top
     
     // Camera controls
     void SetCamera(float x, float y, float zoom);

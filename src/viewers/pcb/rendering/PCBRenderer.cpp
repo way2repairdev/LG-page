@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include <set>
 #include <imgui.h>
 #include <cctype>
 
@@ -123,41 +124,31 @@ void PCBRenderer::Render(int window_width, int window_height) {
     
     // Apply camera transformation
 
-    // Only create ImGui window if overlay is enabled
-    bool window_open = true;
-    ImDrawList* draw_list = nullptr;
+    // Create a fullscreen ImGui window for PCB rendering
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2(window_width, window_height));
     
-    if (settings.enable_imgui_overlay) {
-        // Create a fullscreen ImGui window for PCB rendering
-        ImGui::SetNextWindowPos(ImVec2(0, 0));
-        ImGui::SetNextWindowSize(ImVec2(window_width, window_height));
-        
-        window_open = ImGui::Begin("PCB View", nullptr, 
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                     ImGuiWindowFlags_NoBackground);
+    bool window_open = ImGui::Begin("PCB View", nullptr, 
+                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
+                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                 ImGuiWindowFlags_NoBackground);
 
-        if (!window_open) {
-            LOG_ERROR("Failed to create ImGui window");
-            ImGui::End();
-            return;
-        }
+    if (!window_open) {
+        LOG_ERROR("Failed to create ImGui window");
+        ImGui::End();
+        return;
+    }
 
-        draw_list = ImGui::GetWindowDrawList();
-        if (!draw_list) {
-            LOG_ERROR("Failed to get ImGui draw list");
-            ImGui::End();
-            return;
-        }
-    } else {
-        // Use background draw list when ImGui overlay is disabled
-        draw_list = ImGui::GetBackgroundDrawList();
-        if (!draw_list) {
-            LOG_ERROR("Failed to get ImGui background draw list");
-            return;
-        }
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    if (!draw_list) {
+        LOG_ERROR("Failed to get ImGui draw list");
+        ImGui::End();
+        return;
     }    // Use structured ImGui rendering methods (like original OpenBoardView)
     RenderOutlineImGui(draw_list, zoom, offset_x, offset_y);
+    if (settings.show_part_outlines) {
+        RenderPartOutlineImGui(draw_list, zoom, offset_x, offset_y);
+    }
     RenderCirclePinsImGui(draw_list, zoom, offset_x, offset_y);
     RenderRectanglePinsImGui(draw_list, zoom, offset_x, offset_y);
     RenderOvalPinsImGui(draw_list, zoom, offset_x, offset_y);
@@ -170,11 +161,11 @@ void PCBRenderer::Render(int window_width, int window_height) {
 
     // Render pin numbers as text overlays
     RenderPinNumbersAsText(draw_list, zoom, offset_x, offset_y);
+    
+    // Render part highlighting on top of everything
+    RenderPartHighlighting(draw_list, zoom, offset_x, offset_y);
 
-    // Only end ImGui window if overlay was enabled
-    if (settings.enable_imgui_overlay) {
-        ImGui::End();
-    }
+    ImGui::End();
 }
 
 void PCBRenderer::SetCamera(float x, float y, float zoom) {
@@ -616,6 +607,202 @@ void PCBRenderer::RenderOutlineImGui(ImDrawList* draw_list, float zoom, float of
     }
     
     // Outline rendering complete
+}
+
+void PCBRenderer::RenderPartOutlineImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y) {
+    if (!pcb_data || pcb_data->part_outline_segments.empty()) {
+        return;
+    }
+
+    // Render part outlines normally
+    
+    // Use part outline color from settings with alpha
+    ImU32 part_outline_color = IM_COL32(
+        static_cast<int>(settings.part_outline_color.r * 255),
+        static_cast<int>(settings.part_outline_color.g * 255),
+        static_cast<int>(settings.part_outline_color.b * 255),
+        static_cast<int>(settings.part_outline_alpha * 255)
+    );
+    
+    // Adaptive line thickness based on zoom level (slightly thinner than board outline)
+    float line_thickness = std::max(0.5f, std::min(2.0f, zoom * 1.5f));
+    
+    for (const auto& segment : pcb_data->part_outline_segments) {
+        // Transform coordinates from PCB space to screen space with Y-axis mirroring
+        ImVec2 p1(segment.first.x * zoom + offset_x, offset_y - segment.first.y * zoom);
+        ImVec2 p2(segment.second.x * zoom + offset_x, offset_y - segment.second.y * zoom);
+        
+        // Draw part outline segment
+        draw_list->AddLine(p1, p2, part_outline_color, line_thickness);
+    }
+    
+    // Part outline rendering complete
+}
+
+void PCBRenderer::RenderPartHighlighting(ImDrawList* draw_list, float zoom, float offset_x, float offset_y) {
+    // Render part highlighting on top of everything
+    if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
+        std::string selected_net = pcb_data->pins[selected_pin_index].net;
+        
+        if (!selected_net.empty() && selected_net != "UNCONNECTED") {
+            // Find all parts that have pins on the selected net
+            std::set<unsigned int> parts_to_highlight;
+            for (const auto& pin : pcb_data->pins) {
+                if (pin.net == selected_net && pin.part > 0) {
+                    parts_to_highlight.insert(pin.part);
+                }
+            }
+            
+            // Highlight each part that has pins on the selected net
+            for (unsigned int highlighted_part : parts_to_highlight) {
+                // Collect all pins belonging to this part with their geometry info
+                struct PinGeometryInfo {
+                    BRDPoint pos;
+                    float extent_left, extent_right, extent_bottom, extent_top;
+                };
+                std::vector<PinGeometryInfo> part_pins_info;
+                
+                for (const auto& pin : pcb_data->pins) {
+                    if (pin.part == highlighted_part) {
+                        PinGeometryInfo info;
+                        info.pos = pin.pos;
+                        
+                        // Default extents (symmetric for circles)
+                        float default_extent = 5.0f;
+                        info.extent_left = info.extent_right = info.extent_bottom = info.extent_top = default_extent;
+                        
+                        // Check if this pin has a circle
+                        bool found_geometry = false;
+                        for (const auto& circle : pcb_data->circles) {
+                            if (circle.center.x == pin.pos.x && circle.center.y == pin.pos.y) {
+                                float radius = std::max(default_extent, circle.radius);
+                                info.extent_left = info.extent_right = info.extent_bottom = info.extent_top = radius;
+                                found_geometry = true;
+                                break;
+                            }
+                        }
+                        
+                        // Check if this pin has a rectangle
+                        if (!found_geometry) {
+                            for (const auto& rectangle : pcb_data->rectangles) {
+                                if (rectangle.center.x == pin.pos.x && rectangle.center.y == pin.pos.y) {
+                                    // For rectangles, calculate extents considering rotation
+                                    float half_width = rectangle.width / 2.0f;
+                                    float half_height = rectangle.height / 2.0f;
+                                    
+                                    if (rectangle.rotation == 0.0f) {
+                                        // No rotation - simple case
+                                        info.extent_left = info.extent_right = half_width;
+                                        info.extent_bottom = info.extent_top = half_height;
+                                    } else {
+                                        // With rotation, calculate the maximum extent in each direction
+                                        float rot_rad = rectangle.rotation * 3.14159265f / 180.0f;
+                                        float cos_rot = std::abs(std::cos(rot_rad));
+                                        float sin_rot = std::abs(std::sin(rot_rad));
+                                        
+                                        float extent_x = half_width * cos_rot + half_height * sin_rot;
+                                        float extent_y = half_width * sin_rot + half_height * cos_rot;
+                                        
+                                        info.extent_left = info.extent_right = extent_x;
+                                        info.extent_bottom = info.extent_top = extent_y;
+                                    }
+                                    found_geometry = true;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // Check if this pin has an oval
+                        if (!found_geometry) {
+                            for (const auto& oval : pcb_data->ovals) {
+                                if (oval.center.x == pin.pos.x && oval.center.y == pin.pos.y) {
+                                    // For ovals, calculate extents considering rotation
+                                    float half_width = oval.width / 2.0f;
+                                    float half_height = oval.height / 2.0f;
+                                    
+                                    if (oval.rotation == 0.0f) {
+                                        // No rotation - simple case
+                                        info.extent_left = info.extent_right = half_width;
+                                        info.extent_bottom = info.extent_top = half_height;
+                                    } else {
+                                        // With rotation, calculate the maximum extent in each direction
+                                        float rot_rad = oval.rotation * 3.14159265f / 180.0f;
+                                        float cos_rot = std::abs(std::cos(rot_rad));
+                                        float sin_rot = std::abs(std::sin(rot_rad));
+                                        
+                                        float extent_x = half_width * cos_rot + half_height * sin_rot;
+                                        float extent_y = half_width * sin_rot + half_height * cos_rot;
+                                        
+                                        info.extent_left = info.extent_right = extent_x;
+                                        info.extent_bottom = info.extent_top = extent_y;
+                                    }
+                                    found_geometry = true;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        part_pins_info.push_back(info);
+                    }
+                }
+                
+                if (part_pins_info.size() >= 1) {
+                    // Calculate initial bounding box of the part's pins
+                    float min_x = part_pins_info[0].pos.x, max_x = part_pins_info[0].pos.x;
+                    float min_y = part_pins_info[0].pos.y, max_y = part_pins_info[0].pos.y;
+                    
+                    for (const auto& info : part_pins_info) {
+                        min_x = std::min(min_x, static_cast<float>(info.pos.x));
+                        max_x = std::max(max_x, static_cast<float>(info.pos.x));
+                        min_y = std::min(min_y, static_cast<float>(info.pos.y));
+                        max_y = std::max(max_y, static_cast<float>(info.pos.y));
+                    }
+                    
+                    // Calculate directional margins based on boundary pins with proper geometry
+                    float left_margin = 0.0f, right_margin = 0.0f;
+                    float bottom_margin = 0.0f, top_margin = 0.0f;
+                    
+                    for (const auto& info : part_pins_info) {
+                        // Check if this pin affects the left boundary
+                        if (info.pos.x == min_x) {
+                            left_margin = std::max(left_margin, info.extent_left);
+                        }
+                        // Check if this pin affects the right boundary
+                        if (info.pos.x == max_x) {
+                            right_margin = std::max(right_margin, info.extent_right);
+                        }
+                        // Check if this pin affects the bottom boundary
+                        if (info.pos.y == min_y) {
+                            bottom_margin = std::max(bottom_margin, info.extent_bottom);
+                        }
+                        // Check if this pin affects the top boundary
+                        if (info.pos.y == max_y) {
+                            top_margin = std::max(top_margin, info.extent_top);
+                        }
+                    }
+                    
+                    // Apply directional margins
+                    min_x -= left_margin;
+                    max_x += right_margin;
+                    min_y -= bottom_margin;
+                    max_y += top_margin;
+                    
+                    // Transform to screen coordinates
+                    ImVec2 top_left(min_x * zoom + offset_x, offset_y - max_y * zoom);
+                    ImVec2 bottom_right(max_x * zoom + offset_x, offset_y - min_y * zoom);
+                    
+                    // Draw highlighted bounding box around the part
+                    ImU32 highlight_color = IM_COL32(255, 255, 179, 128); // Semi-transparent yellow
+                    ImU32 highlight_border = IM_COL32(255, 255, 0, 200);  // More opaque yellow border
+                    
+                    // Draw filled rectangle
+                    draw_list->AddRectFilled(top_left, bottom_right, highlight_color);
+                    // Draw border
+                    draw_list->AddRect(top_left, bottom_right, highlight_border, 0.0f, 0, 2.0f);
+                }
+            }
+        }
+    }
 }
 
 void PCBRenderer::RenderCirclePinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y) {

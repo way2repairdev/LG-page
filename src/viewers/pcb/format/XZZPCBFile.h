@@ -53,6 +53,7 @@ private:
     // Translation functions
     void FindXYTranslation();
     void TranslateSegments();
+    void TranslatePartOutlineSegments();
     void TranslatePoints(BRDPoint& point) const;
     void TranslatePins();
     void TranslateCircles();

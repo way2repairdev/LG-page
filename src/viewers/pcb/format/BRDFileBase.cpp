@@ -55,9 +55,13 @@ BRDPoint BRDFileBase::GetCenter() const {
 void BRDFileBase::ClearData() {
     format.clear();
     outline_segments.clear();
+    part_outline_segments.clear();
     parts.clear();
     pins.clear();
     nails.clear();
+    circles.clear();
+    rectangles.clear();
+    ovals.clear();
     
     num_format = 0;
     num_parts = 0;

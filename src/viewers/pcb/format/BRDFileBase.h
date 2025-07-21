@@ -18,6 +18,7 @@ public:
     // PCB data
     std::vector<BRDPoint> format;                                    // Board outline
     std::vector<std::pair<BRDPoint, BRDPoint>> outline_segments;    // Board outline segments
+    std::vector<std::pair<BRDPoint, BRDPoint>> part_outline_segments; // Part outline segments
     std::vector<BRDPart> parts;                                     // Components
     std::vector<BRDPin> pins;                                       // Pins/pads
     std::vector<BRDNail> nails;                                     // Test points
