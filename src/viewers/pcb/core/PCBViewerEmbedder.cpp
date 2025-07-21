@@ -191,8 +191,14 @@ void PCBViewerEmbedder::render()
         return;
     }
 
+    // Poll GLFW events first - CRITICAL: This was missing!
+    glfwPollEvents();
+
     // Make the context current - essential for OpenGL rendering
     glfwMakeContextCurrent(m_glfwWindow);
+
+    // Clear the framebuffer
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Start ImGui frame - matching main.cpp sequence
     ImGui_ImplOpenGL3_NewFrame();
@@ -203,6 +209,9 @@ void PCBViewerEmbedder::render()
     if (m_renderer) {
         m_renderer->Render(m_windowWidth, m_windowHeight);
     }
+
+    // Display hover information like in main.cpp - this was missing!
+    displayPinHoverInfo();
 
     // Render ImGui - matching main.cpp sequence
     ImGui::Render();
@@ -218,8 +227,21 @@ void PCBViewerEmbedder::resize(int width, int height)
     m_windowHeight = height;
 
     if (m_glfwWindow) {
+        // Resize the GLFW window
         glfwSetWindowSize(m_glfwWindow, width, height);
+        
+        // Update viewport
+        glfwMakeContextCurrent(m_glfwWindow);
         glViewport(0, 0, width, height);
+        
+#ifdef _WIN32
+        // Update Windows position for embedded window
+        if (m_childHwnd && m_parentHwnd) {
+            SetWindowPos(static_cast<HWND>(m_childHwnd), nullptr, 
+                        0, 0, width, height, 
+                        SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+#endif
     }
 
     handleStatus("PCB viewer resized to " + std::to_string(width) + "x" + std::to_string(height));
@@ -532,8 +554,19 @@ bool PCBViewerEmbedder::initializeGLFW(void* parentHandle, int width, int height
             SetWindowLong(childHwnd, GWL_STYLE, WS_CHILD | WS_VISIBLE);
             SetWindowPos(childHwnd, nullptr, 0, 0, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
             m_childHwnd = childHwnd;
+            m_parentHwnd = parentHwnd;
+            
+            // Show the embedded window
+            ShowWindow(childHwnd, SW_SHOW);
+            UpdateWindow(childHwnd);
         }
+    } else {
+        // If no parent, just show the window normally
+        glfwShowWindow(m_glfwWindow);
     }
+#else
+    // Non-Windows platforms
+    glfwShowWindow(m_glfwWindow);
 #endif
 
     return true;
@@ -781,4 +814,60 @@ std::vector<std::string> PCBViewerEmbedder::getComponentList() const
         }
     }
     return components;
+}
+
+void PCBViewerEmbedder::displayPinHoverInfo()
+{
+    // Check if any pin is hovered - matching main.cpp DisplayPinHoverInfo()
+    int hoveredPin = -1;
+    if (m_renderer) {
+        hoveredPin = m_renderer->GetHoveredPin(static_cast<float>(m_lastMouseX), static_cast<float>(m_lastMouseY),
+                                              m_windowWidth, m_windowHeight);
+    }
+    
+    if (hoveredPin >= 0 && m_pcbData && hoveredPin < static_cast<int>(m_pcbData->pins.size())) {
+        const auto& pin = m_pcbData->pins[hoveredPin];
+        
+        // Create hover tooltip - matching main.cpp style
+        ImGui::BeginTooltip();
+        ImGui::Text("Pin Information:");
+        ImGui::Separator();
+        ImGui::Text("Pin Number: %s", pin.name.c_str());
+        ImGui::Text("Net: %s", pin.net.empty() ? "UNCONNECTED" : pin.net.c_str());
+        ImGui::Text("Position: (%.1f, %.1f)", pin.pos.x, pin.pos.y);
+        
+        if (hoveredPin < static_cast<int>(m_pcbData->parts.size())) {
+            ImGui::Text("Part: %s", m_pcbData->parts[pin.part].name.c_str());
+        }
+        
+        ImGui::EndTooltip();
+    }
+    
+    // Display selected pin information in a separate window - matching main.cpp
+    if (m_renderer && m_renderer->HasSelectedPin() && m_pcbData) {
+        int selectedPin = m_renderer->GetSelectedPinIndex();
+        if (selectedPin >= 0 && selectedPin < static_cast<int>(m_pcbData->pins.size())) {
+            const auto& pin = m_pcbData->pins[selectedPin];
+            
+            // Create selection info window
+            ImGui::Begin("Pin Information", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+            ImGui::Text("Selected Pin Details:");
+            ImGui::Separator();
+            ImGui::Text("Pin Number: %s", pin.name.c_str());
+            ImGui::Text("Net Name: %s", pin.net.empty() ? "UNCONNECTED" : pin.net.c_str());
+            ImGui::Text("Serial Number: %s", pin.snum.c_str());
+            ImGui::Text("Position: (%.1f, %.1f)", pin.pos.x, pin.pos.y);
+            ImGui::Text("Radius: %.1f", pin.radius);
+            
+            if (pin.part < static_cast<int>(m_pcbData->parts.size())) {
+                ImGui::Text("Part: %s", m_pcbData->parts[pin.part].name.c_str());
+            }
+            
+            if (ImGui::Button("Clear Selection")) {
+                clearSelection();
+            }
+            
+            ImGui::End();
+        }
+    }
 }

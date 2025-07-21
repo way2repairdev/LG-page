@@ -130,6 +130,7 @@ private:
     bool initializeRenderer();
     void setupCallbacks();
     bool createSamplePCB(); // For testing when no file is loaded
+    void displayPinHoverInfo(); // Display pin hover and selection info - matching main.cpp
     void handleError(const std::string& error);
     void handleStatus(const std::string& status);
     void onPinSelected(int pinIndex);
