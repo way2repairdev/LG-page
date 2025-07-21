@@ -51,6 +51,7 @@ public:
     // Mouse and keyboard input
     void handleMouseMove(int x, int y);
     void handleMouseClick(int x, int y, int button);
+    void handleMouseRelease(int x, int y, int button);
     void handleMouseScroll(double xOffset, double yOffset);
     void handleKeyPress(int key, int scancode, int action, int mods);
 

@@ -303,19 +303,20 @@ void PCBViewerEmbedder::zoom(float factor, float centerX, float centerY)
 void PCBViewerEmbedder::handleMouseMove(int x, int y)
 {
     if (m_renderer) {
-        // Update hover state
+        // Update hover state - use the callback parameters for accuracy
         int hoveredPin = m_renderer->GetHoveredPin(static_cast<float>(x), static_cast<float>(y), 
                                                   m_windowWidth, m_windowHeight);
         m_renderer->SetHoveredPin(hoveredPin);
     }
 
-    // Handle panning if dragging
+    // Handle panning if dragging - use the callback parameters for consistent delta calculation
     if (m_mouseDragging) {
         double dx = x - m_lastMouseX;
         double dy = y - m_lastMouseY;
         pan(static_cast<float>(-dx), static_cast<float>(dy));
     }
 
+    // Update last mouse position AFTER panning calculation
     m_lastMouseX = x;
     m_lastMouseY = y;
 }
@@ -341,13 +342,29 @@ void PCBViewerEmbedder::handleMouseClick(int x, int y, int button)
     }
 }
 
+void PCBViewerEmbedder::handleMouseRelease(int x, int y, int button)
+{
+    if (button == 1) { // Right click release - stop panning
+        m_mouseDragging = false;
+    }
+}
+
 void PCBViewerEmbedder::handleMouseScroll(double xOffset, double yOffset)
 {
     if (m_renderer) {
+        // Get real-time mouse position for zoom center - this is important for zoom-to-cursor functionality
+        double mouseX, mouseY;
+        if (m_glfwWindow) {
+            glfwGetCursorPos(m_glfwWindow, &mouseX, &mouseY);
+        } else {
+            mouseX = m_lastMouseX;
+            mouseY = m_lastMouseY;
+        }
+        
         // Get mouse world position for zoom center
         const auto& camera = m_renderer->GetCamera();
-        float mouseWorldX = camera.x + (static_cast<float>(m_lastMouseX) - m_windowWidth * 0.5f) / camera.zoom;
-        float mouseWorldY = camera.y + (m_windowHeight * 0.5f - static_cast<float>(m_lastMouseY)) / camera.zoom;
+        float mouseWorldX = camera.x + (static_cast<float>(mouseX) - m_windowWidth * 0.5f) / camera.zoom;
+        float mouseWorldY = camera.y + (m_windowHeight * 0.5f - static_cast<float>(mouseY)) / camera.zoom;
         
         float zoomFactor = 1.0f + static_cast<float>(yOffset) * 0.1f;
         m_renderer->Zoom(zoomFactor, mouseWorldX, mouseWorldY);
@@ -818,29 +835,76 @@ std::vector<std::string> PCBViewerEmbedder::getComponentList() const
 
 void PCBViewerEmbedder::displayPinHoverInfo()
 {
+    // Get current mouse position - matching main.cpp exactly
+    double mouseX, mouseY;
+    if (m_glfwWindow) {
+        glfwGetCursorPos(m_glfwWindow, &mouseX, &mouseY);
+    } else {
+        mouseX = m_lastMouseX;
+        mouseY = m_lastMouseY;
+    }
+    
     // Check if any pin is hovered - matching main.cpp DisplayPinHoverInfo()
     int hoveredPin = -1;
     if (m_renderer) {
-        hoveredPin = m_renderer->GetHoveredPin(static_cast<float>(m_lastMouseX), static_cast<float>(m_lastMouseY),
+        hoveredPin = m_renderer->GetHoveredPin(static_cast<float>(mouseX), static_cast<float>(mouseY),
                                               m_windowWidth, m_windowHeight);
     }
     
     if (hoveredPin >= 0 && m_pcbData && hoveredPin < static_cast<int>(m_pcbData->pins.size())) {
         const auto& pin = m_pcbData->pins[hoveredPin];
         
-        // Create hover tooltip - matching main.cpp style
-        ImGui::BeginTooltip();
-        ImGui::Text("Pin Information:");
-        ImGui::Separator();
-        ImGui::Text("Pin Number: %s", pin.name.c_str());
-        ImGui::Text("Net: %s", pin.net.empty() ? "UNCONNECTED" : pin.net.c_str());
-        ImGui::Text("Position: (%.1f, %.1f)", pin.pos.x, pin.pos.y);
+        // Create hover tooltip with exact mouse cursor positioning - matching main.cpp
+        ImGui::SetNextWindowPos(ImVec2(static_cast<float>(mouseX) + 15, static_cast<float>(mouseY) + 15));
+        ImGui::SetNextWindowBgAlpha(0.9f); // Semi-transparent background
         
-        if (hoveredPin < static_cast<int>(m_pcbData->parts.size())) {
-            ImGui::Text("Part: %s", m_pcbData->parts[pin.part].name.c_str());
+        if (ImGui::Begin("Pin Info", nullptr, 
+                       ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize |
+                       ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing)) {
+            
+            // Display pin information - matching main.cpp format
+            ImGui::Text("Pin Information:");
+            ImGui::Separator();
+            
+            if (!pin.snum.empty()) {
+                ImGui::Text("Pin Number: %s", pin.snum.c_str());
+            }
+            if (!pin.name.empty() && pin.name != pin.snum) {
+                ImGui::Text("Pin Name: %s", pin.name.c_str());
+            }
+            if (!pin.net.empty()) {
+                ImGui::Text("Net: %s", pin.net.c_str());
+                
+                // Count connected pins in the same net
+                if (pin.net != "UNCONNECTED" && pin.net != "") {
+                    int connectedPins = 0;
+                    for (const auto& otherPin : m_pcbData->pins) {
+                        if (otherPin.net == pin.net) {
+                            connectedPins++;
+                        }
+                    }
+                    ImGui::Text("Connected Pins: %d", connectedPins);
+                    
+                    if (connectedPins > 1) {
+                        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), 
+                                         "Click to highlight net");
+                    }
+                }
+            }
+            
+            ImGui::Text("Position: (%.1f, %.1f)", pin.pos.x, pin.pos.y);
+            ImGui::Text("Part: %d", pin.part);
+            
+            // Show selection status
+            if (m_renderer && m_renderer->GetSelectedPinIndex() == hoveredPin) {
+                ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "SELECTED");
+            } else {
+                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Click to select");
+            }
+            
+            ImGui::End();
         }
-        
-        ImGui::EndTooltip();
     }
     
     // Display selected pin information in a separate window - matching main.cpp
