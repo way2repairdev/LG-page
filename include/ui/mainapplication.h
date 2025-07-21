@@ -25,6 +25,8 @@
 
 // Forward declaration for PDF viewer
 class PDFViewerWidget;
+// Forward declaration for PCB viewer
+class PCBViewerWidget;
 // Server-side includes (commented out for local file loading)
 //#include <QNetworkAccessManager>
 //#include <QNetworkRequest>
@@ -106,6 +108,7 @@ private:
     void populateTreeFromDirectory(const QString &dirPath, QTreeWidgetItem *parentItem = nullptr);
     void openFileInTab(const QString &filePath);
     void openPDFInTab(const QString &filePath);
+    void openPCBInTab(const QString &filePath);
     void addWelcomeTab();
     QIcon getFileIcon(const QString &filePath);
     QIcon getFolderIcon(bool isOpen = false);

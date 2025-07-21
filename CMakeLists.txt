@@ -48,6 +48,16 @@ endif()
 # Find OpenGL
 find_package(OpenGL REQUIRED)
 
+# PCB Viewer vcpkg dependencies
+set(PCB_VCPKG_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/vcpkg_installed/x64-windows)
+set(PCB_VCPKG_INCLUDE ${PCB_VCPKG_ROOT}/include)
+set(PCB_VCPKG_LIB ${PCB_VCPKG_ROOT}/lib)
+set(PCB_VCPKG_BIN ${PCB_VCPKG_ROOT}/bin)
+
+message(STATUS "PCB vcpkg root: ${PCB_VCPKG_ROOT}")
+message(STATUS "PCB vcpkg include: ${PCB_VCPKG_INCLUDE}")
+message(STATUS "PCB vcpkg lib: ${PCB_VCPKG_LIB}")
+
 # Set directories
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -64,11 +74,16 @@ include_directories(
     ${INCLUDE_DIR}/database
     ${INCLUDE_DIR}/network
     ${INCLUDE_DIR}/viewers/pdf
+    ${INCLUDE_DIR}/viewers/pcb
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui
     ${SRC_DIR}/viewers/pdf/third_party/include
     ${SRC_DIR}/viewers/pdf/third_party/third_party/extern/pdfium/include
     ${SRC_DIR}/viewers/pdf/third_party/third_party/extern/glew/include
     ${SRC_DIR}/viewers/pdf/third_party/third_party/extern/glfw/include
+    ${SRC_DIR}/viewers/pcb/core
+    ${SRC_DIR}/viewers/pcb/format
+    ${SRC_DIR}/viewers/pcb/rendering
+    ${PCB_VCPKG_INCLUDE}
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -85,6 +100,8 @@ set(UI_SOURCES
     ${SRC_DIR}/viewers/pdf/core/PDFViewerEmbedder.cpp
     ${SRC_DIR}/viewers/pdf/ui/QtPDFViewerWidget.cpp
     ${SRC_DIR}/viewers/pdf/rendering/OpenGLPipelineManager.cpp
+    ${SRC_DIR}/viewers/pcb/ui/pcbviewerwidget.cpp
+    ${SRC_DIR}/viewers/pcb/core/PCBViewerEmbedder.cpp
 )
 
 # Add hybrid PDF viewer only if Qt PDF modules are available
@@ -99,6 +116,17 @@ set(PDF_SOURCES
     ${SRC_DIR}/viewers/pdf/third_party/src/ui/menu-integration.cpp
     ${SRC_DIR}/viewers/pdf/third_party/src/ui/tab-manager.cpp
     ${SRC_DIR}/viewers/pdf/third_party/src/globals.cpp
+)
+
+# PCB viewer sources
+set(PCB_SOURCES
+    ${SRC_DIR}/viewers/pcb/core/BRDTypes.cpp
+    ${SRC_DIR}/viewers/pcb/core/Utils.cpp
+    ${SRC_DIR}/viewers/pcb/format/BRDFileBase.cpp
+    ${SRC_DIR}/viewers/pcb/format/XZZPCBFile.cpp
+    ${SRC_DIR}/viewers/pcb/format/des.cpp
+    ${SRC_DIR}/viewers/pcb/rendering/PCBRenderer.cpp
+    ${SRC_DIR}/viewers/pcb/rendering/Window.cpp
 )
 
 set(DATABASE_SOURCES
@@ -118,6 +146,8 @@ set(UI_HEADERS
     ${INCLUDE_DIR}/viewers/pdf/PDFViewerEmbedder.h
     ${INCLUDE_DIR}/viewers/pdf/QtPDFViewerWidget.h
     ${INCLUDE_DIR}/viewers/pdf/OpenGLPipelineManager.h
+    ${INCLUDE_DIR}/viewers/pcb/PCBViewerWidget.h
+    ${INCLUDE_DIR}/viewers/pcb/PCBViewerEmbedder.h
 )
 
 # Add hybrid PDF viewer header only if Qt PDF modules are available
@@ -131,6 +161,17 @@ set(PDF_HEADERS
     ${SRC_DIR}/viewers/pdf/third_party/include/core/feature.h
     ${SRC_DIR}/viewers/pdf/third_party/include/ui/menu-integration.h
     ${SRC_DIR}/viewers/pdf/third_party/include/ui/tab-manager.h
+)
+
+# PCB viewer headers
+set(PCB_HEADERS
+    ${SRC_DIR}/viewers/pcb/core/BRDTypes.h
+    ${SRC_DIR}/viewers/pcb/core/Utils.h
+    ${SRC_DIR}/viewers/pcb/format/BRDFileBase.h
+    ${SRC_DIR}/viewers/pcb/format/XZZPCBFile.h
+    ${SRC_DIR}/viewers/pcb/format/des.h
+    ${SRC_DIR}/viewers/pcb/rendering/PCBRenderer.h
+    ${SRC_DIR}/viewers/pcb/rendering/Window.h
 )
 
 set(DATABASE_HEADERS
@@ -156,10 +197,12 @@ set(PROJECT_SOURCES
     ${CORE_SOURCES}
     ${UI_SOURCES}
     ${PDF_SOURCES}
+    ${PCB_SOURCES}
     ${DATABASE_SOURCES}
     ${NETWORK_SOURCES}
     ${UI_HEADERS}
     ${PDF_HEADERS}
+    ${PCB_HEADERS}
     ${DATABASE_HEADERS}
     ${NETWORK_HEADERS}
     ${UI_FORMS}
@@ -235,24 +278,49 @@ if(NOT MSVC)
         set(HAVE_GLEW FALSE)
     endif()
 
-    # Check if GLFW library exists (using MinGW compatible build)
-    if(EXISTS "${GLFW_LIB_PATH}/libglfw3.a")
-        message(STATUS "GLFW library found - enabling GLFW window management")
-        target_link_directories(Way2RepairLoginSystem PRIVATE "${GLFW_LIB_PATH}")
-        target_include_directories(Way2RepairLoginSystem PRIVATE "${SRC_DIR}/viewers/pdf/third_party/third_party/extern/glfw_mingw/include")
-        target_link_libraries(Way2RepairLoginSystem PRIVATE glfw3 opengl32 gdi32 user32 kernel32 shell32)
-        target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_GLFW)
-        set(HAVE_GLFW TRUE)
-    else()
-        message(STATUS "GLFW library not found - using Qt native embedding")
-        set(HAVE_GLFW FALSE)
-    endif()
+    # Check if GLFW library exists (using MinGW compatible build) - DISABLED to avoid conflicts with PCB GLFW
+    # Using PCB vcpkg GLFW instead
+    message(STATUS "GLFW library skipped - using PCB vcpkg GLFW to avoid conflicts")
+    set(HAVE_GLFW FALSE)
 else()
     message(STATUS "Visual Studio detected - skipping third-party libraries due to MinGW/MSVC compatibility")
     message(STATUS "PDF viewer will use Qt-only implementation")
     set(HAVE_PDFIUM FALSE)
     set(HAVE_GLEW FALSE)
     set(HAVE_GLFW FALSE)
+endif()
+
+# Add PCB viewer vcpkg dependencies - use MinGW-compatible libraries
+set(PCB_VCPKG_MINGW_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/vcpkg/packages)
+set(PCB_IMGUI_ROOT ${PCB_VCPKG_MINGW_ROOT}/imgui_x64-mingw-dynamic)
+set(PCB_GLFW_ROOT ${PCB_VCPKG_MINGW_ROOT}/glfw3_x64-mingw-dynamic)
+set(PCB_GLEW_ROOT ${PCB_VCPKG_MINGW_ROOT}/glew_x64-mingw-dynamic)
+
+if(EXISTS "${PCB_IMGUI_ROOT}/lib/libimgui.a" AND EXISTS "${PCB_GLFW_ROOT}/lib/libglfw3dll.a" AND EXISTS "${PCB_GLEW_ROOT}/lib/libglew32.dll.a")
+    message(STATUS "PCB MinGW vcpkg libraries found - enabling PCB viewer with ImGui")
+    
+    # Add include directories
+    target_include_directories(Way2RepairLoginSystem PRIVATE 
+        "${PCB_IMGUI_ROOT}/include"
+        "${PCB_GLFW_ROOT}/include" 
+        "${PCB_GLEW_ROOT}/include"
+    )
+    
+    # Add library directories and link libraries
+    target_link_directories(Way2RepairLoginSystem PRIVATE 
+        "${PCB_IMGUI_ROOT}/lib"
+        "${PCB_GLFW_ROOT}/lib"
+        "${PCB_GLEW_ROOT}/lib"
+    )
+    
+    target_link_libraries(Way2RepairLoginSystem PRIVATE imgui glfw3dll glew32)
+    target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_PCB_IMGUI HAVE_PCB_GLFW HAVE_PCB_GLEW)
+    set(HAVE_PCB_VCPKG TRUE)
+    
+    message(STATUS "Linked MinGW-compiled ImGui, GLFW, and GLEW libraries")
+else()
+    message(STATUS "PCB MinGW vcpkg libraries not found - PCB viewer may not work properly")
+    set(HAVE_PCB_VCPKG FALSE)
 endif()
 
 # Set target properties
@@ -333,6 +401,26 @@ if(WIN32)
         message(STATUS "GLEW DLL will be copied: ${GLEW_DLL}")
     else()
         message(STATUS "GLEW DLL not found - application will use basic OpenGL: ${GLEW_DLL}")
+    endif()
+    
+    # Copy PCB MinGW vcpkg DLLs if they exist
+    set(PCB_GLFW_DLL "${PCB_GLFW_ROOT}/bin/glfw3.dll")
+    set(PCB_GLEW_DLL "${PCB_GLEW_ROOT}/bin/glew32.dll")
+    
+    if(EXISTS ${PCB_GLFW_DLL})
+        add_custom_command(TARGET Way2RepairLoginSystem POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PCB_GLFW_DLL} ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Copying PCB MinGW GLFW DLL"
+        )
+        message(STATUS "PCB MinGW GLFW DLL will be copied: ${PCB_GLFW_DLL}")
+    endif()
+    
+    if(EXISTS ${PCB_GLEW_DLL})
+        add_custom_command(TARGET Way2RepairLoginSystem POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PCB_GLEW_DLL} ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Copying PCB MinGW GLEW DLL"
+        )
+        message(STATUS "PCB MinGW GLEW DLL will be copied: ${PCB_GLEW_DLL}")
     endif()
     
     # Copy additional runtime dependencies (database files, etc.)

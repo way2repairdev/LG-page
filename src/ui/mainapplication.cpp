@@ -1,5 +1,6 @@
 #include "ui/mainapplication.h"
 #include "viewers/pdf/pdfviewerwidget.h"
+#include "viewers/pcb/PCBViewerWidget.h"
 #include <QApplication>
 #include <QScreen>
 #include <QHeaderView>
@@ -446,6 +447,12 @@ void MainApplication::openFileInTab(const QString &filePath)
         return;
     }
     
+    // Check if it's a PCB file
+    if (extension == "xzz" || extension == "pcb" || extension == "xzzpcb") {
+        openPCBInTab(filePath);
+        return;
+    }
+    
     // Read file content for non-PDF files
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -597,6 +604,100 @@ void MainApplication::openPDFInTab(const QString &filePath)
     m_tabWidget->setTabToolTip(tabIndex, tooltip);
     
     statusBar()->showMessage(QString("Opened PDF: %1").arg(fileInfo.fileName()));
+}
+
+void MainApplication::openPCBInTab(const QString &filePath)
+{
+    // Show loading message
+    statusBar()->showMessage("Loading PCB file...");
+    
+    // Check if PCB file is already open in a tab
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+        QWidget *tabWidget = m_tabWidget->widget(i);
+        if (tabWidget->property("filePath").toString() == filePath) {
+            // File is already open, just switch to that tab
+            m_tabWidget->setCurrentIndex(i);
+            statusBar()->showMessage("PCB file already open in tab");
+            return;
+        }
+    }
+    
+    // Verify file exists and is readable
+    QFileInfo fileInfo(filePath);
+    if (!fileInfo.exists() || !fileInfo.isReadable()) {
+        statusBar()->showMessage("Error: Cannot access PCB file: " + filePath);
+        QMessageBox::warning(this, "PCB Error", "Cannot access PCB file:\n" + filePath);
+        return;
+    }
+    
+    // Create PCB viewer widget
+    PCBViewerWidget *pcbViewer = new PCBViewerWidget();
+    pcbViewer->setProperty("filePath", filePath);
+    
+    // Connect PCB viewer signals
+    connect(pcbViewer, &PCBViewerWidget::pcbLoaded, this, [this, filePath](const QString &loadedPath) {
+        Q_UNUSED(loadedPath)
+        QFileInfo fileInfo(filePath);
+        statusBar()->showMessage(QString("PCB loaded: %1").arg(fileInfo.fileName()));
+    });
+    
+    connect(pcbViewer, &PCBViewerWidget::errorOccurred, this, [this](const QString &error) {
+        statusBar()->showMessage("PCB Error: " + error);
+        QMessageBox::warning(this, "PCB Error", error);
+    });
+    
+    connect(pcbViewer, &PCBViewerWidget::statusMessage, this, [this](const QString &message) {
+        statusBar()->showMessage("PCB: " + message);
+    });
+    
+    connect(pcbViewer, &PCBViewerWidget::zoomChanged, this, [this](double zoomLevel) {
+        statusBar()->showMessage(QString("PCB Zoom: %1%").arg(static_cast<int>(zoomLevel * 100)));
+    });
+    
+    connect(pcbViewer, &PCBViewerWidget::pinSelected, this, [this](const QString &pinName, const QString &netName) {
+        statusBar()->showMessage(QString("PCB: Selected pin %1 on net %2").arg(pinName, netName));
+    });
+    
+    // Add PCB viewer to tab first
+    QString tabName = fileInfo.fileName();
+    QIcon tabIcon = getFileIcon(filePath);
+    int tabIndex = m_tabWidget->addTab(pcbViewer, tabIcon, tabName);
+    
+    // Switch to the new tab
+    m_tabWidget->setCurrentIndex(tabIndex);
+    
+    // Load the PCB after the widget is properly initialized
+    QTimer::singleShot(100, this, [this, pcbViewer, filePath, tabIndex, fileInfo]() {
+        // Try to load the PCB after the widget is properly initialized
+        if (!pcbViewer->loadPCB(filePath)) {
+            // If loading fails, remove the tab and show error
+            m_tabWidget->removeTab(tabIndex);
+            statusBar()->showMessage("Error: Failed to load PCB file: " + filePath);
+            
+            QString errorMessage = QString(
+                "Failed to load PCB file:\n\n"
+                "File: %1\n"
+                "Path: %2\n\n"
+                "This PCB file may be:\n"
+                "• Corrupted or invalid\n"
+                "• Incompatible with XZZPCB format\n" 
+                "• Not accessible due to permissions\n\n"
+                "Supported formats: .xzz, .pcb, .xzzpcb"
+            ).arg(fileInfo.fileName()).arg(filePath);
+            
+            QMessageBox::warning(this, "PCB Loading Error", errorMessage);
+            return;
+        }
+    });
+    
+    // Set tab tooltip
+    QString tooltip = QString("PCB File: %1\nPath: %2\nSize: %3 bytes")
+                        .arg(fileInfo.fileName())
+                        .arg(filePath)
+                        .arg(fileInfo.size());
+    m_tabWidget->setTabToolTip(tabIndex, tooltip);
+    
+    statusBar()->showMessage(QString("Opened PCB: %1").arg(fileInfo.fileName()));
 }
 
 void MainApplication::onTabCloseRequested(int index)
