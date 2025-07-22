@@ -1,4 +1,5 @@
 #include "ui/mainapplication.h"
+#include "ui/dualtabwidget.h"
 #include "viewers/pdf/pdfviewerwidget.h"
 #include "viewers/pcb/PCBViewerWidget.h"
 #include <QApplication>
@@ -242,56 +243,15 @@ void MainApplication::setupTreeView()
 
 void MainApplication::setupTabWidget()
 {
-    m_tabWidget = new QTabWidget();
+    m_tabWidget = new DualTabWidget();
     m_tabWidget->setTabsClosable(true);
     m_tabWidget->setMovable(true);
-    m_tabWidget->setStyleSheet(
-        "QTabWidget {"
-        "    border: 1px solid #d4e1f5;"
-        "    border-radius: 6px;"
-        "    background-color: white;"
-        "}"
-        "QTabWidget::pane {"
-        "    border: 1px solid #d4e1f5;"
-        "    border-radius: 6px;"
-        "    background-color: white;"
-        "}"
-        "QTabWidget::tab-bar {"
-        "    alignment: left;"
-        "}"
-        "QTabBar::tab {"
-        "    background-color: #f8f9ff;"
-        "    border: 1px solid #d4e1f5;"
-        "    border-bottom: none;"
-        "    border-radius: 4px 4px 0 0;"
-        "    padding: 8px 12px;"
-        "    margin-right: 2px;"
-        "    font-family: 'Segoe UI', Arial, sans-serif;"
-        "    color: #2c3e50;"
-        "}"
-        "QTabBar::tab:selected {"
-        "    background-color: white;"
-        "    border-color: #4285f4;"
-        "    color: #4285f4;"
-        "}"
-        "QTabBar::tab:hover {"
-        "    background-color: #e8f0fe;"
-        "}"
-        "QTabBar::close-button {"
-        "    image: url(:/icons/close.png);"
-        "    subcontrol-position: right;"
-        "}"
-        "QTabBar::close-button:hover {"
-        "    background-color: #ff6b6b;"
-        "    border-radius: 2px;"
-        "}"
-    );
     
-    // Connect tab close signal
-    connect(m_tabWidget, &QTabWidget::tabCloseRequested, this, &MainApplication::onTabCloseRequested);
-    
-    // Connect tab change signal to manage toolbar visibility
-    connect(m_tabWidget, &QTabWidget::currentChanged, this, &MainApplication::onTabChanged);
+    // Connect dual tab widget signals
+    connect(m_tabWidget, &DualTabWidget::tabCloseRequested, 
+            this, &MainApplication::onTabCloseRequestedByType);
+    connect(m_tabWidget, &DualTabWidget::currentChanged, 
+            this, &MainApplication::onTabChangedByType);
 }
 
 void MainApplication::loadLocalFiles()
@@ -370,17 +330,6 @@ void MainApplication::openFileInTab(const QString &filePath)
     // Show loading message
     statusBar()->showMessage("Loading file...");
     
-    // Check if file is already open in a tab
-    for (int i = 0; i < m_tabWidget->count(); ++i) {
-        QWidget *tabWidget = m_tabWidget->widget(i);
-        if (tabWidget->property("filePath").toString() == filePath) {
-            // File is already open, just switch to that tab
-            m_tabWidget->setCurrentIndex(i);
-            statusBar()->showMessage("File already open in tab");
-            return;
-        }
-    }
-    
     // Check if it's a PDF file
     QFileInfo fileInfo(filePath);
     QString extension = fileInfo.suffix().toLower();
@@ -396,67 +345,12 @@ void MainApplication::openFileInTab(const QString &filePath)
         return;
     }
     
-    // Read file content for non-PDF files
-    QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        statusBar()->showMessage("Error: Could not open file: " + filePath);
-        QMessageBox::warning(this, "File Error", "Could not open file:\n" + filePath);
-        return;
-    }
-    
-    QTextStream in(&file);
-    QString content = in.readAll();
-    file.close();
-    
-    // Create new tab content
-    QTextEdit *textEdit = new QTextEdit();
-    textEdit->setPlainText(content);
-    textEdit->setReadOnly(true); // Make it read-only for now
-    textEdit->setProperty("filePath", filePath);
-    
-    // Set appropriate font based on file type
-    if (isCodeFile(extension)) {
-        // Code files - use monospace font
-        QFont codeFont("Consolas", 10);
-        codeFont.setStyleHint(QFont::Monospace);
-        textEdit->setFont(codeFont);
-        textEdit->setLineWrapMode(QTextEdit::NoWrap);
-    } else {
-        // Text files - use default font
-        QFont textFont("Segoe UI", 10);
-        textEdit->setFont(textFont);
-        textEdit->setLineWrapMode(QTextEdit::WidgetWidth);
-    }
-    
-    // Style the text edit
-    textEdit->setStyleSheet(
-        "QTextEdit {"
-        "    border: none;"
-        "    background-color: white;"
-        "    color: #2c3e50;"
-        "    font-family: 'Consolas', monospace;"
-        "    selection-background-color: #4285f4;"
-        "    selection-color: white;"
-        "}"
-    );
-    
-    // Add tab with file name and icon
-    QString tabName = fileInfo.fileName();
-    QIcon tabIcon = getFileIcon(filePath);
-    int tabIndex = m_tabWidget->addTab(textEdit, tabIcon, tabName);
-    
-    // Set tab tooltip
-    QString tooltip = QString("File: %1\nPath: %2\nSize: %3 bytes\nType: %4")
-                        .arg(fileInfo.fileName())
-                        .arg(filePath)
-                        .arg(fileInfo.size())
-                        .arg(extension.isEmpty() ? "Unknown" : extension.toUpper());
-    m_tabWidget->setTabToolTip(tabIndex, tooltip);
-    
-    // Switch to the new tab
-    m_tabWidget->setCurrentIndex(tabIndex);
-    
-    statusBar()->showMessage(QString("Opened file: %1").arg(fileInfo.fileName()));
+    // For non-PDF/PCB files, show a message
+    statusBar()->showMessage("Only PDF and PCB files are supported in tabs");
+    QMessageBox::information(this, "File Type Not Supported", 
+        "Only PDF files (.pdf) and PCB files (.xzz, .pcb, .xzzpcb) can be opened in tabs.\n\n"
+        "Selected file: " + fileInfo.fileName() + "\n"
+        "File type: " + (extension.isEmpty() ? "Unknown" : extension.toUpper()));
 }
 
 void MainApplication::openPDFInTab(const QString &filePath)
@@ -464,12 +358,12 @@ void MainApplication::openPDFInTab(const QString &filePath)
     // Show loading message
     statusBar()->showMessage("Loading PDF file...");
     
-    // Check if PDF file is already open in a tab
-    for (int i = 0; i < m_tabWidget->count(); ++i) {
-        QWidget *tabWidget = m_tabWidget->widget(i);
-        if (tabWidget->property("filePath").toString() == filePath) {
+    // Check if PDF file is already open in PDF tabs
+    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
+        QWidget *tabWidget = m_tabWidget->widget(i, DualTabWidget::PDF_TAB);
+        if (tabWidget && tabWidget->property("filePath").toString() == filePath) {
             // File is already open, just switch to that tab
-            m_tabWidget->setCurrentIndex(i);
+            m_tabWidget->setCurrentIndex(i, DualTabWidget::PDF_TAB);
             statusBar()->showMessage("PDF file already open in tab");
             return;
         }
@@ -483,7 +377,7 @@ void MainApplication::openPDFInTab(const QString &filePath)
         return;
     }
     
-    // Create PDF viewer widget (using the existing PDFViewerWidget but without internal tabs)
+    // Create PDF viewer widget
     PDFViewerWidget *pdfViewer = new PDFViewerWidget();
     pdfViewer->setProperty("filePath", filePath);
     
@@ -510,20 +404,22 @@ void MainApplication::openPDFInTab(const QString &filePath)
         statusBar()->showMessage(QString("PDF Zoom: %1%").arg(static_cast<int>(zoomLevel * 100)));
     });
     
-    // Add PDF viewer to tab first
+    // Add PDF viewer to PDF tab row
     QString tabName = fileInfo.fileName();
     QIcon tabIcon = getFileIcon(filePath);
-    int tabIndex = m_tabWidget->addTab(pdfViewer, tabIcon, tabName);
+    int tabIndex = m_tabWidget->addTab(pdfViewer, tabIcon, tabName, DualTabWidget::PDF_TAB);
     
     // Switch to the new tab
-    m_tabWidget->setCurrentIndex(tabIndex);
+    m_tabWidget->setCurrentIndex(tabIndex, DualTabWidget::PDF_TAB);
     
-    // Load the PDF directly (the key fix is to bypass the internal tab system)
+    // Load the PDF after the widget is properly initialized
     QTimer::singleShot(100, this, [this, pdfViewer, filePath, tabIndex, fileInfo]() {
         // Try to load the PDF after the widget is properly initialized
         if (!pdfViewer->loadPDF(filePath)) {
             // If loading fails, remove the tab and show error
-            m_tabWidget->removeTab(tabIndex);
+            if (tabIndex < m_tabWidget->count(DualTabWidget::PDF_TAB)) {
+                m_tabWidget->removeTab(tabIndex, DualTabWidget::PDF_TAB);
+            }
             statusBar()->showMessage("Error: Failed to load PDF file: " + filePath);
             
             QString errorMessage = QString(
@@ -547,7 +443,7 @@ void MainApplication::openPDFInTab(const QString &filePath)
                         .arg(fileInfo.fileName())
                         .arg(filePath)
                         .arg(fileInfo.size());
-    m_tabWidget->setTabToolTip(tabIndex, tooltip);
+    m_tabWidget->setTabToolTip(tabIndex, tooltip, DualTabWidget::PDF_TAB);
     
     statusBar()->showMessage(QString("Opened PDF: %1").arg(fileInfo.fileName()));
 }
@@ -557,12 +453,12 @@ void MainApplication::openPCBInTab(const QString &filePath)
     // Show loading message
     statusBar()->showMessage("Loading PCB file...");
     
-    // Check if PCB file is already open in a tab
-    for (int i = 0; i < m_tabWidget->count(); ++i) {
-        QWidget *tabWidget = m_tabWidget->widget(i);
-        if (tabWidget->property("filePath").toString() == filePath) {
+    // Check if PCB file is already open in PCB tabs
+    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PCB_TAB); ++i) {
+        QWidget *tabWidget = m_tabWidget->widget(i, DualTabWidget::PCB_TAB);
+        if (tabWidget && tabWidget->property("filePath").toString() == filePath) {
             // File is already open, just switch to that tab
-            m_tabWidget->setCurrentIndex(i);
+            m_tabWidget->setCurrentIndex(i, DualTabWidget::PCB_TAB);
             statusBar()->showMessage("PCB file already open in tab");
             return;
         }
@@ -607,20 +503,22 @@ void MainApplication::openPCBInTab(const QString &filePath)
         statusBar()->showMessage(QString("PCB: Selected pin %1 on net %2").arg(pinName, netName));
     });
     
-    // Add PCB viewer to tab first
+    // Add PCB viewer to PCB tab row
     QString tabName = fileInfo.fileName();
     QIcon tabIcon = getFileIcon(filePath);
-    int tabIndex = m_tabWidget->addTab(pcbViewer, tabIcon, tabName);
+    int tabIndex = m_tabWidget->addTab(pcbViewer, tabIcon, tabName, DualTabWidget::PCB_TAB);
     
     // Switch to the new tab
-    m_tabWidget->setCurrentIndex(tabIndex);
+    m_tabWidget->setCurrentIndex(tabIndex, DualTabWidget::PCB_TAB);
     
     // Load the PCB after the widget is properly initialized
     QTimer::singleShot(100, this, [this, pcbViewer, filePath, tabIndex, fileInfo]() {
         // Try to load the PCB after the widget is properly initialized
         if (!pcbViewer->loadPCB(filePath)) {
             // If loading fails, remove the tab and show error
-            m_tabWidget->removeTab(tabIndex);
+            if (tabIndex < m_tabWidget->count(DualTabWidget::PCB_TAB)) {
+                m_tabWidget->removeTab(tabIndex, DualTabWidget::PCB_TAB);
+            }
             statusBar()->showMessage("Error: Failed to load PCB file: " + filePath);
             
             QString errorMessage = QString(
@@ -644,53 +542,60 @@ void MainApplication::openPCBInTab(const QString &filePath)
                         .arg(fileInfo.fileName())
                         .arg(filePath)
                         .arg(fileInfo.size());
-    m_tabWidget->setTabToolTip(tabIndex, tooltip);
+    m_tabWidget->setTabToolTip(tabIndex, tooltip, DualTabWidget::PCB_TAB);
     
     statusBar()->showMessage(QString("Opened PCB: %1").arg(fileInfo.fileName()));
 }
 
-void MainApplication::onTabCloseRequested(int index)
+void MainApplication::onTabCloseRequestedByType(int index, int type)
 {
-    if (index >= 0 && index < m_tabWidget->count()) {
-        QWidget *tabWidget = m_tabWidget->widget(index);
-        QString filePath = tabWidget->property("filePath").toString();
-        
-        // Remove the tab
-        m_tabWidget->removeTab(index);
-        
-        // Update status bar
-        if (!filePath.isEmpty()) {
-            QFileInfo fileInfo(filePath);
-            statusBar()->showMessage(QString("Closed file: %1").arg(fileInfo.fileName()));
-        } else {
-            statusBar()->showMessage("Closed tab");
+    DualTabWidget::TabType tabType = static_cast<DualTabWidget::TabType>(type);
+    
+    if (index >= 0 && index < m_tabWidget->count(tabType)) {
+        QWidget *tabWidget = m_tabWidget->widget(index, tabType);
+        if (tabWidget) {
+            QString filePath = tabWidget->property("filePath").toString();
+            
+            // Remove the tab
+            m_tabWidget->removeTab(index, tabType);
+            
+            // Update status bar
+            if (!filePath.isEmpty()) {
+                QFileInfo fileInfo(filePath);
+                QString fileType = (tabType == DualTabWidget::PDF_TAB) ? "PDF" : "PCB";
+                statusBar()->showMessage(QString("Closed %1 file: %2").arg(fileType, fileInfo.fileName()));
+            } else {
+                statusBar()->showMessage("Closed tab");
+            }
         }
     }
 }
 
-void MainApplication::onTabChanged(int index)
+void MainApplication::onTabChangedByType(int index, int type)
 {
-    qDebug() << "=== Tab Changed to Index:" << index << "===";
+    DualTabWidget::TabType tabType = static_cast<DualTabWidget::TabType>(type);
+    
+    qDebug() << "=== Tab Changed to Index:" << index << "Type:" << (tabType == DualTabWidget::PDF_TAB ? "PDF" : "PCB") << "===";
     
     // Use aggressive toolbar isolation
     forceToolbarIsolation();
     
     // If no valid tab is selected, return
-    if (index < 0 || index >= m_tabWidget->count()) {
+    if (index < 0 || index >= m_tabWidget->count(tabType)) {
         statusBar()->showMessage("No active tab");
         qDebug() << "Invalid tab index, returning";
         return;
     }
     
     // Get the current widget
-    QWidget *currentWidget = m_tabWidget->widget(index);
+    QWidget *currentWidget = m_tabWidget->widget(index, tabType);
     if (!currentWidget) {
         statusBar()->showMessage("Invalid tab selected");
         qDebug() << "Current widget is null, returning";
         return;
     }
     
-    QString tabName = m_tabWidget->tabText(index);
+    QString tabName = m_tabWidget->tabText(index, tabType);
     qDebug() << "Switching to tab:" << tabName;
     
     // Force focus and bring current widget to front
@@ -701,72 +606,70 @@ void MainApplication::onTabChanged(int index)
     // Small delay before showing toolbar
     QThread::msleep(50);
     
-    // Show appropriate toolbar based on widget type with enhanced management
-    if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(currentWidget)) {
-        qDebug() << "Activating PDF viewer for tab:" << tabName;
-        
-        // Ensure PDF viewer is properly initialized and visible
-        pdfViewer->setVisible(true);
-        pdfViewer->raise();
-        
-        // Show PDF toolbar with enhanced visibility management
-        pdfViewer->toggleControls(true);
-        
-        // Force layout updates
-        pdfViewer->updateGeometry();
-        pdfViewer->update();
-        
-        statusBar()->showMessage("PDF viewer active - Page navigation and search available");
-        
-    } else if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(currentWidget)) {
-        qDebug() << "Activating PCB viewer for tab:" << tabName;
-        
-        // Ensure PCB viewer is properly initialized and visible
-        pcbViewer->setVisible(true);
-        pcbViewer->raise();
-        
-        // Enable PCB Qt toolbar - Qt toolbar enabled for PCB viewer
-        pcbViewer->setToolbarVisible(true);
-        
-        // Force layout updates
-        pcbViewer->updateGeometry();
-        pcbViewer->update();
-        
-        statusBar()->showMessage("PCB viewer active - Qt toolbar controls available");
-        
-    } else {
-        qDebug() << "Activating standard tab:" << tabName;
-        // For other tab types (welcome, text editors, etc.), no special toolbar needed
-        currentWidget->setVisible(true);
-        currentWidget->raise();
-        statusBar()->showMessage("Document tab active - " + tabName);
+    // Show appropriate toolbar based on widget type
+    if (tabType == DualTabWidget::PDF_TAB) {
+        if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(currentWidget)) {
+            qDebug() << "Activating PDF viewer for tab:" << tabName;
+            
+            // Ensure PDF viewer is properly initialized and visible
+            pdfViewer->setVisible(true);
+            pdfViewer->raise();
+            
+            // Show PDF toolbar
+            pdfViewer->toggleControls(true);
+            
+            // Force layout updates
+            pdfViewer->updateGeometry();
+            pdfViewer->update();
+            
+            statusBar()->showMessage("PDF viewer active - Page navigation and search available");
+        }
+    } else if (tabType == DualTabWidget::PCB_TAB) {
+        if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(currentWidget)) {
+            qDebug() << "Activating PCB viewer for tab:" << tabName;
+            
+            // Ensure PCB viewer is properly initialized and visible
+            pcbViewer->setVisible(true);
+            pcbViewer->raise();
+            
+            // Enable PCB toolbar
+            pcbViewer->setToolbarVisible(true);
+            
+            // Force layout updates
+            pcbViewer->updateGeometry();
+            pcbViewer->update();
+            
+            statusBar()->showMessage("PCB viewer active - Qt toolbar controls available");
+        }
     }
     
     // Force multiple event processing cycles to ensure complete showing
     QApplication::processEvents();
-    QApplication::processEvents(); // Double processing for complex layouts
-    
-    // Force repaint of the entire tab widget to prevent visual artifacts
-    m_tabWidget->repaint();
-    
-    // Debug: Print toolbar states after changes
-    debugToolbarStates();
+    QApplication::processEvents();
     
     qDebug() << "=== Tab Change Complete ===";
 }
+
+// Old onTabChanged method - replaced by onTabChangedByType
+/*
+void MainApplication::onTabChanged(int index)
+{
+    // This method is no longer used - replaced by onTabChangedByType
+    // which handles the dual tab widget system with PDF/PCB type awareness
+}
+*/
 
 void MainApplication::hideAllViewerToolbars()
 {
     qDebug() << "=== Hiding All Viewer Toolbars ===";
     
-    // Iterate through all tabs and aggressively hide viewer toolbars
-    for (int i = 0; i < m_tabWidget->count(); ++i) {
-        QWidget *widget = m_tabWidget->widget(i);
+    // Iterate through all PDF tabs and hide their toolbars
+    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
+        QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PDF_TAB);
         if (!widget) continue;
         
-        QString tabName = m_tabWidget->tabText(i);
+        QString tabName = m_tabWidget->tabText(i, DualTabWidget::PDF_TAB);
         
-        // Hide PDF viewer toolbar with enhanced cleanup
         if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(widget)) {
             qDebug() << "Hiding PDF viewer toolbar for tab:" << tabName;
             
@@ -781,8 +684,16 @@ void MainApplication::hideAllViewerToolbars()
             
             qDebug() << "PDF toolbar hidden for tab:" << i;
         }
-        // Hide PCB viewer toolbar with enhanced cleanup
-        else if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(widget)) {
+    }
+    
+    // Iterate through all PCB tabs and hide their toolbars  
+    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PCB_TAB); ++i) {
+        QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PCB_TAB);
+        if (!widget) continue;
+        
+        QString tabName = m_tabWidget->tabText(i, DualTabWidget::PCB_TAB);
+        
+        if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(widget)) {
             qDebug() << "Hiding PCB viewer toolbar for tab:" << tabName;
             
             // Force hide with multiple methods
@@ -802,30 +713,36 @@ void MainApplication::hideAllViewerToolbars()
     QApplication::processEvents();
     QApplication::processEvents(); // Extra processing for complex layouts
     
-    // Force repaint of tab widget
-    m_tabWidget->repaint();
-    
     qDebug() << "=== All Viewer Toolbars Hidden ===";
 }
 
 void MainApplication::debugToolbarStates()
 {
     qDebug() << "=== Toolbar Debug Info ===";
-    qDebug() << "Current tab index:" << m_tabWidget->currentIndex();
-    qDebug() << "Total tabs:" << m_tabWidget->count();
+    qDebug() << "Current PDF tab index:" << m_tabWidget->currentIndex(DualTabWidget::PDF_TAB);
+    qDebug() << "Current PCB tab index:" << m_tabWidget->currentIndex(DualTabWidget::PCB_TAB);
+    qDebug() << "Total PDF tabs:" << m_tabWidget->count(DualTabWidget::PDF_TAB);
+    qDebug() << "Total PCB tabs:" << m_tabWidget->count(DualTabWidget::PCB_TAB);
     
-    for (int i = 0; i < m_tabWidget->count(); ++i) {
-        QWidget *widget = m_tabWidget->widget(i);
-        QString tabName = m_tabWidget->tabText(i);
+    // Debug PDF tabs
+    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
+        QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PDF_TAB);
+        QString tabName = m_tabWidget->tabText(i, DualTabWidget::PDF_TAB);
         
         if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(widget)) {
             bool toolbarVisible = pdfViewer->isToolbarVisible();
-            qDebug() << "Tab" << i << "(" << tabName << "): PDF Viewer, toolbar visible:" << toolbarVisible;
-        } else if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(widget)) {
+            qDebug() << "PDF Tab" << i << "(" << tabName << "): toolbar visible:" << toolbarVisible;
+        }
+    }
+    
+    // Debug PCB tabs
+    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PCB_TAB); ++i) {
+        QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PCB_TAB);
+        QString tabName = m_tabWidget->tabText(i, DualTabWidget::PCB_TAB);
+        
+        if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(widget)) {
             bool toolbarVisible = pcbViewer->isToolbarVisible();
-            qDebug() << "Tab" << i << "(" << tabName << "): PCB Viewer, toolbar visible:" << toolbarVisible;
-        } else {
-            qDebug() << "Tab" << i << "(" << tabName << "): Other widget type";
+            qDebug() << "PCB Tab" << i << "(" << tabName << "): toolbar visible:" << toolbarVisible;
         }
     }
     qDebug() << "=========================";
@@ -835,9 +752,18 @@ void MainApplication::forceToolbarIsolation()
 {
     qDebug() << "=== Force Toolbar Isolation ===";
     
-    // Step 1: Hide ALL widgets completely
-    for (int i = 0; i < m_tabWidget->count(); ++i) {
-        QWidget *widget = m_tabWidget->widget(i);
+    // Step 1: Hide ALL widgets completely from both tab rows
+    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
+        QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PDF_TAB);
+        if (widget) {
+            widget->hide();
+            widget->setEnabled(false);
+            widget->clearFocus();
+        }
+    }
+    
+    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PCB_TAB); ++i) {
+        QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PCB_TAB);
         if (widget) {
             widget->hide();
             widget->setEnabled(false);
@@ -857,15 +783,30 @@ void MainApplication::forceToolbarIsolation()
     QApplication::processEvents();
     QApplication::processEvents();
     
-    // Step 5: Now show only the current tab
-    int currentIndex = m_tabWidget->currentIndex();
-    if (currentIndex >= 0 && currentIndex < m_tabWidget->count()) {
-        QWidget *currentWidget = m_tabWidget->widget(currentIndex);
-        if (currentWidget) {
-            currentWidget->show();
-            currentWidget->setEnabled(true);
-            currentWidget->raise();
-            currentWidget->activateWindow();
+    // Step 5: Show the currently active widget based on which tab row is active
+    DualTabWidget::TabType activeType = m_tabWidget->getCurrentTabType();
+    
+    if (activeType == DualTabWidget::PDF_TAB) {
+        int currentIndex = m_tabWidget->currentIndex(DualTabWidget::PDF_TAB);
+        if (currentIndex >= 0 && currentIndex < m_tabWidget->count(DualTabWidget::PDF_TAB)) {
+            QWidget *currentWidget = m_tabWidget->widget(currentIndex, DualTabWidget::PDF_TAB);
+            if (currentWidget) {
+                currentWidget->show();
+                currentWidget->setEnabled(true);
+                currentWidget->raise();
+                currentWidget->activateWindow();
+            }
+        }
+    } else if (activeType == DualTabWidget::PCB_TAB) {
+        int currentIndex = m_tabWidget->currentIndex(DualTabWidget::PCB_TAB);
+        if (currentIndex >= 0 && currentIndex < m_tabWidget->count(DualTabWidget::PCB_TAB)) {
+            QWidget *currentWidget = m_tabWidget->widget(currentIndex, DualTabWidget::PCB_TAB);
+            if (currentWidget) {
+                currentWidget->show();
+                currentWidget->setEnabled(true);
+                currentWidget->raise();
+                currentWidget->activateWindow();
+            }
         }
     }
     
@@ -936,59 +877,9 @@ void MainApplication::setupContentArea()
 
 void MainApplication::addWelcomeTab()
 {
-    // Create welcome content
-    QWidget *welcomeWidget = new QWidget();
-    QVBoxLayout *layout = new QVBoxLayout(welcomeWidget);
-    
-    // Welcome message
-    QLabel *welcomeLabel = new QLabel(QString("Welcome to Way2Repair, %1!").arg(m_userSession.fullName));
-    welcomeLabel->setStyleSheet(
-        "QLabel {"
-        "    font-size: 24px;"
-        "    font-weight: bold;"
-        "    color: #2c3e50;"
-        "    padding: 40px;"
-        "    font-family: 'Segoe UI', Arial, sans-serif;"
-        "}"
-    );
-    welcomeLabel->setAlignment(Qt::AlignCenter);
-    
-    // Instructions
-    QLabel *instructionLabel = new QLabel(
-        "Desktop File Browser is now active!\n\n"
-        "Features:\n"
-        "• Browse files from your Desktop folder\n"
-        "• Click on files in the tree view to open them in tabs\n"
-        "• Multiple files can be open simultaneously\n"
-        "• Tabs are closable and movable\n"
-        "• Syntax highlighting for code files\n"
-        "• Real-time file tree refresh\n\n"
-        "Instructions:\n"
-        "• Select a file from the tree view on the left\n"
-        "• File content will open in a new tab\n"
-        "• Close tabs using the 'X' button\n"
-        "• Expand/collapse folders in the tree view\n"
-        "• Use toolbar buttons to refresh and manage the tree view\n\n"
-        "Current folder: " + m_rootFolderPath
-    );
-    instructionLabel->setStyleSheet(
-        "QLabel {"
-        "    font-size: 14px;"
-        "    color: #666;"
-        "    padding: 20px;"
-        "    font-family: 'Segoe UI', Arial, sans-serif;"
-        "    line-height: 1.5;"
-        "}"
-    );
-    instructionLabel->setAlignment(Qt::AlignCenter);
-    instructionLabel->setWordWrap(true);
-    
-    layout->addWidget(welcomeLabel);
-    layout->addWidget(instructionLabel);
-    layout->addStretch();
-    
-    // Add welcome tab
-    m_tabWidget->addTab(welcomeWidget, "Welcome");
+    // No welcome tab needed since we only support PDF and PCB files
+    // Users will see empty dual tab widget until they open a supported file
+    statusBar()->showMessage("Ready - Open PDF or PCB files from the tree view");
 }
 
 // ==========================
@@ -1337,9 +1228,14 @@ void MainApplication::onLogoutClicked()
         QMessageBox::No);
     
     if (reply == QMessageBox::Yes) {
-        // Close all tabs first
-        while (m_tabWidget->count() > 0) {
-            m_tabWidget->removeTab(0);
+        // Close all PDF tabs first
+        while (m_tabWidget->count(DualTabWidget::PDF_TAB) > 0) {
+            m_tabWidget->removeTab(0, DualTabWidget::PDF_TAB);
+        }
+        
+        // Close all PCB tabs
+        while (m_tabWidget->count(DualTabWidget::PCB_TAB) > 0) {
+            m_tabWidget->removeTab(0, DualTabWidget::PCB_TAB);
         }
         
         // Emit logout signal
@@ -1363,8 +1259,22 @@ void MainApplication::toggleTreeView()
 
 void MainApplication::toggleFullScreenPDF()
 {
-    // Check if current tab is a PDF viewer
-    QWidget *currentWidget = m_tabWidget->currentWidget();
+    // Check which tab type is currently active and get the current widget
+    DualTabWidget::TabType currentType = m_tabWidget->getCurrentTabType();
+    QWidget *currentWidget = nullptr;
+    
+    if (currentType == DualTabWidget::PDF_TAB) {
+        int currentIndex = m_tabWidget->currentIndex(DualTabWidget::PDF_TAB);
+        if (currentIndex >= 0) {
+            currentWidget = m_tabWidget->widget(currentIndex, DualTabWidget::PDF_TAB);
+        }
+    } else if (currentType == DualTabWidget::PCB_TAB) {
+        int currentIndex = m_tabWidget->currentIndex(DualTabWidget::PCB_TAB);
+        if (currentIndex >= 0) {
+            currentWidget = m_tabWidget->widget(currentIndex, DualTabWidget::PCB_TAB);
+        }
+    }
+    
     PDFViewerWidget *pdfViewer = qobject_cast<PDFViewerWidget*>(currentWidget);
     
     if (pdfViewer) {
@@ -1452,15 +1362,31 @@ void MainApplication::setupKeyboardShortcuts()
     // Tab navigation shortcuts
     QShortcut *nextTabShortcut = new QShortcut(QKeySequence("Ctrl+Tab"), this);
     connect(nextTabShortcut, &QShortcut::activated, this, [this]() {
-        int currentIndex = m_tabWidget->currentIndex();
-        int nextIndex = (currentIndex + 1) % m_tabWidget->count();
-        m_tabWidget->setCurrentIndex(nextIndex);
+        DualTabWidget::TabType currentType = m_tabWidget->getCurrentTabType();
+        
+        if (currentType == DualTabWidget::PDF_TAB && m_tabWidget->count(DualTabWidget::PDF_TAB) > 1) {
+            int currentIndex = m_tabWidget->currentIndex(DualTabWidget::PDF_TAB);
+            int nextIndex = (currentIndex + 1) % m_tabWidget->count(DualTabWidget::PDF_TAB);
+            m_tabWidget->setCurrentIndex(nextIndex, DualTabWidget::PDF_TAB);
+        } else if (currentType == DualTabWidget::PCB_TAB && m_tabWidget->count(DualTabWidget::PCB_TAB) > 1) {
+            int currentIndex = m_tabWidget->currentIndex(DualTabWidget::PCB_TAB);
+            int nextIndex = (currentIndex + 1) % m_tabWidget->count(DualTabWidget::PCB_TAB);
+            m_tabWidget->setCurrentIndex(nextIndex, DualTabWidget::PCB_TAB);
+        }
     });
     
     QShortcut *prevTabShortcut = new QShortcut(QKeySequence("Ctrl+Shift+Tab"), this);
     connect(prevTabShortcut, &QShortcut::activated, this, [this]() {
-        int currentIndex = m_tabWidget->currentIndex();
-        int prevIndex = (currentIndex - 1 + m_tabWidget->count()) % m_tabWidget->count();
-        m_tabWidget->setCurrentIndex(prevIndex);
+        DualTabWidget::TabType currentType = m_tabWidget->getCurrentTabType();
+        
+        if (currentType == DualTabWidget::PDF_TAB && m_tabWidget->count(DualTabWidget::PDF_TAB) > 1) {
+            int currentIndex = m_tabWidget->currentIndex(DualTabWidget::PDF_TAB);
+            int prevIndex = (currentIndex - 1 + m_tabWidget->count(DualTabWidget::PDF_TAB)) % m_tabWidget->count(DualTabWidget::PDF_TAB);
+            m_tabWidget->setCurrentIndex(prevIndex, DualTabWidget::PDF_TAB);
+        } else if (currentType == DualTabWidget::PCB_TAB && m_tabWidget->count(DualTabWidget::PCB_TAB) > 1) {
+            int currentIndex = m_tabWidget->currentIndex(DualTabWidget::PCB_TAB);
+            int prevIndex = (currentIndex - 1 + m_tabWidget->count(DualTabWidget::PCB_TAB)) % m_tabWidget->count(DualTabWidget::PCB_TAB);
+            m_tabWidget->setCurrentIndex(prevIndex, DualTabWidget::PCB_TAB);
+        }
     });
 }

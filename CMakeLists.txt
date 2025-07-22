@@ -96,6 +96,7 @@ set(CORE_SOURCES
 set(UI_SOURCES
     ${SRC_DIR}/ui/mainwindow.cpp
     ${SRC_DIR}/ui/mainapplication.cpp
+    ${SRC_DIR}/ui/dualtabwidget.cpp
     ${SRC_DIR}/viewers/pdf/ui/pdfviewerwidget.cpp
     ${SRC_DIR}/viewers/pdf/core/PDFViewerEmbedder.cpp
     ${SRC_DIR}/viewers/pdf/ui/QtPDFViewerWidget.cpp
@@ -142,6 +143,7 @@ set(NETWORK_SOURCES
 set(UI_HEADERS
     ${INCLUDE_DIR}/ui/mainwindow.h
     ${INCLUDE_DIR}/ui/mainapplication.h
+    ${INCLUDE_DIR}/ui/dualtabwidget.h
     ${INCLUDE_DIR}/viewers/pdf/pdfviewerwidget.h
     ${INCLUDE_DIR}/viewers/pdf/PDFViewerEmbedder.h
     ${INCLUDE_DIR}/viewers/pdf/QtPDFViewerWidget.h

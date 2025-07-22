@@ -27,6 +27,8 @@
 class PDFViewerWidget;
 // Forward declaration for PCB viewer
 class PCBViewerWidget;
+// Forward declaration for dual tab widget
+class DualTabWidget;
 // Server-side includes (commented out for local file loading)
 //#include <QNetworkAccessManager>
 //#include <QNetworkRequest>
@@ -65,8 +67,9 @@ private slots:
     void onTreeItemCollapsed(QTreeWidgetItem *item);
     void onAboutClicked();
     void onLogoutClicked();
-    void onTabCloseRequested(int index);
-    void onTabChanged(int index);
+    // Dual tab widget slots
+    void onTabCloseRequestedByType(int index, int type);
+    void onTabChangedByType(int index, int type);
     // Server-side slots (commented out for local file loading)
     //void onHttpRequestFinished(QNetworkReply *reply);
     //void onNetworkError(QNetworkReply::NetworkError error);
@@ -88,7 +91,7 @@ private:
     QWidget *m_centralWidget;
     QSplitter *m_splitter;
     QTreeWidget *m_treeWidget;
-    QTabWidget *m_tabWidget;  // Changed from QWidget to QTabWidget
+    DualTabWidget *m_tabWidget;  // Changed from QTabWidget to DualTabWidget
     QStatusBar *m_statusBar;
     
     // Tree view state
