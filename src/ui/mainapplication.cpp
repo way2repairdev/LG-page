@@ -28,7 +28,6 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
 {
     setupUI();
     setupMenuBar();
-    setupToolBar();
     setupStatusBar();
     updateUserInfo();
     
@@ -159,66 +158,6 @@ void MainApplication::setupMenuBar()
     // Help menu
     QMenu *helpMenu = menuBar->addMenu("&Help");
     helpMenu->addAction("&About", this, &MainApplication::onAboutClicked);
-}
-
-void MainApplication::setupToolBar()
-{
-    m_toolbar = addToolBar("Main Toolbar");
-    m_toolbar->setStyleSheet(
-        "QToolBar {"
-        "    background-color: #f8f9ff;"
-        "    border: 1px solid #d4e1f5;"
-        "    spacing: 3px;"
-        "}"
-        "QToolButton {"
-        "    background-color: transparent;"
-        "    border: 1px solid transparent;"
-        "    border-radius: 4px;"
-        "    padding: 6px;"
-        "    margin: 2px;"
-        "    color: #2c3e50;"
-        "    font-family: 'Segoe UI', Arial, sans-serif;"
-        "}"
-        "QToolButton:hover {"
-        "    background-color: #e8f0fe;"
-        "    border-color: #4285f4;"
-        "}"
-        "QToolButton:pressed {"
-        "    background-color: #4285f4;"
-        "    color: white;"
-        "}"
-    );
-    
-    // Add toolbar actions
-    QAction *refreshAction = m_toolbar->addAction("🔄 Refresh");
-    refreshAction->setToolTip("Refresh file tree");
-    connect(refreshAction, &QAction::triggered, this, &MainApplication::loadLocalFiles);
-    
-    QAction *expandAction = m_toolbar->addAction("⊞ Expand All");
-    expandAction->setToolTip("Expand all folders");
-    connect(expandAction, &QAction::triggered, this, [this]() { m_treeWidget->expandAll(); });
-    
-    QAction *collapseAction = m_toolbar->addAction("⊟ Collapse All");
-    collapseAction->setToolTip("Collapse all folders");
-    connect(collapseAction, &QAction::triggered, this, [this]() { m_treeWidget->collapseAll(); });
-    
-    m_toolbar->addSeparator();
-    
-    QAction *toggleTreeAction = m_toolbar->addAction("📁 Toggle Tree");
-    toggleTreeAction->setToolTip("Toggle tree view (Ctrl+T)");
-    toggleTreeAction->setCheckable(true);
-    toggleTreeAction->setChecked(true);
-    connect(toggleTreeAction, &QAction::triggered, this, &MainApplication::toggleTreeView);
-    
-    QAction *fullScreenPDFAction = m_toolbar->addAction("📄 PDF Full Screen");
-    fullScreenPDFAction->setToolTip("Full screen PDF view (F11)");
-    connect(fullScreenPDFAction, &QAction::triggered, this, &MainApplication::toggleFullScreenPDF);
-    
-    m_toolbar->addSeparator();
-    
-    QAction *logoutAction = m_toolbar->addAction("🚪 Logout");
-    logoutAction->setToolTip("Logout from application");
-    connect(logoutAction, &QAction::triggered, this, &MainApplication::onLogoutClicked);
 }
 
 void MainApplication::setupStatusBar()
@@ -1484,15 +1423,6 @@ void MainApplication::setTreeViewVisible(bool visible)
                     }
                 }
             }
-            break;
-        }
-    }
-    
-    // Update toolbar action state
-    QList<QAction*> toolbarActions = m_toolbar->actions();
-    for (QAction *action : toolbarActions) {
-        if (action->text().contains("Toggle Tree")) {
-            action->setChecked(visible);
             break;
         }
     }

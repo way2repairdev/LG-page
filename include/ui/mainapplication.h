@@ -89,7 +89,6 @@ private:
     QSplitter *m_splitter;
     QTreeWidget *m_treeWidget;
     QTabWidget *m_tabWidget;  // Changed from QWidget to QTabWidget
-    QToolBar *m_toolbar;
     QStatusBar *m_statusBar;
     
     // Tree view state
@@ -98,7 +97,6 @@ private:
     
     void setupUI();
     void setupMenuBar();
-    void setupToolBar();
     void setupStatusBar();
     void setupKeyboardShortcuts();
     void setupTreeView();
