@@ -6,6 +6,7 @@
 
 // Forward declarations
 struct GLFWwindow;
+struct ImGuiContext;
 class PCBRenderer;
 class BRDFileBase;
 struct BRDPin;
@@ -89,20 +90,24 @@ public:
     void hide();
     void setVisible(bool visible);
     bool isVisible() const { return m_visible; }
+    
+    // ImGui UI control
+    void setImGuiUIEnabled(bool enabled) { m_imguiUIEnabled = enabled; }
+    bool isImGuiUIEnabled() const { return m_imguiUIEnabled; }
 
     // Fallback mode (Qt-only rendering when GLFW fails)
     bool isUsingFallback() const { return m_usingFallback; }
     void enableFallbackMode();
-
-    // ImGui UI control
-    void setImGuiUIEnabled(bool enabled);
-    bool isImGuiUIEnabled() const { return m_imguiUIEnabled; }
 
 private:
     // GLFW window management
     GLFWwindow* m_glfwWindow;
     void* m_parentHwnd;
     void* m_childHwnd;
+    
+    // ImGui context for this instance (prevents conflicts between tabs)
+    ImGuiContext* m_imguiContext;
+    bool m_imguiUIEnabled;
 
     // Core PCB viewer components
     std::unique_ptr<PCBRenderer> m_renderer;
@@ -113,7 +118,6 @@ private:
     bool m_pdfLoaded; // Keep same name for compatibility
     bool m_usingFallback;
     bool m_visible;
-    bool m_imguiUIEnabled; // Control ImGui UI rendering
     std::string m_currentFilePath;
 
     // Window dimensions

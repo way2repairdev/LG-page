@@ -25,18 +25,20 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 
 PCBViewerEmbedder::PCBViewerEmbedder()
     : m_glfwWindow(nullptr)
     , m_parentHwnd(nullptr)
     , m_childHwnd(nullptr)
+    , m_imguiContext(nullptr)
+    , m_imguiUIEnabled(false)
     , m_renderer(std::make_unique<PCBRenderer>())
     , m_pcbData(nullptr)
     , m_initialized(false)
     , m_pdfLoaded(false) // Keep same name for compatibility
     , m_usingFallback(false)
     , m_visible(false)
-    , m_imguiUIEnabled(false) // Disable ImGui UI by default - use Qt toolbar only
     , m_currentFilePath("")
     , m_windowWidth(800)
     , m_windowHeight(600)
@@ -101,63 +103,54 @@ void PCBViewerEmbedder::cleanup()
 
     handleStatus("Cleaning up PCB viewer embedder...");
 
-    try {
-        // Clear PCB data first to free memory
-        if (m_pcbData) {
-            handleStatus("Clearing PCB data...");
-            m_pcbData.reset();
-        }
-
-        // Cleanup renderer before ImGui
-        if (m_renderer) {
-            handleStatus("Cleaning up PCB renderer...");
-            m_renderer->SetPCBData(nullptr); // Clear data reference
-            m_renderer->Cleanup();
-        }
-
-        // Cleanup ImGui - always initialized for GLFW compatibility
-        if (m_glfwWindow) {
-            handleStatus("Making GLFW context current for cleanup...");
-            glfwMakeContextCurrent(m_glfwWindow);
-            
-            handleStatus("Shutting down ImGui...");
-            ImGui_ImplOpenGL3_Shutdown();
-            ImGui_ImplGlfw_Shutdown();
-            ImGui::DestroyContext();
-        }
-
-        // Cleanup GLFW window
-        if (m_glfwWindow) {
-            handleStatus("Destroying GLFW window...");
-            glfwDestroyWindow(m_glfwWindow);
-            m_glfwWindow = nullptr;
-        }
-
-        // Reset all state
-        m_initialized = false;
-        m_pdfLoaded = false;
-        m_currentFilePath.clear();
-        m_parentHwnd = nullptr;
-        m_childHwnd = nullptr;
+    // Cleanup ImGui with proper context isolation
+    if (m_glfwWindow && m_imguiContext) {
+        glfwMakeContextCurrent(m_glfwWindow);
         
-        handleStatus("PCB viewer embedder cleaned up successfully");
+        // Set context before cleanup
+        ImGui::SetCurrentContext(m_imguiContext);
+        
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        
+        // Destroy our specific context
+        ImGui::DestroyContext(m_imguiContext);
+        m_imguiContext = nullptr;
     }
-    catch (const std::exception& e) {
-        handleError("Exception during cleanup: " + std::string(e.what()));
-        // Force reset even if cleanup fails
-        m_initialized = false;
-        m_pdfLoaded = false;
-        m_pcbData.reset();
+
+    // Cleanup renderer
+    if (m_renderer) {
+        m_renderer->Cleanup();
+    }
+
+    // Cleanup GLFW window (don't terminate GLFW as other tabs may be using it)
+    if (m_glfwWindow) {
+        glfwDestroyWindow(m_glfwWindow);
         m_glfwWindow = nullptr;
     }
-    catch (...) {
-        handleError("Unknown exception during cleanup");
-        // Force reset even if cleanup fails
-        m_initialized = false;
-        m_pdfLoaded = false;
-        m_pcbData.reset();
-        m_glfwWindow = nullptr;
+
+    // Manage GLFW termination with static counter
+    static int s_instanceCount = 0;
+    static std::mutex s_glfwMutex;
+    
+    {
+        std::lock_guard<std::mutex> lock(s_glfwMutex);
+        s_instanceCount--;
+        
+        // Only terminate GLFW when last instance is cleaned up
+        if (s_instanceCount <= 0) {
+            glfwTerminate();
+            handleStatus("GLFW terminated (last PCB instance)");
+        } else {
+            handleStatus("GLFW kept alive (other PCB instances active)");
+        }
     }
+
+    m_initialized = false;
+    m_pdfLoaded = false;
+    m_pcbData.reset();
+    
+    handleStatus("PCB viewer embedder cleaned up");
 }
 
 bool PCBViewerEmbedder::loadPCB(const std::string& filePath)
@@ -170,54 +163,18 @@ bool PCBViewerEmbedder::loadPCB(const std::string& filePath)
     }
 
     try {
-        // Clear any existing PCB data to free memory before loading new file
-        if (m_pcbData) {
-            handleStatus("Clearing existing PCB data before loading new file");
-            m_pcbData.reset();
-            
-            // Force garbage collection
-            if (m_renderer) {
-                m_renderer->SetPCBData(nullptr);
-            }
-        }
-
-        // Check file extension - matching standalone version exactly
-        std::string ext = Utils::ToLower(Utils::GetFileExtension(filePath));
-        if (ext != "xzz" && ext != "pcb" && ext != "xzzpcb") {
-            handleError("Unsupported file format: " + ext);
-            return false;
-        }
-
-        handleStatus("Loading XZZPCB file format: " + ext);
-        
-        // Load PCB file using XZZPCBFile - matching standalone version
+        // Load PCB file using XZZPCBFile
         auto pcbFile = XZZPCBFile::LoadFromFile(filePath);
         if (!pcbFile) {
-            handleError("Failed to load XZZPCB file: " + filePath);
+            handleError("Failed to load PCB file: " + filePath);
             return false;
         }
 
-        // Convert to shared_ptr<BRDFileBase> - matching standalone version
+        // Convert to shared_ptr<BRDFileBase>
         m_pcbData = std::shared_ptr<BRDFileBase>(pcbFile.release());
-        
-        // Log data size for debugging large files
-        if (m_pcbData && m_pcbData->IsValid()) {
-            handleStatus("PCB data loaded: " + std::to_string(m_pcbData->parts.size()) + 
-                        " parts, " + std::to_string(m_pcbData->pins.size()) + " pins");
-            
-            // Check for very large PCB files that might cause memory issues
-            if (m_pcbData->pins.size() > 50000 || m_pcbData->parts.size() > 10000) {
-                handleStatus("Warning: Large PCB file detected - using memory optimization");
-            }
-        }
         
         if (m_renderer) {
             m_renderer->SetPCBData(m_pcbData);
-            
-            // Set initial camera position - matching standalone version exactly
-            m_renderer->SetCamera(1500, 900, 0.5f); // Center around middle of PCB coordinates
-            
-            // Then zoom to fit
             m_renderer->ZoomToFit(m_windowWidth, m_windowHeight);
         }
 
@@ -227,31 +184,8 @@ bool PCBViewerEmbedder::loadPCB(const std::string& filePath)
         handleStatus("PCB file loaded successfully: " + filePath);
         return true;
     }
-    catch (const std::bad_alloc& e) {
-        handleError("Memory allocation failed while loading PCB (file too large): " + std::string(e.what()));
-        // Clean up on memory failure
-        m_pcbData.reset();
-        if (m_renderer) {
-            m_renderer->SetPCBData(nullptr);
-        }
-        return false;
-    }
     catch (const std::exception& e) {
         handleError("Exception while loading PCB: " + std::string(e.what()));
-        // Clean up on any failure
-        m_pcbData.reset();
-        if (m_renderer) {
-            m_renderer->SetPCBData(nullptr);
-        }
-        return false;
-    }
-    catch (...) {
-        handleError("Unknown exception while loading PCB file: " + filePath);
-        // Clean up on unknown failure
-        m_pcbData.reset();
-        if (m_renderer) {
-            m_renderer->SetPCBData(nullptr);
-        }
         return false;
     }
 }
@@ -276,7 +210,7 @@ void PCBViewerEmbedder::closePCB()
 
 void PCBViewerEmbedder::render()
 {
-    if (!m_initialized || m_usingFallback || !m_glfwWindow) {
+    if (!m_initialized || m_usingFallback || !m_glfwWindow || !m_imguiContext) {
         return;
     }
 
@@ -284,83 +218,37 @@ void PCBViewerEmbedder::render()
         return;
     }
 
-    try {
-        // Make the context current first - essential for OpenGL rendering
-        glfwMakeContextCurrent(m_glfwWindow);
+    // Poll GLFW events first - CRITICAL: This was missing!
+    glfwPollEvents();
 
-        // Check for OpenGL errors before rendering
-        GLenum error = glGetError();
-        if (error != GL_NO_ERROR) {
-            handleError("OpenGL error detected before rendering: " + std::to_string(error));
-            return;
-        }
+    // Make the context current - essential for OpenGL rendering
+    glfwMakeContextCurrent(m_glfwWindow);
+    
+    // Set ImGui context for this tab (prevents cross-tab conflicts)
+    ImGui::SetCurrentContext(m_imguiContext);
 
-        // Poll GLFW events - but limit frequency for large datasets
-        static int eventPollCounter = 0;
-        eventPollCounter++;
-        if (eventPollCounter % 3 == 0) { // Poll events every 3rd frame for better performance with large PCBs
-            glfwPollEvents();
-        }
+    // Clear the framebuffer
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // Clear the framebuffer
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // Start ImGui frame - matching main.cpp sequence
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
 
-        // Always start ImGui frame for GLFW compatibility
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        // Render the PCB using PCBRenderer - matching main.cpp with error handling
-        if (m_renderer) {
-            try {
-                m_renderer->Render(m_windowWidth, m_windowHeight);
-            }
-            catch (const std::bad_alloc& e) {
-                handleError("Memory allocation failed during rendering (PCB too large): " + std::string(e.what()));
-                // Try to recover by clearing the PCB data
-                m_pcbData.reset();
-                m_renderer->SetPCBData(nullptr);
-                enableFallbackMode();
-                return;
-            }
-            catch (const std::exception& e) {
-                handleError("Exception during PCB rendering: " + std::string(e.what()));
-                return;
-            }
-        }
-
-        // Display hover information only if ImGui UI is enabled
-        if (m_imguiUIEnabled) {
-            try {
-                displayPinHoverInfo();
-            }
-            catch (const std::exception& e) {
-                handleError("Exception during pin hover info display: " + std::string(e.what()));
-                // Continue rendering even if hover info fails
-            }
-        }
-
-        // Always render ImGui (even if no UI elements) for GLFW compatibility
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        // Swap buffers - matching main.cpp
-        glfwSwapBuffers(m_glfwWindow);
-
-        // Check for OpenGL errors after rendering
-        error = glGetError();
-        if (error != GL_NO_ERROR) {
-            handleError("OpenGL error detected after rendering: " + std::to_string(error));
-        }
+    // Render the PCB using PCBRenderer - matching main.cpp
+    if (m_renderer) {
+        m_renderer->Render(m_windowWidth, m_windowHeight);
     }
-    catch (const std::exception& e) {
-        handleError("Critical exception in render loop: " + std::string(e.what()));
-        enableFallbackMode();
-    }
-    catch (...) {
-        handleError("Unknown critical exception in render loop");
-        enableFallbackMode();
-    }
+
+    // Display hover information like in main.cpp - this was missing!
+    displayPinHoverInfo();
+
+    // Render ImGui - matching main.cpp sequence
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    // Swap buffers - matching main.cpp
+    glfwSwapBuffers(m_glfwWindow);
 }
 
 void PCBViewerEmbedder::resize(int width, int height)
@@ -486,7 +374,6 @@ void PCBViewerEmbedder::handleMouseClick(int x, int y, int button)
 
 void PCBViewerEmbedder::handleMouseRelease(int x, int y, int button)
 {
-    (void)x; (void)y; // Suppress unused parameter warnings
     if (button == 1) { // Right click release - stop panning
         m_mouseDragging = false;
     }
@@ -494,7 +381,6 @@ void PCBViewerEmbedder::handleMouseRelease(int x, int y, int button)
 
 void PCBViewerEmbedder::handleMouseScroll(double xOffset, double yOffset)
 {
-    (void)xOffset; // Suppress unused parameter warning
     if (m_renderer) {
         // Get real-time mouse position for zoom center - this is important for zoom-to-cursor functionality
         double mouseX, mouseY;
@@ -518,7 +404,6 @@ void PCBViewerEmbedder::handleMouseScroll(double xOffset, double yOffset)
 
 void PCBViewerEmbedder::handleKeyPress(int key, int scancode, int action, int mods)
 {
-    (void)scancode; (void)mods; // Suppress unused parameter warnings
     // Handle keyboard shortcuts
     if (action == GLFW_PRESS || action == GLFW_REPEAT) {
         switch (key) {
@@ -637,151 +522,121 @@ void PCBViewerEmbedder::setCameraPosition(float x, float y)
 
 bool PCBViewerEmbedder::initializeGLFW(void* parentHandle, int width, int height)
 {
-    try {
-        // Initialize GLFW - following the pattern from Window.cpp
-        if (!glfwInit()) {
-            handleError("Failed to initialize GLFW");
-            return false;
-        }
-
-        // Set GLFW window hints - matching Window.cpp configuration with optimizations for large PCBs
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // Start hidden
-        glfwWindowHint(GLFW_DECORATED, GLFW_FALSE); // No window decorations
+    // Use static initialization counter to ensure GLFW is only initialized once globally
+    // This prevents crashes when opening multiple PCB tabs
+    static bool s_glfwInitialized = false;
+    static int s_instanceCount = 0;
+    static std::mutex s_glfwMutex;
+    
+    {
+        std::lock_guard<std::mutex> lock(s_glfwMutex);
         
-        // Memory optimization hints for large PCB files
-        glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
-        glfwWindowHint(GLFW_SAMPLES, 0); // Disable multisampling to save memory
+        // Only initialize GLFW on first instance
+        if (!s_glfwInitialized) {
+            if (!glfwInit()) {
+                handleError("Failed to initialize GLFW globally");
+                return false;
+            }
+            s_glfwInitialized = true;
+            handleStatus("GLFW initialized globally (first PCB instance)");
+        } else {
+            handleStatus("Using existing GLFW initialization (instance " + std::to_string(s_instanceCount + 1) + ")");
+        }
+        s_instanceCount++;
+    }
+
+    // Set GLFW window hints - matching Window.cpp configuration
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // Start hidden
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE); // No window decorations
 
 #ifdef __APPLE__
-        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
 #ifdef _WIN32
-        // Create window as child of Qt widget
-        glfwWindowHint(GLFW_FOCUSED, GLFW_FALSE);
+    // Create window as child of Qt widget
+    glfwWindowHint(GLFW_FOCUSED, GLFW_FALSE);
 #endif
 
-        // Create GLFW window - similar to Window.cpp but for embedding
-        m_glfwWindow = glfwCreateWindow(width, height, "PCB Viewer Embedded", nullptr, nullptr);
-        if (!m_glfwWindow) {
-            handleError("Failed to create GLFW window");
-            glfwTerminate();
-            return false;
-        }
+    // Create GLFW window - similar to Window.cpp but for embedding
+    m_glfwWindow = glfwCreateWindow(width, height, "PCB Viewer Embedded", nullptr, nullptr);
+    if (!m_glfwWindow) {
+        handleError("Failed to create GLFW window");
+        glfwTerminate();
+        return false;
+    }
 
-        // Make the window's context current - essential step from Window.cpp
-        glfwMakeContextCurrent(m_glfwWindow);
-        
-        // Enable V-sync for better performance (from Window.cpp) - but disable for large files
-        glfwSwapInterval(1);
+    // Make the window's context current - essential step from Window.cpp
+    glfwMakeContextCurrent(m_glfwWindow);
+    
+    // Enable V-sync for better performance (from Window.cpp)
+    glfwSwapInterval(1);
 
-        // Initialize GLEW - exactly like Window.cpp
-        if (glewInit() != GLEW_OK) {
-            handleError("Failed to initialize GLEW");
-            glfwDestroyWindow(m_glfwWindow);
-            glfwTerminate();
-            return false;
-        }
+    // Initialize GLEW - exactly like Window.cpp
+    if (glewInit() != GLEW_OK) {
+        handleError("Failed to initialize GLEW");
+        return false;
+    }
 
-        // Set viewport - like Window.cpp
-        glViewport(0, 0, width, height);
+    // Set viewport - like Window.cpp
+    glViewport(0, 0, width, height);
 
-        // Enable depth testing and blending - matching Window.cpp OpenGL setup
-        glEnable(GL_DEPTH_TEST);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // Enable depth testing and blending - matching Window.cpp OpenGL setup
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        // Memory optimization for large PCBs
-        glHint(GL_GENERATE_MIPMAP_HINT, GL_FASTEST);
-        glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
-        
-        // Check OpenGL limits for debugging large file issues
-        GLint maxTextureSize, maxVertexAttribs, maxUniformComponents;
-        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
-        glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &maxVertexAttribs);
-        glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS, &maxUniformComponents);
-        
-        handleStatus("OpenGL limits - Max texture: " + std::to_string(maxTextureSize) + 
-                    ", Max vertex attribs: " + std::to_string(maxVertexAttribs) +
-                    ", Max uniform components: " + std::to_string(maxUniformComponents));
+    // Initialize ImGui with proper context isolation to prevent tab conflicts
+    // Each PCB tab gets its own ImGui context to prevent crashes
+    IMGUI_CHECKVERSION();
+    m_imguiContext = ImGui::CreateContext();
+    ImGui::SetCurrentContext(m_imguiContext);
+    
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-        // Always initialize ImGui for GLFW event handling, but control UI rendering separately
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-        ImGuiIO& io = ImGui::GetIO();
-        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    ImGui::StyleColorsDark();
 
-        ImGui::StyleColorsDark();
+    if (!ImGui_ImplGlfw_InitForOpenGL(m_glfwWindow, true)) {
+        handleError("Failed to initialize ImGui GLFW backend");
+        return false;
+    }
 
-        if (!ImGui_ImplGlfw_InitForOpenGL(m_glfwWindow, true)) {
-            handleError("Failed to initialize ImGui GLFW backend");
-            glfwDestroyWindow(m_glfwWindow);
-            glfwTerminate();
-            return false;
-        }
-
-        if (!ImGui_ImplOpenGL3_Init("#version 330")) {
-            handleError("Failed to initialize ImGui OpenGL3 backend");
-            glfwDestroyWindow(m_glfwWindow);
-            glfwTerminate();
-            return false;
-        }
-        
-        if (m_imguiUIEnabled) {
-            handleStatus("ImGui UI enabled (will show pin hover/selection overlays)");
-        } else {
-            handleStatus("ImGui UI disabled (using Qt toolbar only) - ImGui initialized for GLFW compatibility");
-        }
+    if (!ImGui_ImplOpenGL3_Init("#version 330")) {
+        handleError("Failed to initialize ImGui OpenGL3 backend");
+        return false;
+    }
 
 #ifdef _WIN32
-        // Embed in parent window if provided
-        if (parentHandle) {
-            HWND parentHwnd = static_cast<HWND>(parentHandle);
-            HWND childHwnd = glfwGetWin32Window(m_glfwWindow);
+    // Embed in parent window if provided
+    if (parentHandle) {
+        HWND parentHwnd = static_cast<HWND>(parentHandle);
+        HWND childHwnd = glfwGetWin32Window(m_glfwWindow);
+        
+        if (childHwnd && parentHwnd) {
+            SetParent(childHwnd, parentHwnd);
+            SetWindowLong(childHwnd, GWL_STYLE, WS_CHILD | WS_VISIBLE);
+            SetWindowPos(childHwnd, nullptr, 0, 0, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+            m_childHwnd = childHwnd;
+            m_parentHwnd = parentHwnd;
             
-            if (childHwnd && parentHwnd) {
-                SetParent(childHwnd, parentHwnd);
-                SetWindowLong(childHwnd, GWL_STYLE, WS_CHILD | WS_VISIBLE);
-                SetWindowPos(childHwnd, nullptr, 0, 0, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
-                m_childHwnd = childHwnd;
-                m_parentHwnd = parentHwnd;
-                
-                // Show the embedded window
-                ShowWindow(childHwnd, SW_SHOW);
-                UpdateWindow(childHwnd);
-            }
-        } else {
-            // If no parent, just show the window normally
-            glfwShowWindow(m_glfwWindow);
+            // Show the embedded window
+            ShowWindow(childHwnd, SW_SHOW);
+            UpdateWindow(childHwnd);
         }
-#else
-        // Non-Windows platforms
+    } else {
+        // If no parent, just show the window normally
         glfwShowWindow(m_glfwWindow);
+    }
+#else
+    // Non-Windows platforms
+    glfwShowWindow(m_glfwWindow);
 #endif
 
-        return true;
-    }
-    catch (const std::exception& e) {
-        handleError("Exception during GLFW initialization: " + std::string(e.what()));
-        if (m_glfwWindow) {
-            glfwDestroyWindow(m_glfwWindow);
-            m_glfwWindow = nullptr;
-        }
-        glfwTerminate();
-        return false;
-    }
-    catch (...) {
-        handleError("Unknown exception during GLFW initialization");
-        if (m_glfwWindow) {
-            glfwDestroyWindow(m_glfwWindow);
-            m_glfwWindow = nullptr;
-        }
-        glfwTerminate();
-        return false;
-    }
+    return true;
 }
 
 bool PCBViewerEmbedder::initializeRenderer()
@@ -797,8 +652,14 @@ bool PCBViewerEmbedder::initializeRenderer()
         return false;
     }
 
-    // Apply ImGui UI setting to renderer after initialization
-    m_renderer->GetSettings().enable_imgui_overlay = m_imguiUIEnabled;
+    // Apply ImGui UI setting and memory optimizations to renderer after initialization
+    auto& settings = m_renderer->GetSettings();
+    
+    // Memory optimization - reduce alpha levels to save on blending operations
+    settings.part_alpha = 0.8f;   // Slightly more transparent
+    settings.pin_alpha = 0.9f;    // Reduce transparency computations
+    settings.outline_alpha = 0.9f;
+    
     handleStatus(std::string("PCB renderer initialized successfully with ImGui overlay ") + 
                 (m_imguiUIEnabled ? "enabled" : "disabled"));
     
@@ -867,7 +728,7 @@ bool PCBViewerEmbedder::createSamplePCB()
             pin.pos = {2000 + i * 250, 2000};
             pin.part = 0;
             pin.name = std::to_string(i + 1);  // Pin number
-            pin.net = (static_cast<size_t>(i) < netNames.size()) ? netNames[i] : "NET_" + std::to_string(i);
+            pin.net = (i < netNames.size()) ? netNames[i] : "NET_" + std::to_string(i);
             pin.snum = std::to_string(i + 1);
             pin.radius = 50;
             samplePcb->pins.push_back(pin);
@@ -878,7 +739,7 @@ bool PCBViewerEmbedder::createSamplePCB()
             pin.pos = {6000 + i * 300, 4000};
             pin.part = 1;
             pin.name = std::to_string(i + 1);  // Pin number
-            pin.net = (static_cast<size_t>(i) < netNames2.size()) ? netNames2[i] : "NET_" + std::to_string(i + 8);
+            pin.net = (i < netNames2.size()) ? netNames2[i] : "NET_" + std::to_string(i + 8);
             pin.snum = std::to_string(i + 1);
             pin.radius = 60;
             samplePcb->pins.push_back(pin);
@@ -939,7 +800,6 @@ void PCBViewerEmbedder::onZoomChanged()
 
 void PCBViewerEmbedder::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 {
-    (void)mods; // Suppress unused parameter warning
     PCBViewerEmbedder* embedder = static_cast<PCBViewerEmbedder*>(glfwGetWindowUserPointer(window));
     if (embedder) {
         double xpos, ypos;
@@ -999,7 +859,6 @@ void PCBViewerEmbedder::clearHighlights()
 
 void PCBViewerEmbedder::showLayer(const std::string& layerName, bool visible)
 {
-    (void)visible; // Suppress unused parameter warning
     handleStatus("Layer control not yet implemented: " + layerName);
 }
 
@@ -1034,36 +893,8 @@ std::vector<std::string> PCBViewerEmbedder::getComponentList() const
     return components;
 }
 
-void PCBViewerEmbedder::setImGuiUIEnabled(bool enabled)
-{
-    m_imguiUIEnabled = enabled;
-    handleStatus("setImGuiUIEnabled called with: " + std::string(enabled ? "true" : "false"));
-    
-    // Also control PCBRenderer's ImGui overlay
-    if (m_renderer) {
-        m_renderer->GetSettings().enable_imgui_overlay = enabled;
-        handleStatus("PCBRenderer overlay setting updated to: " + std::string(enabled ? "true" : "false"));
-    } else {
-        handleStatus("PCBRenderer not available yet - setting will be applied after initialization");
-    }
-    
-    LOG_INFO("ImGui UI enabled set to: " + std::string(enabled ? "true" : "false"));
-    handleStatus("ImGui UI " + std::string(enabled ? "enabled" : "disabled"));
-}
-
 void PCBViewerEmbedder::displayPinHoverInfo()
 {
-    // Skip ImGui UI rendering if disabled (using Qt toolbar only)
-    if (!m_imguiUIEnabled) {
-        // Debug: This should be printed when ImGui UI is disabled
-        static bool debugOnce = false;
-        if (!debugOnce) {
-            LOG_INFO("ImGui UI is disabled - skipping pin hover info display");
-            debugOnce = true;
-        }
-        return;
-    }
-
     // Get current mouse position - matching main.cpp exactly
     double mouseX, mouseY;
     if (m_glfwWindow) {
@@ -1122,7 +953,7 @@ void PCBViewerEmbedder::displayPinHoverInfo()
                 }
             }
             
-            ImGui::Text("Position: (%d, %d)", pin.pos.x, pin.pos.y);
+            ImGui::Text("Position: (%.1f, %.1f)", pin.pos.x, pin.pos.y);
             ImGui::Text("Part: %d", pin.part);
             
             // Show selection status
@@ -1149,10 +980,10 @@ void PCBViewerEmbedder::displayPinHoverInfo()
             ImGui::Text("Pin Number: %s", pin.name.c_str());
             ImGui::Text("Net Name: %s", pin.net.empty() ? "UNCONNECTED" : pin.net.c_str());
             ImGui::Text("Serial Number: %s", pin.snum.c_str());
-            ImGui::Text("Position: (%d, %d)", pin.pos.x, pin.pos.y);
+            ImGui::Text("Position: (%.1f, %.1f)", pin.pos.x, pin.pos.y);
             ImGui::Text("Radius: %.1f", pin.radius);
             
-            if (static_cast<size_t>(pin.part) < m_pcbData->parts.size()) {
+            if (pin.part < static_cast<int>(m_pcbData->parts.size())) {
                 ImGui::Text("Part: %s", m_pcbData->parts[pin.part].name.c_str());
             }
             
