@@ -20,14 +20,35 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-# Ensure Qt tools can be found
+# Ensure Qt tools can be found - using dynamic detection
 if(NOT Qt${QT_VERSION_MAJOR}_FOUND)
     if(WIN32 AND MSVC)
-        # For Visual Studio, we need to find the MSVC version of Qt
-        # If not available, we'll disable the PDF viewer features that require MinGW libraries
-        set(CMAKE_PREFIX_PATH "C:/Qt/6.9.1/msvc2019_64;C:/Qt/6.9.1/msvc2022_64;${CMAKE_PREFIX_PATH}")
+        # For Visual Studio, try to find MSVC Qt installations dynamically
+        set(QT_POSSIBLE_PATHS 
+            "C:/Qt/6.9.1/msvc2022_64"
+            "C:/Qt/6.9.1/msvc2019_64"
+            "C:/Qt/6.8.0/msvc2022_64"
+            "C:/Qt/6.7.0/msvc2022_64"
+        )
+        foreach(QT_PATH ${QT_POSSIBLE_PATHS})
+            if(EXISTS ${QT_PATH})
+                set(CMAKE_PREFIX_PATH "${QT_PATH};${CMAKE_PREFIX_PATH}")
+                break()
+            endif()
+        endforeach()
     else()
-        set(CMAKE_PREFIX_PATH "C:/Qt/6.9.1/mingw_64;${CMAKE_PREFIX_PATH}")
+        # For MinGW, try to find MinGW Qt installations dynamically
+        set(QT_POSSIBLE_PATHS 
+            "C:/Qt/6.9.1/mingw_64"
+            "C:/Qt/6.8.0/mingw_64"
+            "C:/Qt/6.7.0/mingw_64"
+        )
+        foreach(QT_PATH ${QT_POSSIBLE_PATHS})
+            if(EXISTS ${QT_PATH})
+                set(CMAKE_PREFIX_PATH "${QT_PATH};${CMAKE_PREFIX_PATH}")
+                break()
+            endif()
+        endforeach()
     endif()
 endif()
 
@@ -66,7 +87,7 @@ set(RESOURCES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 # Tell Qt where to find UI files
 set(CMAKE_AUTOUIC_SEARCH_PATHS ${RESOURCES_DIR}/ui)
 
-# Include directories
+# Include directories - all paths relative to project directory
 include_directories(
     ${INCLUDE_DIR}
     ${INCLUDE_DIR}/core
@@ -76,62 +97,62 @@ include_directories(
     ${INCLUDE_DIR}/viewers/pdf
     ${INCLUDE_DIR}/viewers/pcb
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui
-    ${SRC_DIR}/viewers/pdf/third_party/include
-    ${SRC_DIR}/viewers/pdf/third_party/third_party/extern/pdfium/include
-    ${SRC_DIR}/viewers/pdf/third_party/third_party/extern/glew/include
-    ${SRC_DIR}/viewers/pdf/third_party/third_party/extern/glfw/include
-    ${SRC_DIR}/viewers/pcb/core
-    ${SRC_DIR}/viewers/pcb/format
-    ${SRC_DIR}/viewers/pcb/rendering
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/third_party/extern/pdfium/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/third_party/extern/glew/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/third_party/extern/glfw/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/rendering
     ${PCB_VCPKG_INCLUDE}
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-# Source files
+# Source files - all paths relative to project directory
 set(CORE_SOURCES
-    ${SRC_DIR}/core/main.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/main.cpp
 )
 
 # UI sources - conditionally include hybrid PDF viewer
 set(UI_SOURCES
-    ${SRC_DIR}/ui/mainwindow.cpp
-    ${SRC_DIR}/ui/mainapplication.cpp
-    ${SRC_DIR}/ui/dualtabwidget.cpp
-    ${SRC_DIR}/viewers/pdf/ui/pdfviewerwidget.cpp
-    ${SRC_DIR}/viewers/pdf/core/PDFViewerEmbedder.cpp
-    ${SRC_DIR}/viewers/pdf/ui/QtPDFViewerWidget.cpp
-    ${SRC_DIR}/viewers/pdf/rendering/OpenGLPipelineManager.cpp
-    ${SRC_DIR}/viewers/pcb/ui/pcbviewerwidget.cpp
-    ${SRC_DIR}/viewers/pcb/core/PCBViewerEmbedder.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/mainwindow.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/mainapplication.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/dualtabwidget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/ui/pdfviewerwidget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/core/PDFViewerEmbedder.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/ui/QtPDFViewerWidget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/rendering/OpenGLPipelineManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/ui/pcbviewerwidget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/core/PCBViewerEmbedder.cpp
 )
 
 # Add hybrid PDF viewer only if Qt PDF modules are available
 if(HAVE_QT_PDF)
-    list(APPEND UI_SOURCES ${SRC_DIR}/ui/hybridpdfviewer.cpp)
+    list(APPEND UI_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/hybridpdfviewer.cpp)
 endif()
 
 # PDF viewer sources
 set(PDF_SOURCES
-    ${SRC_DIR}/viewers/pdf/third_party/src/rendering/pdf-render.cpp
-    ${SRC_DIR}/viewers/pdf/third_party/src/core/feature.cpp
-    ${SRC_DIR}/viewers/pdf/third_party/src/ui/menu-integration.cpp
-    ${SRC_DIR}/viewers/pdf/third_party/src/ui/tab-manager.cpp
-    ${SRC_DIR}/viewers/pdf/third_party/src/globals.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/src/rendering/pdf-render.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/src/core/feature.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/src/ui/menu-integration.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/src/ui/tab-manager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/src/globals.cpp
 )
 
 # PCB viewer sources
 set(PCB_SOURCES
-    ${SRC_DIR}/viewers/pcb/core/BRDTypes.cpp
-    ${SRC_DIR}/viewers/pcb/core/Utils.cpp
-    ${SRC_DIR}/viewers/pcb/format/BRDFileBase.cpp
-    ${SRC_DIR}/viewers/pcb/format/XZZPCBFile.cpp
-    ${SRC_DIR}/viewers/pcb/format/des.cpp
-    ${SRC_DIR}/viewers/pcb/rendering/PCBRenderer.cpp
-    ${SRC_DIR}/viewers/pcb/rendering/Window.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/core/BRDTypes.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/core/Utils.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/BRDFileBase.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/XZZPCBFile.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/des.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/rendering/PCBRenderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/rendering/Window.cpp
 )
 
 set(DATABASE_SOURCES
-    ${SRC_DIR}/database/databasemanager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/database/databasemanager.cpp
 )
 
 set(NETWORK_SOURCES
@@ -157,23 +178,23 @@ if(HAVE_QT_PDF)
     list(APPEND UI_HEADERS ${INCLUDE_DIR}/ui/hybridpdfviewer.h)
 endif()
 
-# PDF viewer headers
+# PDF viewer headers - all paths relative to project directory
 set(PDF_HEADERS
-    ${SRC_DIR}/viewers/pdf/third_party/include/rendering/pdf-render.h
-    ${SRC_DIR}/viewers/pdf/third_party/include/core/feature.h
-    ${SRC_DIR}/viewers/pdf/third_party/include/ui/menu-integration.h
-    ${SRC_DIR}/viewers/pdf/third_party/include/ui/tab-manager.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/include/rendering/pdf-render.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/include/core/feature.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/include/ui/menu-integration.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/include/ui/tab-manager.h
 )
 
 # PCB viewer headers
 set(PCB_HEADERS
-    ${SRC_DIR}/viewers/pcb/core/BRDTypes.h
-    ${SRC_DIR}/viewers/pcb/core/Utils.h
-    ${SRC_DIR}/viewers/pcb/format/BRDFileBase.h
-    ${SRC_DIR}/viewers/pcb/format/XZZPCBFile.h
-    ${SRC_DIR}/viewers/pcb/format/des.h
-    ${SRC_DIR}/viewers/pcb/rendering/PCBRenderer.h
-    ${SRC_DIR}/viewers/pcb/rendering/Window.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/core/BRDTypes.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/core/Utils.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/BRDFileBase.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/XZZPCBFile.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/des.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/rendering/PCBRenderer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/rendering/Window.h
 )
 
 set(DATABASE_HEADERS
@@ -184,14 +205,14 @@ set(NETWORK_HEADERS
     # Add network header files here if needed
 )
 
-# UI files
+# UI files - using dynamic paths
 set(UI_FORMS
-    resources/ui/mainwindow.ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/resources/ui/mainwindow.ui
 )
 
-# Resource files
+# Resource files - using dynamic paths
 set(RESOURCE_FILES
-    resources/icons.qrc
+    ${CMAKE_CURRENT_SOURCE_DIR}/resources/icons.qrc
 )
 
 # All project sources
@@ -252,9 +273,10 @@ endif()
 # Add PDFium, GLEW, and GLFW library paths and link (conditionally)
 # Skip third-party libraries for Visual Studio due to MinGW/MSVC compatibility issues
 if(NOT MSVC)
-    set(PDFIUM_LIB_PATH "${SRC_DIR}/viewers/pdf/third_party/third_party/extern/pdfium/lib")
-    set(GLEW_LIB_PATH "${SRC_DIR}/viewers/pdf/third_party/third_party/extern/glew/lib/Release/x64")
-    set(GLFW_LIB_PATH "${SRC_DIR}/viewers/pdf/third_party/third_party/extern/glfw_mingw/lib")
+    # Dynamic paths relative to project directory
+    set(PDFIUM_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/third_party/extern/pdfium/lib")
+    set(GLEW_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/third_party/extern/glew/lib/Release/x64")
+    set(GLFW_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/third_party/extern/glfw_mingw/lib")
 
     # Check if PDFium library exists
     if(EXISTS "${PDFIUM_LIB_PATH}/pdfium.lib")
@@ -292,7 +314,7 @@ else()
     set(HAVE_GLFW FALSE)
 endif()
 
-# Add PCB viewer vcpkg dependencies - use MinGW-compatible libraries
+# Add PCB viewer vcpkg dependencies - use MinGW-compatible libraries for GCC compatibility
 set(PCB_VCPKG_MINGW_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/vcpkg/packages)
 set(PCB_IMGUI_ROOT ${PCB_VCPKG_MINGW_ROOT}/imgui_x64-mingw-dynamic)
 set(PCB_GLFW_ROOT ${PCB_VCPKG_MINGW_ROOT}/glfw3_x64-mingw-dynamic)
@@ -308,7 +330,7 @@ if(EXISTS "${PCB_IMGUI_ROOT}/lib/libimgui.a" AND EXISTS "${PCB_GLFW_ROOT}/lib/li
         "${PCB_GLEW_ROOT}/include"
     )
     
-    # Add library directories and link libraries
+    # Add library directories and link libraries with MinGW-style library names
     target_link_directories(Way2RepairLoginSystem PRIVATE 
         "${PCB_IMGUI_ROOT}/lib"
         "${PCB_GLFW_ROOT}/lib"
@@ -319,7 +341,7 @@ if(EXISTS "${PCB_IMGUI_ROOT}/lib/libimgui.a" AND EXISTS "${PCB_GLFW_ROOT}/lib/li
     target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_PCB_IMGUI HAVE_PCB_GLFW HAVE_PCB_GLEW)
     set(HAVE_PCB_VCPKG TRUE)
     
-    message(STATUS "Linked MinGW-compiled ImGui, GLFW, and GLEW libraries")
+    message(STATUS "Linked MinGW-compatible ImGui, GLFW, and GLEW libraries")
 else()
     message(STATUS "PCB MinGW vcpkg libraries not found - PCB viewer may not work properly")
     set(HAVE_PCB_VCPKG FALSE)
@@ -381,9 +403,9 @@ if(WIN32)
         message(WARNING "Qt deployment tool not found. You may need to manually copy Qt DLLs.")
     endif()
     
-    # Copy PDFium and GLEW DLLs if they exist
-    set(PDFIUM_DLL "${SRC_DIR}/viewers/pdf/third_party/third_party/extern/pdfium/bin/pdfium.dll")
-    set(GLEW_DLL "${SRC_DIR}/viewers/pdf/third_party/third_party/extern/glew/bin/Release/x64/glew32.dll")
+    # Copy PDFium and GLEW DLLs if they exist - using dynamic paths
+    set(PDFIUM_DLL "${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/third_party/extern/pdfium/bin/pdfium.dll")
+    set(GLEW_DLL "${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/third_party/extern/glew/bin/Release/x64/glew32.dll")
     
     if(EXISTS ${PDFIUM_DLL})
         add_custom_command(TARGET Way2RepairLoginSystem POST_BUILD
@@ -405,24 +427,24 @@ if(WIN32)
         message(STATUS "GLEW DLL not found - application will use basic OpenGL: ${GLEW_DLL}")
     endif()
     
-    # Copy PCB MinGW vcpkg DLLs if they exist
-    set(PCB_GLFW_DLL "${PCB_GLFW_ROOT}/bin/glfw3.dll")
-    set(PCB_GLEW_DLL "${PCB_GLEW_ROOT}/bin/glew32.dll")
+    # Copy PCB vcpkg DLLs if they exist (use the x64-windows version for better compatibility)
+    set(PCB_VCPKG_GLFW_DLL "${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/vcpkg_installed/x64-windows/bin/glfw3.dll")
+    set(PCB_VCPKG_GLEW_DLL "${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/vcpkg_installed/x64-windows/bin/glew32.dll")
     
-    if(EXISTS ${PCB_GLFW_DLL})
+    if(EXISTS ${PCB_VCPKG_GLFW_DLL})
         add_custom_command(TARGET Way2RepairLoginSystem POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PCB_GLFW_DLL} ${CMAKE_CURRENT_BINARY_DIR}
-            COMMENT "Copying PCB MinGW GLFW DLL"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PCB_VCPKG_GLFW_DLL} ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Copying PCB vcpkg GLFW DLL"
         )
-        message(STATUS "PCB MinGW GLFW DLL will be copied: ${PCB_GLFW_DLL}")
+        message(STATUS "PCB vcpkg GLFW DLL will be copied: ${PCB_VCPKG_GLFW_DLL}")
     endif()
     
-    if(EXISTS ${PCB_GLEW_DLL})
+    if(EXISTS ${PCB_VCPKG_GLEW_DLL})
         add_custom_command(TARGET Way2RepairLoginSystem POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PCB_GLEW_DLL} ${CMAKE_CURRENT_BINARY_DIR}
-            COMMENT "Copying PCB MinGW GLEW DLL"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PCB_VCPKG_GLEW_DLL} ${CMAKE_CURRENT_BINARY_DIR}
+            COMMENT "Copying PCB vcpkg GLEW DLL"
         )
-        message(STATUS "PCB MinGW GLEW DLL will be copied: ${PCB_GLEW_DLL}")
+        message(STATUS "PCB vcpkg GLEW DLL will be copied: ${PCB_VCPKG_GLEW_DLL}")
     endif()
     
     # Copy additional runtime dependencies (database files, etc.)
