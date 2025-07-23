@@ -29,6 +29,8 @@ if(NOT Qt${QT_VERSION_MAJOR}_FOUND)
             "C:/Qt/6.9.1/msvc2019_64"
             "C:/Qt/6.8.0/msvc2022_64"
             "C:/Qt/6.7.0/msvc2022_64"
+            "C:/Qt/6.6.0/msvc2022_64"
+            "C:/Qt/6.5.0/msvc2022_64"
         )
         foreach(QT_PATH ${QT_POSSIBLE_PATHS})
             if(EXISTS ${QT_PATH})
@@ -40,8 +42,11 @@ if(NOT Qt${QT_VERSION_MAJOR}_FOUND)
         # For MinGW, try to find MinGW Qt installations dynamically
         set(QT_POSSIBLE_PATHS 
             "C:/Qt/6.9.1/mingw_64"
+            "C:/Qt/6.9.0/mingw_64"
             "C:/Qt/6.8.0/mingw_64"
             "C:/Qt/6.7.0/mingw_64"
+            "C:/Qt/6.6.0/mingw_64"
+            "C:/Qt/6.5.0/mingw_64"
         )
         foreach(QT_PATH ${QT_POSSIBLE_PATHS})
             if(EXISTS ${QT_PATH})
