@@ -42,6 +42,7 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_toolbarLayout(nullptr)
     , m_viewerContainer(nullptr)
     , m_updateTimer(new QTimer(this))
+    , m_selectionTimer(new QTimer(this))
     , m_viewerInitialized(false)
     , m_pdfLoaded(false)
     , m_usingFallback(false)
@@ -49,6 +50,7 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_lastPageCount(0)
     , m_lastZoomLevel(1.0)
     , m_lastCurrentPage(1)
+    , m_lastSelectedText("")
 {
     setupUI();
     
@@ -56,6 +58,11 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     m_updateTimer->setInterval(UPDATE_INTERVAL_MS);
     m_updateTimer->setSingleShot(false);
     connect(m_updateTimer, &QTimer::timeout, this, &PDFViewerWidget::updateViewer);
+    
+    // Configure selection timer to check for selected text
+    m_selectionTimer->setInterval(500); // Check every 500ms
+    m_selectionTimer->setSingleShot(false);
+    connect(m_selectionTimer, &QTimer::timeout, this, &PDFViewerWidget::checkForSelectedText);
     
     // Set widget properties
     setMinimumSize(400, 300);
@@ -74,6 +81,11 @@ PDFViewerWidget::~PDFViewerWidget()
     // Stop the update timer
     if (m_updateTimer && m_updateTimer->isActive()) {
         m_updateTimer->stop();
+    }
+    
+    // Stop the selection timer
+    if (m_selectionTimer && m_selectionTimer->isActive()) {
+        m_selectionTimer->stop();
     }
     
     // Shutdown the PDF embedder
@@ -329,6 +341,12 @@ bool PDFViewerWidget::loadPDF(const QString& filePath)
     updateToolbarState();
     updatePageDisplay();
     updateZoomDisplay();
+    
+    // Start the selection timer to check for selected text
+    if (!m_selectionTimer->isActive()) {
+        m_selectionTimer->start();
+        WriteQtDebugToFile("Started selection timer to monitor selected text");
+    }
     
     WriteQtDebugToFile("Step 7: PDF loading completed successfully");
     
@@ -638,6 +656,36 @@ void PDFViewerWidget::onSearchButtonClicked()
     if (!searchText.isEmpty()) {
         findNext();
     }
+}
+
+void PDFViewerWidget::checkForSelectedText()
+{
+    if (!isPDFLoaded() || !m_pdfEmbedder) {
+        return;
+    }
+    
+    // Get currently selected text from the embedded viewer
+    QString selectedText = QString::fromStdString(m_pdfEmbedder->getSelectedText());
+    
+    // Only update the search field if:
+    // 1. There is selected text
+    // 2. The selected text has changed
+    // 3. The search field is not currently focused (to avoid interrupting user typing)
+    if (!selectedText.isEmpty() && 
+        selectedText != m_lastSelectedText && 
+        !m_searchEdit->hasFocus()) {
+        
+        // Update the search field with the selected text
+        m_searchEdit->setText(selectedText);
+        
+        // Trigger search automatically (like the standalone viewer)
+        findText(selectedText);
+        
+        qDebug() << "PDFViewerWidget: Updated search field with selected text:" << selectedText;
+    }
+    
+    // Store the current selected text for next comparison
+    m_lastSelectedText = selectedText;
 }
 
 // Private helper methods

@@ -621,8 +621,8 @@ void StartTextSelection(PDFScrollState& state, double mouseX, double mouseY, flo
     double pdfX, pdfY;
     ScreenToPDFCoordinates(mouseX, mouseY, pdfX, pdfY, pageIndex, winWidth, winHeight, state, pageHeights, pageWidths);
     
-    // Initialize text selection
-    state.textSelection.isActive = true;
+    // Initialize text selection (but don't make it visually active yet)
+    state.textSelection.isActive = false;  // Will be activated when dragging actually starts
     state.textSelection.isDragging = true;
     state.textSelection.startPageIndex = pageIndex;
     state.textSelection.endPageIndex = pageIndex;
@@ -630,6 +630,10 @@ void StartTextSelection(PDFScrollState& state, double mouseX, double mouseY, flo
     state.textSelection.startY = pdfY;
     state.textSelection.endX = pdfX;
     state.textSelection.endY = pdfY;
+    
+    // Store initial screen coordinates for drag distance calculation
+    state.textSelection.initialScreenX = mouseX;
+    state.textSelection.initialScreenY = mouseY;
     
     // Store current zoom/pan state for coordinate tracking
     state.textSelection.selectionZoomScale = state.zoomScale;
@@ -658,6 +662,18 @@ void StartTextSelection(PDFScrollState& state, double mouseX, double mouseY, flo
 
 void UpdateTextSelection(PDFScrollState& state, double mouseX, double mouseY, float winWidth, float winHeight, const std::vector<int>& pageHeights, const std::vector<int>& pageWidths) {
     if (!state.textSelection.isDragging) return;
+    
+    // Check if we've moved enough to start a real selection (activate visual selection)
+    if (!state.textSelection.isActive) {
+        double dragDistance = sqrt(pow(mouseX - state.textSelection.initialScreenX, 2) + pow(mouseY - state.textSelection.initialScreenY, 2));
+        const double MIN_DRAG_DISTANCE = 3.0; // pixels
+        
+        if (dragDistance > MIN_DRAG_DISTANCE) {
+            state.textSelection.isActive = true; // Now activate visual selection
+        } else {
+            return; // Don't update selection until we've dragged enough
+        }
+    }
     
     // Find which page the mouse is over
     int pageIndex = GetPageAtScreenPosition(mouseY, state, pageHeights);
@@ -775,6 +791,8 @@ void ClearTextSelection(PDFScrollState& state) {
     state.textSelection.endPageIndex = -1;
     state.textSelection.startCharIndex = -1;
     state.textSelection.endCharIndex = -1;
+    state.textSelection.initialScreenX = 0.0;
+    state.textSelection.initialScreenY = 0.0;
     state.textSelection.needsCoordinateUpdate = false;
 }
 

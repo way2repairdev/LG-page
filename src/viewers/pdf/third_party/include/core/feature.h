@@ -29,6 +29,10 @@ struct TextSelection {
     double endX = 0.0;
     double endY = 0.0;
     
+    // Initial screen coordinates for drag distance calculation
+    double initialScreenX = 0.0;
+    double initialScreenY = 0.0;
+    
     // Track zoom/pan state when selection was made for coordinate updates
     float selectionZoomScale = 1.0f;
     float selectionScrollOffset = 0.0f;

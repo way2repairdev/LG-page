@@ -120,6 +120,7 @@ private slots:
     void onPageSpinBoxChanged(int value);
     void onSearchTextChanged();
     void onSearchButtonClicked();
+    void checkForSelectedText();
 
 private:
     void setupUI();
@@ -158,6 +159,9 @@ private:
     // Update timer for the embedded viewer
     QTimer* m_updateTimer;
     
+    // Timer to check for selected text
+    QTimer* m_selectionTimer;
+    
     // State tracking
     bool m_viewerInitialized;
     bool m_pdfLoaded;
@@ -167,6 +171,7 @@ private:
     int m_lastPageCount;
     double m_lastZoomLevel;
     int m_lastCurrentPage;
+    QString m_lastSelectedText;
     
     // Constants
     static constexpr int UPDATE_INTERVAL_MS = 16; // ~60 FPS
