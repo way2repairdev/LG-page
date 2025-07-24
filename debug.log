@@ -1145,3 +1145,309 @@ NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT
     Should equal desired position (CENTER) = 430.5
     Difference = 54.0993
     Distance from viewport center = 54.0993
+NavigateToNextSearchResult: CALLED
+  results.size()=2
+  currentResultIndex BEFORE=0
+NavigateToSearchResultPrecise: CALLED for result 1
+  result.pageIndex=3, result.charIndex=4047
+NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT
+  PDF coordinates: left=579.308, top=527.718, right=591.188, bottom=523.202
+  Original page height=595.32
+  Rendered page height=861 (used for positioning)
+  Page index=3
+  Page height in screen=782.727
+  Sum of previous pages=2348.18
+  Text relative top (flipped)=0.113555
+  Text offset in page=88.8827
+  Desired viewport position (CENTER)=430.5
+  Target scroll offset=2006.56
+  Final scroll offset=2006.56
+  Zoom scale=0.909091
+  Viewport height=861
+  Max possible offset=23403.5
+  Total document height=24264.5
+  Rendered/Original height ratio=1.44628
+  SAME-PAGE NAVIGATION ANALYSIS:
+    Current scroll offset=5.25406
+    Original target scroll offset=2006.56
+    Final target scroll offset=2006.56
+    Scroll change magnitude=2001.31
+    LARGE CHANGE - likely cross-page or significant movement
+  VERIFICATION: After navigation, highlighting will calculate:
+    pageTopY = 341.617
+    textScreenTop = 430.5
+    Should equal desired position (CENTER) = 430.5
+    Difference = -9.15527e-05
+    Distance from viewport center = -9.15527e-05
+NavigateToNextSearchResult: CALLED
+  results.size()=2
+  currentResultIndex BEFORE=1
+NavigateToSearchResultPrecise: CALLED for result 0
+  result.pageIndex=0, result.charIndex=230
+NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT
+  PDF coordinates: left=421.08, top=493.677, right=440.419, bottom=486.96
+  Original page height=595.32
+  Rendered page height=861 (used for positioning)
+  Page index=0
+  Page height in screen=782.727
+  Sum of previous pages=0
+  Text relative top (flipped)=0.170736
+  Text offset in page=133.64
+  Desired viewport position (CENTER)=430.5
+  Target scroll offset=0
+  Final scroll offset=0
+  Zoom scale=0.909091
+  Viewport height=861
+  Max possible offset=23403.5
+  Total document height=24264.5
+  Rendered/Original height ratio=1.44628
+  SAME-PAGE NAVIGATION ANALYSIS:
+    Current scroll offset=2348.18
+    Original target scroll offset=-296.86
+    Final target scroll offset=0
+    Scroll change magnitude=2348.18
+    LARGE CHANGE - likely cross-page or significant movement
+  VERIFICATION: After navigation, highlighting will calculate:
+    pageTopY = 0
+    textScreenTop = 133.64
+    Should equal desired position (CENTER) = 430.5
+    Difference = -296.86
+    Distance from viewport center = -296.86
+NavigateToNextSearchResult: CALLED
+  results.size()=2
+  currentResultIndex BEFORE=0
+NavigateToSearchResultPrecise: CALLED for result 1
+  result.pageIndex=3, result.charIndex=4047
+NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT
+  PDF coordinates: left=579.308, top=527.718, right=591.188, bottom=523.202
+  Original page height=595.32
+  Rendered page height=861 (used for positioning)
+  Page index=3
+  Page height in screen=782.727
+  Sum of previous pages=2348.18
+  Text relative top (flipped)=0.113555
+  Text offset in page=88.8827
+  Desired viewport position (CENTER)=430.5
+  Target scroll offset=2006.56
+  Final scroll offset=2006.56
+  Zoom scale=0.909091
+  Viewport height=861
+  Max possible offset=23403.5
+  Total document height=24264.5
+  Rendered/Original height ratio=1.44628
+  SAME-PAGE NAVIGATION ANALYSIS:
+    Current scroll offset=0
+    Original target scroll offset=2006.56
+    Final target scroll offset=2006.56
+    Scroll change magnitude=2006.56
+    LARGE CHANGE - likely cross-page or significant movement
+  VERIFICATION: After navigation, highlighting will calculate:
+    pageTopY = 341.617
+    textScreenTop = 430.5
+    Should equal desired position (CENTER) = 430.5
+    Difference = -9.15527e-05
+    Distance from viewport center = -9.15527e-05
+NavigateToNextSearchResult: CALLED
+  results.size()=2
+  currentResultIndex BEFORE=1
+NavigateToSearchResultPrecise: CALLED for result 0
+  result.pageIndex=0, result.charIndex=230
+NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT
+  PDF coordinates: left=421.08, top=493.677, right=440.419, bottom=486.96
+  Original page height=595.32
+  Rendered page height=861 (used for positioning)
+  Page index=0
+  Page height in screen=782.727
+  Sum of previous pages=0
+  Text relative top (flipped)=0.170736
+  Text offset in page=133.64
+  Desired viewport position (CENTER)=430.5
+  Target scroll offset=0
+  Final scroll offset=0
+  Zoom scale=0.909091
+  Viewport height=861
+  Max possible offset=23403.5
+  Total document height=24264.5
+  Rendered/Original height ratio=1.44628
+  SAME-PAGE NAVIGATION ANALYSIS:
+    Current scroll offset=2348.18
+    Original target scroll offset=-296.86
+    Final target scroll offset=0
+    Scroll change magnitude=2348.18
+    LARGE CHANGE - likely cross-page or significant movement
+  VERIFICATION: After navigation, highlighting will calculate:
+    pageTopY = 0
+    textScreenTop = 133.64
+    Should equal desired position (CENTER) = 430.5
+    Difference = -296.86
+    Distance from viewport center = -296.86
+NavigateToNextSearchResult: CALLED
+  results.size()=2
+  currentResultIndex BEFORE=0
+NavigateToSearchResultPrecise: CALLED for result 1
+  result.pageIndex=3, result.charIndex=4047
+NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT
+  PDF coordinates: left=579.308, top=527.718, right=591.188, bottom=523.202
+  Original page height=595.32
+  Rendered page height=861 (used for positioning)
+  Page index=3
+  Page height in screen=782.727
+  Sum of previous pages=2348.18
+  Text relative top (flipped)=0.113555
+  Text offset in page=88.8827
+  Desired viewport position (CENTER)=430.5
+  Target scroll offset=2006.56
+  Final scroll offset=2006.56
+  Zoom scale=0.909091
+  Viewport height=861
+  Max possible offset=23403.5
+  Total document height=24264.5
+  Rendered/Original height ratio=1.44628
+  SAME-PAGE NAVIGATION ANALYSIS:
+    Current scroll offset=0
+    Original target scroll offset=2006.56
+    Final target scroll offset=2006.56
+    Scroll change magnitude=2006.56
+    LARGE CHANGE - likely cross-page or significant movement
+  VERIFICATION: After navigation, highlighting will calculate:
+    pageTopY = 341.617
+    textScreenTop = 430.5
+    Should equal desired position (CENTER) = 430.5
+    Difference = -9.15527e-05
+    Distance from viewport center = -9.15527e-05
+NavigateToNextSearchResult: CALLED
+  results.size()=2
+  currentResultIndex BEFORE=1
+NavigateToSearchResultPrecise: CALLED for result 0
+  result.pageIndex=0, result.charIndex=230
+NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT
+  PDF coordinates: left=421.08, top=493.677, right=440.419, bottom=486.96
+  Original page height=595.32
+  Rendered page height=861 (used for positioning)
+  Page index=0
+  Page height in screen=782.727
+  Sum of previous pages=0
+  Text relative top (flipped)=0.170736
+  Text offset in page=133.64
+  Desired viewport position (CENTER)=430.5
+  Target scroll offset=0
+  Final scroll offset=0
+  Zoom scale=0.909091
+  Viewport height=861
+  Max possible offset=23403.5
+  Total document height=24264.5
+  Rendered/Original height ratio=1.44628
+  SAME-PAGE NAVIGATION ANALYSIS:
+    Current scroll offset=2348.18
+    Original target scroll offset=-296.86
+    Final target scroll offset=0
+    Scroll change magnitude=2348.18
+    LARGE CHANGE - likely cross-page or significant movement
+  VERIFICATION: After navigation, highlighting will calculate:
+    pageTopY = 0
+    textScreenTop = 133.64
+    Should equal desired position (CENTER) = 430.5
+    Difference = -296.86
+    Distance from viewport center = -296.86
+NavigateToNextSearchResult: CALLED
+  results.size()=2
+  currentResultIndex BEFORE=0
+NavigateToSearchResultPrecise: CALLED for result 1
+  result.pageIndex=3, result.charIndex=4047
+NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT
+  PDF coordinates: left=579.308, top=527.718, right=591.188, bottom=523.202
+  Original page height=595.32
+  Rendered page height=861 (used for positioning)
+  Page index=3
+  Page height in screen=782.727
+  Sum of previous pages=2348.18
+  Text relative top (flipped)=0.113555
+  Text offset in page=88.8827
+  Desired viewport position (CENTER)=430.5
+  Target scroll offset=2006.56
+  Final scroll offset=2006.56
+  Zoom scale=0.909091
+  Viewport height=861
+  Max possible offset=23403.5
+  Total document height=24264.5
+  Rendered/Original height ratio=1.44628
+  SAME-PAGE NAVIGATION ANALYSIS:
+    Current scroll offset=0
+    Original target scroll offset=2006.56
+    Final target scroll offset=2006.56
+    Scroll change magnitude=2006.56
+    LARGE CHANGE - likely cross-page or significant movement
+  VERIFICATION: After navigation, highlighting will calculate:
+    pageTopY = 341.617
+    textScreenTop = 430.5
+    Should equal desired position (CENTER) = 430.5
+    Difference = -9.15527e-05
+    Distance from viewport center = -9.15527e-05
+NavigateToNextSearchResult: CALLED
+  results.size()=2
+  currentResultIndex BEFORE=1
+NavigateToSearchResultPrecise: CALLED for result 0
+  result.pageIndex=0, result.charIndex=230
+NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT
+  PDF coordinates: left=421.08, top=493.677, right=440.419, bottom=486.96
+  Original page height=595.32
+  Rendered page height=861 (used for positioning)
+  Page index=0
+  Page height in screen=782.727
+  Sum of previous pages=0
+  Text relative top (flipped)=0.170736
+  Text offset in page=133.64
+  Desired viewport position (CENTER)=430.5
+  Target scroll offset=0
+  Final scroll offset=0
+  Zoom scale=0.909091
+  Viewport height=861
+  Max possible offset=23403.5
+  Total document height=24264.5
+  Rendered/Original height ratio=1.44628
+  SAME-PAGE NAVIGATION ANALYSIS:
+    Current scroll offset=2348.18
+    Original target scroll offset=-296.86
+    Final target scroll offset=0
+    Scroll change magnitude=2348.18
+    LARGE CHANGE - likely cross-page or significant movement
+  VERIFICATION: After navigation, highlighting will calculate:
+    pageTopY = 0
+    textScreenTop = 133.64
+    Should equal desired position (CENTER) = 430.5
+    Difference = -296.86
+    Distance from viewport center = -296.86
+NavigateToNextSearchResult: CALLED
+  results.size()=2
+  currentResultIndex BEFORE=0
+NavigateToSearchResultPrecise: CALLED for result 1
+  result.pageIndex=3, result.charIndex=4047
+NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT
+  PDF coordinates: left=579.308, top=527.718, right=591.188, bottom=523.202
+  Original page height=595.32
+  Rendered page height=861 (used for positioning)
+  Page index=3
+  Page height in screen=782.727
+  Sum of previous pages=2348.18
+  Text relative top (flipped)=0.113555
+  Text offset in page=88.8827
+  Desired viewport position (CENTER)=430.5
+  Target scroll offset=2006.56
+  Final scroll offset=2006.56
+  Zoom scale=0.909091
+  Viewport height=861
+  Max possible offset=23403.5
+  Total document height=24264.5
+  Rendered/Original height ratio=1.44628
+  SAME-PAGE NAVIGATION ANALYSIS:
+    Current scroll offset=0
+    Original target scroll offset=2006.56
+    Final target scroll offset=2006.56
+    Scroll change magnitude=2006.56
+    LARGE CHANGE - likely cross-page or significant movement
+  VERIFICATION: After navigation, highlighting will calculate:
+    pageTopY = 341.617
+    textScreenTop = 430.5
+    Should equal desired position (CENTER) = 430.5
+    Difference = -9.15527e-05
+    Distance from viewport center = -9.15527e-05

@@ -1112,18 +1112,13 @@ void PDFViewerEmbedder::onMouseButton(int button, int action, int /*mods*/)
             } else {
                 // Text selection logic with double-click detection
                 double currentTime = glfwGetTime();
-                std::cout << "PDFViewerEmbedder: Mouse press detected at (" << mouseX << ", " << mouseY << ") at time " << currentTime << std::endl;
                 if (DetectDoubleClick(*m_scrollState, mouseX, mouseY, currentTime)) {
                     // Double-click: select word at position
-                    std::cout << "PDFViewerEmbedder: Double-click detected, selecting word at position" << std::endl;
                     SelectWordAtPosition(*m_scrollState, mouseX, mouseY, (float)m_windowWidth, (float)m_windowHeight, 
                                          m_pageHeights, m_pageWidths);
-                    
-                    // IMPORTANT: Call PopulateSearchFromSelection for double-click word selection too
-                    PopulateSearchFromSelection(*m_scrollState);
                 } else {
-                    // Single click: start text selection drag (no immediate selection)
-                    std::cout << "PDFViewerEmbedder: Starting text selection drag at (" << mouseX << ", " << mouseY << ")" << std::endl;
+                    // Single click: start text selection
+                    std::cout << "PDFViewerEmbedder: Starting text selection at (" << mouseX << ", " << mouseY << ")" << std::endl;
                     StartTextSelection(*m_scrollState, mouseX, mouseY, (float)m_windowWidth, (float)m_windowHeight, 
                                        m_pageHeights, m_pageWidths);
                 }
@@ -1137,19 +1132,11 @@ void PDFViewerEmbedder::onMouseButton(int button, int action, int /*mods*/)
                 std::cout << "PDFViewerEmbedder: Ending text selection" << std::endl;
                 EndTextSelection(*m_scrollState);
                 
-                // IMPORTANT: Only call PopulateSearchFromSelection if we actually have selected text
-                // This prevents single clicks from triggering search field updates
-                if (m_scrollState->textSelection.isActive && !GetSelectedText(*m_scrollState).empty()) {
-                    std::cout << "PDFViewerEmbedder: Text selected via drag, updating search field" << std::endl;
-                    PopulateSearchFromSelection(*m_scrollState);
-                    
-                    // Trigger search for the selected text
-                    if (m_scrollState->textSearch.needsUpdate) {
-                        std::cout << "PDFViewerEmbedder: Triggering search for selected text: '" << m_scrollState->textSearch.searchTerm << "'" << std::endl;
-                        PerformTextSearch(*m_scrollState, m_pageHeights, m_pageWidths);
-                    }
-                } else {
-                    std::cout << "PDFViewerEmbedder: No text selected, skipping search field update" << std::endl;
+                // IMPORTANT: Trigger the search immediately after text selection
+                // This ensures that the selected text gets highlighted in yellow
+                if (m_scrollState->textSearch.needsUpdate) {
+                    std::cout << "PDFViewerEmbedder: Triggering search for selected text: '" << m_scrollState->textSearch.searchTerm << "'" << std::endl;
+                    PerformTextSearch(*m_scrollState, m_pageHeights, m_pageWidths);
                 }
             }
             m_scrollState->textSelection.isDoubleClick = false;
@@ -1385,4 +1372,24 @@ void PDFViewerEmbedder::setFocus()
     if (m_glfwWindow) {
         glfwFocusWindow(m_glfwWindow);
     }
+}
+
+int PDFViewerEmbedder::countTextOccurrences(const std::string& searchTerm) const
+{
+    if (!m_scrollState || searchTerm.empty()) {
+        return 0;
+    }
+    
+    // Return the total number of search results found
+    return static_cast<int>(m_scrollState->textSearch.results.size());
+}
+
+int PDFViewerEmbedder::getCurrentSearchResultIndex() const
+{
+    if (!m_scrollState || m_scrollState->textSearch.results.empty()) {
+        return -1;
+    }
+    
+    // Return the current search result index (0-based)
+    return m_scrollState->textSearch.currentResultIndex;
 }

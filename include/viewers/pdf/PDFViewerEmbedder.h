@@ -100,6 +100,12 @@ public:
     bool findText(const std::string& searchTerm);
     void findNext();
     void findPrevious();
+    
+    /**
+     * Text search information
+     */
+    int countTextOccurrences(const std::string& searchTerm) const;
+    int getCurrentSearchResultIndex() const;
 
     /**
      * Set focus to the viewer (for keyboard input)

@@ -232,6 +232,13 @@ void PDFViewerWidget::setupToolbar()
     m_clearBtn->setShortcut(QKeySequence("Esc"));
     connect(m_clearBtn, &QPushButton::clicked, this, &PDFViewerWidget::clearSelection);
     
+    // Selection status label - shows "1 of 10" for selected text occurrences
+    m_selectionStatusLabel = new QLabel("");
+    m_selectionStatusLabel->setMinimumWidth(80);
+    m_selectionStatusLabel->setStyleSheet("QLabel { color: #6c757d; font-size: 11px; font-weight: 500; }");
+    m_selectionStatusLabel->setAlignment(Qt::AlignCenter);
+    m_selectionStatusLabel->hide(); // Initially hidden
+    
     // Add separators and widgets to toolbar
     m_toolbarLayout->addWidget(m_prevPageBtn);
     m_toolbarLayout->addWidget(m_nextPageBtn);
@@ -257,6 +264,7 @@ void PDFViewerWidget::setupToolbar()
     m_toolbarLayout->addWidget(m_searchPrevBtn);
     m_toolbarLayout->addWidget(m_searchNextBtn);
     m_toolbarLayout->addWidget(m_clearBtn);
+    m_toolbarLayout->addWidget(m_selectionStatusLabel);
     
     m_toolbarLayout->addStretch(); // Push remaining widgets to the right
 }
@@ -482,6 +490,7 @@ void PDFViewerWidget::findNext()
 {
     if (isPDFLoaded()) {
         m_pdfEmbedder->findNext();
+        updateSelectionStatus(QString::fromStdString(m_pdfEmbedder->getSelectedText()));
     }
 }
 
@@ -489,6 +498,7 @@ void PDFViewerWidget::findPrevious()
 {
     if (isPDFLoaded()) {
         m_pdfEmbedder->findPrevious();
+        updateSelectionStatus(QString::fromStdString(m_pdfEmbedder->getSelectedText()));
     }
 }
 
@@ -684,6 +694,9 @@ void PDFViewerWidget::checkForSelectedText()
         qDebug() << "PDFViewerWidget: Updated search field with selected text:" << selectedText;
     }
     
+    // Update selection status display (shows "1 of 10" format)
+    updateSelectionStatus(selectedText);
+    
     // Store the current selected text for next comparison
     m_lastSelectedText = selectedText;
 }
@@ -732,4 +745,39 @@ void PDFViewerWidget::updateZoomDisplay()
 {
     // No zoom display widgets to update since we removed zoom slider and label
     // Zoom functionality is still available through buttons and keyboard shortcuts
+}
+
+void PDFViewerWidget::updateSelectionStatus(const QString& selectedText)
+{
+    if (selectedText.isEmpty()) {
+        // No text selected, hide the status label
+        m_selectionStatusLabel->hide();
+        return;
+    }
+    
+    // Count how many times the selected text appears in the document
+    if (m_pdfEmbedder) {
+        int totalMatches = m_pdfEmbedder->countTextOccurrences(selectedText.toStdString());
+        
+        if (totalMatches > 0) {
+            // Get current search result index (0-based, convert to 1-based for display)
+            int currentMatch = m_pdfEmbedder->getCurrentSearchResultIndex();
+            if (currentMatch >= 0) {
+                currentMatch += 1; // Convert to 1-based indexing
+            } else {
+                currentMatch = 1; // Default to first match if no specific index
+            }
+            
+            // Show status like "1 of 10" to indicate current selection and total matches
+            QString statusText = QString("%1 of %2").arg(currentMatch).arg(totalMatches);
+            m_selectionStatusLabel->setText(statusText);
+            m_selectionStatusLabel->show();
+            
+            qDebug() << "PDFViewerWidget: Selection status updated:" << statusText;
+        } else {
+            // Selected text not found as search results (shouldn't happen but handle gracefully)
+            m_selectionStatusLabel->setText("0 of 0");
+            m_selectionStatusLabel->show();
+        }
+    }
 }

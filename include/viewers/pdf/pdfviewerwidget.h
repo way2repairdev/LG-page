@@ -120,7 +120,7 @@ private slots:
     void onPageSpinBoxChanged(int value);
     void onSearchTextChanged();
     void onSearchButtonClicked();
-    void checkForSelectedText();
+    void checkForSelectedText();  // Checks for text selection changes
 
 private:
     void setupUI();
@@ -130,6 +130,7 @@ private:
     void updateToolbarState();
     void updatePageDisplay();
     void updateZoomDisplay();
+    void updateSelectionStatus(const QString& selectedText);  // Updates "1 of 10" display
     
     // Core PDF viewer component (your existing renderer)
     std::unique_ptr<PDFViewerEmbedder> m_pdfEmbedder;
@@ -155,12 +156,11 @@ private:
     QPushButton* m_searchPrevBtn;
     QPushButton* m_searchNextBtn;
     QPushButton* m_clearBtn;
+    QLabel* m_selectionStatusLabel;  // Shows "1 of 10" for selected text occurrences
     
     // Update timer for the embedded viewer
     QTimer* m_updateTimer;
-    
-    // Timer to check for selected text
-    QTimer* m_selectionTimer;
+    QTimer* m_selectionTimer;  // Timer to check for selected text changes
     
     // State tracking
     bool m_viewerInitialized;
@@ -171,7 +171,7 @@ private:
     int m_lastPageCount;
     double m_lastZoomLevel;
     int m_lastCurrentPage;
-    QString m_lastSelectedText;
+    QString m_lastSelectedText;  // Track last selected text to detect changes
     
     // Constants
     static constexpr int UPDATE_INTERVAL_MS = 16; // ~60 FPS
