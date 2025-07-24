@@ -23,6 +23,8 @@
 #include <QFileInfo>
 #include <QTextStream>
 
+#include "ui/dualtabwidget.h"
+
 // Forward declaration for PDF viewer
 class PDFViewerWidget;
 // Forward declaration for PCB viewer
@@ -68,8 +70,8 @@ private slots:
     void onAboutClicked();
     void onLogoutClicked();
     // Dual tab widget slots
-    void onTabCloseRequestedByType(int index, int type);
-    void onTabChangedByType(int index, int type);
+    void onTabCloseRequestedByType(int index, DualTabWidget::TabType type);
+    void onTabChangedByType(int index, DualTabWidget::TabType type);
     // Server-side slots (commented out for local file loading)
     //void onHttpRequestFinished(QNetworkReply *reply);
     //void onNetworkError(QNetworkReply::NetworkError error);

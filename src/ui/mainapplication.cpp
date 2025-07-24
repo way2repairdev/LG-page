@@ -547,22 +547,20 @@ void MainApplication::openPCBInTab(const QString &filePath)
     statusBar()->showMessage(QString("Opened PCB: %1").arg(fileInfo.fileName()));
 }
 
-void MainApplication::onTabCloseRequestedByType(int index, int type)
+void MainApplication::onTabCloseRequestedByType(int index, DualTabWidget::TabType type)
 {
-    DualTabWidget::TabType tabType = static_cast<DualTabWidget::TabType>(type);
-    
-    if (index >= 0 && index < m_tabWidget->count(tabType)) {
-        QWidget *tabWidget = m_tabWidget->widget(index, tabType);
+    if (index >= 0 && index < m_tabWidget->count(type)) {
+        QWidget *tabWidget = m_tabWidget->widget(index, type);
         if (tabWidget) {
             QString filePath = tabWidget->property("filePath").toString();
             
             // Remove the tab
-            m_tabWidget->removeTab(index, tabType);
+            m_tabWidget->removeTab(index, type);
             
             // Update status bar
             if (!filePath.isEmpty()) {
                 QFileInfo fileInfo(filePath);
-                QString fileType = (tabType == DualTabWidget::PDF_TAB) ? "PDF" : "PCB";
+                QString fileType = (type == DualTabWidget::PDF_TAB) ? "PDF" : "PCB";
                 statusBar()->showMessage(QString("Closed %1 file: %2").arg(fileType, fileInfo.fileName()));
             } else {
                 statusBar()->showMessage("Closed tab");
@@ -571,31 +569,29 @@ void MainApplication::onTabCloseRequestedByType(int index, int type)
     }
 }
 
-void MainApplication::onTabChangedByType(int index, int type)
+void MainApplication::onTabChangedByType(int index, DualTabWidget::TabType type)
 {
-    DualTabWidget::TabType tabType = static_cast<DualTabWidget::TabType>(type);
-    
-    qDebug() << "=== Tab Changed to Index:" << index << "Type:" << (tabType == DualTabWidget::PDF_TAB ? "PDF" : "PCB") << "===";
+    qDebug() << "=== Tab Changed to Index:" << index << "Type:" << (type == DualTabWidget::PDF_TAB ? "PDF" : "PCB") << "===";
     
     // Use aggressive toolbar isolation
     forceToolbarIsolation();
     
     // If no valid tab is selected, return
-    if (index < 0 || index >= m_tabWidget->count(tabType)) {
+    if (index < 0 || index >= m_tabWidget->count(type)) {
         statusBar()->showMessage("No active tab");
         qDebug() << "Invalid tab index, returning";
         return;
     }
     
     // Get the current widget
-    QWidget *currentWidget = m_tabWidget->widget(index, tabType);
+    QWidget *currentWidget = m_tabWidget->widget(index, type);
     if (!currentWidget) {
         statusBar()->showMessage("Invalid tab selected");
         qDebug() << "Current widget is null, returning";
         return;
     }
     
-    QString tabName = m_tabWidget->tabText(index, tabType);
+    QString tabName = m_tabWidget->tabText(index, type);
     qDebug() << "Switching to tab:" << tabName;
     
     // Force focus and bring current widget to front
@@ -607,7 +603,7 @@ void MainApplication::onTabChangedByType(int index, int type)
     QThread::msleep(50);
     
     // Show appropriate toolbar based on widget type
-    if (tabType == DualTabWidget::PDF_TAB) {
+    if (type == DualTabWidget::PDF_TAB) {
         if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(currentWidget)) {
             qDebug() << "Activating PDF viewer for tab:" << tabName;
             
@@ -624,7 +620,7 @@ void MainApplication::onTabChangedByType(int index, int type)
             
             statusBar()->showMessage("PDF viewer active - Page navigation and search available");
         }
-    } else if (tabType == DualTabWidget::PCB_TAB) {
+    } else if (type == DualTabWidget::PCB_TAB) {
         if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(currentWidget)) {
             qDebug() << "Activating PCB viewer for tab:" << tabName;
             

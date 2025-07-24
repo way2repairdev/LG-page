@@ -39,12 +39,19 @@ public:
     void setTabsClosable(bool closable);
     void setMovable(bool movable);
     
-    // Global content management
-    void showContent(QWidget *widget);
+    // Content isolation and mutual exclusion
+    void activateTab(int index, TabType type);
+    void deactivateAllTabs();
+    bool hasActiveTab() const;
+    QWidget* getActiveWidget() const;
+
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
 
 signals:
     void tabCloseRequested(int index, TabType type);
     void currentChanged(int index, TabType type);
+    void activeTabChanged(TabType type); // New signal for active tab type changes
 
 private slots:
     void onPdfTabCloseRequested(int index);
@@ -55,16 +62,29 @@ private slots:
 private:
     void setupUI();
     void updateVisibility();
+    void setActiveTabType(TabType type);
+    void hideAllContent();
+    void showActiveContent();
+    void updateTabBarStates();
+    void updateTabBarVisualState();
     
     QVBoxLayout *m_mainLayout;
     QTabWidget *m_pdfTabWidget;    // Row 1: PDF tabs
     QTabWidget *m_pcbTabWidget;    // Row 2: PCB tabs
-    QStackedWidget *m_contentArea; // Shared content area
     
-    // Keep track of widgets and their mapping
+    // Separate content areas for complete isolation
+    QStackedWidget *m_pdfContentArea; // PDF-only content area
+    QStackedWidget *m_pcbContentArea; // PCB-only content area
+    
+    // Active tab tracking for mutual exclusion
+    TabType m_activeTabType;
+    int m_activePdfIndex;
+    int m_activePcbIndex;
+    bool m_hasActiveTab;
+    
+    // Separate widget lists for content isolation
     QList<QWidget*> m_pdfWidgets;
     QList<QWidget*> m_pcbWidgets;
-    QList<QWidget*> m_allWidgets; // All widgets in stacked widget
 };
 
 #endif // DUALTABWIDGET_H
