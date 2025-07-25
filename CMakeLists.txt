@@ -74,11 +74,19 @@ endif()
 # Find OpenGL
 find_package(OpenGL REQUIRED)
 
-# PCB Viewer vcpkg dependencies
-set(PCB_VCPKG_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/vcpkg_installed/x64-windows)
-set(PCB_VCPKG_INCLUDE ${PCB_VCPKG_ROOT}/include)
-set(PCB_VCPKG_LIB ${PCB_VCPKG_ROOT}/lib)
-set(PCB_VCPKG_BIN ${PCB_VCPKG_ROOT}/bin)
+# PCB Viewer vcpkg dependencies - use MinGW-compatible libraries
+set(PCB_VCPKG_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/vcpkg/packages)
+set(PCB_VCPKG_IMGUI_ROOT ${PCB_VCPKG_ROOT}/imgui_x64-mingw-dynamic)
+set(PCB_VCPKG_GLFW_ROOT ${PCB_VCPKG_ROOT}/glfw3_x64-mingw-dynamic)
+set(PCB_VCPKG_GLEW_ROOT ${PCB_VCPKG_ROOT}/glew_x64-mingw-dynamic)
+
+# ImGui backend source directory
+set(IMGUI_BACKENDS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/vcpkg/buildtrees/imgui/src/v1.91.9-afb09617a6.clean/backends)
+
+# Set include and library paths for MinGW libraries
+set(PCB_VCPKG_INCLUDE ${PCB_VCPKG_IMGUI_ROOT}/include ${PCB_VCPKG_GLFW_ROOT}/include ${PCB_VCPKG_GLEW_ROOT}/include ${IMGUI_BACKENDS_DIR})
+set(PCB_VCPKG_LIB ${PCB_VCPKG_IMGUI_ROOT}/lib ${PCB_VCPKG_GLFW_ROOT}/lib ${PCB_VCPKG_GLEW_ROOT}/lib)
+set(PCB_VCPKG_BIN ${PCB_VCPKG_GLFW_ROOT}/bin ${PCB_VCPKG_GLEW_ROOT}/bin)
 
 message(STATUS "PCB vcpkg root: ${PCB_VCPKG_ROOT}")
 message(STATUS "PCB vcpkg include: ${PCB_VCPKG_INCLUDE}")
@@ -154,6 +162,9 @@ set(PCB_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/des.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/rendering/PCBRenderer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/rendering/Window.cpp
+    # ImGui implementation sources for GLFW and OpenGL
+    ${IMGUI_BACKENDS_DIR}/imgui_impl_glfw.cpp
+    ${IMGUI_BACKENDS_DIR}/imgui_impl_opengl3.cpp
 )
 
 set(DATABASE_SOURCES
@@ -342,7 +353,12 @@ if(EXISTS "${PCB_IMGUI_ROOT}/lib/libimgui.a" AND EXISTS "${PCB_GLFW_ROOT}/lib/li
         "${PCB_GLEW_ROOT}/lib"
     )
     
-    target_link_libraries(Way2RepairLoginSystem PRIVATE imgui glfw3dll glew32)
+    target_link_libraries(Way2RepairLoginSystem PRIVATE 
+        "${PCB_IMGUI_ROOT}/lib/libimgui.a"
+        "${PCB_GLFW_ROOT}/lib/libglfw3dll.a"  
+        "${PCB_GLEW_ROOT}/lib/libglew32.dll.a"
+        opengl32
+    )
     target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_PCB_IMGUI HAVE_PCB_GLFW HAVE_PCB_GLEW)
     set(HAVE_PCB_VCPKG TRUE)
     
@@ -432,9 +448,9 @@ if(WIN32)
         message(STATUS "GLEW DLL not found - application will use basic OpenGL: ${GLEW_DLL}")
     endif()
     
-    # Copy PCB vcpkg DLLs if they exist (use the x64-windows version for better compatibility)
-    set(PCB_VCPKG_GLFW_DLL "${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/vcpkg_installed/x64-windows/bin/glfw3.dll")
-    set(PCB_VCPKG_GLEW_DLL "${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/vcpkg_installed/x64-windows/bin/glew32.dll")
+    # Copy PCB MinGW vcpkg DLLs if they exist
+    set(PCB_VCPKG_GLFW_DLL "${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/vcpkg/packages/glfw3_x64-mingw-dynamic/bin/glfw3.dll")
+    set(PCB_VCPKG_GLEW_DLL "${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/vcpkg/packages/glew_x64-mingw-dynamic/bin/glew32.dll")
     
     if(EXISTS ${PCB_VCPKG_GLFW_DLL})
         add_custom_command(TARGET Way2RepairLoginSystem POST_BUILD

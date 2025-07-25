@@ -1451,3 +1451,105 @@ NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT
     Should equal desired position (CENTER) = 430.5
     Difference = -9.15527e-05
     Distance from viewport center = -9.15527e-05
+NavigateToNextSearchResult: CALLED
+  results.size()=8
+  currentResultIndex BEFORE=0
+NavigateToSearchResultPrecise: CALLED for result 1
+  result.pageIndex=1, result.charIndex=2002
+NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT
+  PDF coordinates: left=281.734, top=566.167, right=297.525, bottom=559.941
+  Original page height=595.32
+  Rendered page height=861 (used for positioning)
+  Page index=1
+  Page height in screen=2233.21
+  Sum of previous pages=2233.21
+  Text relative top (flipped)=0.0489709
+  Text offset in page=109.363
+  Desired viewport position (CENTER)=430.5
+  Target scroll offset=1912.08
+  Final scroll offset=1912.08
+  Zoom scale=2.59374
+  Viewport height=861
+  Max possible offset=68368.6
+  Total document height=69229.6
+  Rendered/Original height ratio=1.44628
+  SAME-PAGE NAVIGATION ANALYSIS:
+    Current scroll offset=566.879
+    Original target scroll offset=1912.08
+    Final target scroll offset=1912.08
+    Scroll change magnitude=1345.2
+    LARGE CHANGE - likely cross-page or significant movement
+  VERIFICATION: After navigation, highlighting will calculate:
+    pageTopY = 321.137
+    textScreenTop = 430.5
+    Should equal desired position (CENTER) = 430.5
+    Difference = -3.05176e-05
+    Distance from viewport center = -3.05176e-05
+NavigateToNextSearchResult: CALLED
+  results.size()=8
+  currentResultIndex BEFORE=1
+NavigateToSearchResultPrecise: CALLED for result 2
+  result.pageIndex=2, result.charIndex=925
+NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT
+  PDF coordinates: left=124.862, top=585.848, right=139.75, bottom=579.988
+  Original page height=595.32
+  Rendered page height=861 (used for positioning)
+  Page index=2
+  Page height in screen=2233.21
+  Sum of previous pages=4466.43
+  Text relative top (flipped)=0.0159113
+  Text offset in page=35.5332
+  Desired viewport position (CENTER)=430.5
+  Target scroll offset=4071.46
+  Final scroll offset=4071.46
+  Zoom scale=2.59374
+  Viewport height=861
+  Max possible offset=68368.6
+  Total document height=69229.6
+  Rendered/Original height ratio=1.44628
+  SAME-PAGE NAVIGATION ANALYSIS:
+    Current scroll offset=2233.21
+    Original target scroll offset=4071.46
+    Final target scroll offset=4071.46
+    Scroll change magnitude=1838.25
+    LARGE CHANGE - likely cross-page or significant movement
+  VERIFICATION: After navigation, highlighting will calculate:
+    pageTopY = 394.967
+    textScreenTop = 430.5
+    Should equal desired position (CENTER) = 430.5
+    Difference = 0
+    Distance from viewport center = 0
+NavigateToNextSearchResult: CALLED
+  results.size()=8
+  currentResultIndex BEFORE=2
+NavigateToSearchResultPrecise: CALLED for result 3
+  result.pageIndex=3, result.charIndex=3436
+NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT
+  PDF coordinates: left=320.616, top=570.008, right=336.406, bottom=563.781
+  Original page height=595.32
+  Rendered page height=861 (used for positioning)
+  Page index=3
+  Page height in screen=2233.21
+  Sum of previous pages=6699.64
+  Text relative top (flipped)=0.0425191
+  Text offset in page=94.9543
+  Desired viewport position (CENTER)=430.5
+  Target scroll offset=6364.09
+  Final scroll offset=6364.09
+  Zoom scale=2.59374
+  Viewport height=861
+  Max possible offset=68368.6
+  Total document height=69229.6
+  Rendered/Original height ratio=1.44628
+  SAME-PAGE NAVIGATION ANALYSIS:
+    Current scroll offset=4358.09
+    Original target scroll offset=6364.09
+    Final target scroll offset=6364.09
+    Scroll change magnitude=2006
+    LARGE CHANGE - likely cross-page or significant movement
+  VERIFICATION: After navigation, highlighting will calculate:
+    pageTopY = 335.546
+    textScreenTop = 430.5
+    Should equal desired position (CENTER) = 430.5
+    Difference = 0.000183105
+    Distance from viewport center = 0.000183105
