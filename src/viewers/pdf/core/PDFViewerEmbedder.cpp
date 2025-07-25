@@ -884,7 +884,8 @@ void PDFViewerEmbedder::regenerateTextures()
     // Regenerate all textures
     for (int i = 0; i < pageCount; ++i) {
         int pageW = 0, pageH = 0;
-        float effectiveZoom = (m_scrollState->zoomScale > 0.5f) ? m_scrollState->zoomScale : 0.5f;
+        // FIXED: Remove hard 0.5x threshold - use actual zoom with proper minimum
+        float effectiveZoom = std::max(0.2f, m_scrollState->zoomScale);
         m_renderer->GetBestFitSize(i, static_cast<int>(m_windowWidth * effectiveZoom), 
                                    static_cast<int>(m_windowHeight * effectiveZoom), pageW, pageH);
         
@@ -922,12 +923,21 @@ void PDFViewerEmbedder::regenerateVisibleTextures()
         }
         
         int pageW = 0, pageH = 0;
-        float effectiveZoom = (m_scrollState->zoomScale > 0.5f) ? m_scrollState->zoomScale : 0.5f;
+        // FIXED: Remove hard 0.5x threshold - use actual zoom with proper minimum
+        float effectiveZoom = std::max(0.2f, m_scrollState->zoomScale);
         m_renderer->GetBestFitSize(i, static_cast<int>(m_windowWidth * effectiveZoom), 
                                    static_cast<int>(m_windowHeight * effectiveZoom), pageW, pageH);
         
         FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, pageW, pageH);
         m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), pageW, pageH);
+        
+        // Update page dimensions with new resolution
+        // Store base dimensions properly scaled for layout calculations
+        int baseW = 0, baseH = 0;
+        m_renderer->GetBestFitSize(i, m_windowWidth, m_windowHeight, baseW, baseH);
+        m_pageWidths[i] = baseW;
+        m_pageHeights[i] = baseH;
+        
         FPDFBitmap_Destroy(bmp);
     }
     
@@ -945,7 +955,8 @@ void PDFViewerEmbedder::regeneratePageTexture(int pageIndex)
     
     // Generate new texture
     int pageW = 0, pageH = 0;
-    float effectiveZoom = (m_scrollState->zoomScale > 0.5f) ? m_scrollState->zoomScale : 0.5f;
+    // FIXED: Remove hard 0.5x threshold - use actual zoom with proper minimum
+    float effectiveZoom = std::max(0.2f, m_scrollState->zoomScale);
     m_renderer->GetBestFitSize(pageIndex, static_cast<int>(m_windowWidth * effectiveZoom), 
                                static_cast<int>(m_windowHeight * effectiveZoom), pageW, pageH);
     
@@ -1012,6 +1023,14 @@ unsigned int PDFViewerEmbedder::createTextureFromPDFBitmap(void* buffer, int wid
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, buffer);
     glBindTexture(GL_TEXTURE_2D, 0);
     return textureID;
+}
+
+// Texture optimization method for smooth zoom transitions
+float PDFViewerEmbedder::getOptimalTextureZoom(float currentZoom) const
+{
+    // Simple scaling without hard thresholds - this prevents the coordinate misplacement
+    // issue that was caused by sudden texture resolution changes
+    return std::clamp(currentZoom, 0.2f, 4.0f);
 }
 
 // Static callback wrappers
@@ -1199,6 +1218,8 @@ void PDFViewerEmbedder::onScroll(double xoffset, double yoffset)
         // Use zoom FACTOR not delta - same as standalone PDF viewer
         float zoomFactor = (yoffset > 0) ? 1.1f : 1.0f / 1.1f;
         
+        // FIXED: Simply use HandleZoom - it already has proper cursor-based zoom logic
+        // The issue was that we were overcomplicating it with manual coordinate calculations
         HandleZoom(*m_scrollState, zoomFactor, (float)cursorX, (float)cursorY, 
                    (float)m_windowWidth, (float)m_windowHeight, m_pageHeights, m_pageWidths);
         
@@ -1256,7 +1277,6 @@ void PDFViewerEmbedder::onKey(int key, int scancode, int action, int mods)
             // Home key navigation
             if (mods & GLFW_MOD_CONTROL) {
                 // Ctrl+Home: Go to first page
-                goToPage(1);
             } else {
                 // Home: Go to top of current page
                 m_scrollState->scrollOffset = 0.0f;

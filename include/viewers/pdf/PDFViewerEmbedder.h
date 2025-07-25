@@ -158,6 +158,9 @@ private:
     void cleanupTextures();
     unsigned int createTextureFromPDFBitmap(void* bitmap, int width, int height);
     
+    // Texture optimization helpers
+    float getOptimalTextureZoom(float currentZoom) const;
+    
     // Callback wrapper methods (static functions that call instance methods)
     static void windowSizeCallback(GLFWwindow* window, int width, int height);
     static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos);
