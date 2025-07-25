@@ -1082,7 +1082,7 @@ void PDFViewerEmbedder::onCursorPos(double xpos, double ypos)
     }
     
     if (m_scrollState->isPanning) {
-        UpdatePanning(*m_scrollState, xpos, ypos, (float)m_windowWidth, (float)m_windowHeight);
+        UpdatePanning(*m_scrollState, xpos, ypos, (float)m_windowWidth, (float)m_windowHeight, m_pageHeights);
     }
     
     if (m_scrollState->isScrollBarDragging) {
@@ -1193,7 +1193,7 @@ void PDFViewerEmbedder::onScroll(double xoffset, double yoffset)
     
     if (shiftPressed) {
         // Horizontal scrolling with Shift + mouse wheel
-        HandleHorizontalScroll(*m_scrollState, (float)yoffset, (float)m_windowWidth);
+        HandleHorizontalScroll(*m_scrollState, (float)yoffset, (float)m_windowWidth, m_pageHeights);
     } else {
         // Always zoom with mouse wheel (no Ctrl modifier required)
         // Use zoom FACTOR not delta - same as standalone PDF viewer
@@ -1299,14 +1299,14 @@ void PDFViewerEmbedder::onKey(int key, int scancode, int action, int mods)
             if (mods & GLFW_MOD_CONTROL) {
                 previousPage();
             } else {
-                HandleHorizontalScroll(*m_scrollState, -1.0f, (float)m_windowWidth);
+                HandleHorizontalScroll(*m_scrollState, -1.0f, (float)m_windowWidth, m_pageHeights);
             }
         } else if (key == GLFW_KEY_RIGHT) {
             // Arrow right: Horizontal scroll or next page
             if (mods & GLFW_MOD_CONTROL) {
                 nextPage();
             } else {
-                HandleHorizontalScroll(*m_scrollState, 1.0f, (float)m_windowWidth);
+                HandleHorizontalScroll(*m_scrollState, 1.0f, (float)m_windowWidth, m_pageHeights);
             }
         } else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_9 && (mods & GLFW_MOD_CONTROL)) {
             // Ctrl+1-9: Quick zoom levels

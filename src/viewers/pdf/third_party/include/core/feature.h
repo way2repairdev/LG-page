@@ -143,14 +143,14 @@ struct PDFScrollState {
 
 void UpdateScrollState(PDFScrollState& state, float winHeight, const std::vector<int>& pageHeights);
 void HandleScroll(PDFScrollState& state, float yoffset);
-void HandleHorizontalScroll(PDFScrollState& state, float xoffset, float winWidth);
+void HandleHorizontalScroll(PDFScrollState& state, float xoffset, float winWidth, const std::vector<int>& pageHeights);
 void DrawScrollBar(const PDFScrollState& state);
 int GetCurrentPageIndex(const PDFScrollState& state, const std::vector<int>& pageHeights);
 void HandleZoom(PDFScrollState& state, float zoomDelta, float cursorX, float cursorY, float winWidth, float winHeight, std::vector<int>& pageHeights, const std::vector<int>& pageWidths);
 
 // Panning functions
 void StartPanning(PDFScrollState& state, double mouseX, double mouseY);
-void UpdatePanning(PDFScrollState& state, double mouseX, double mouseY, float winWidth, float winHeight);
+void UpdatePanning(PDFScrollState& state, double mouseX, double mouseY, float winWidth, float winHeight, const std::vector<int>& pageHeights);
 void StopPanning(PDFScrollState& state);
 
 // Scroll bar dragging functions

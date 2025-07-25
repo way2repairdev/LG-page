@@ -8,6 +8,9 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+
+// Forward declarations
+float GetVisiblePageMaxWidth(const PDFScrollState& state, const std::vector<int>& pageHeights);
 #include <iostream> // For debug output
 
 #undef max // Resolve macro conflicts with `max`
@@ -43,14 +46,22 @@ void HandleScroll(PDFScrollState& state, float yoffset) {
     // If content fits in viewport, keep it centered (no scrolling)
 }
 
-void HandleHorizontalScroll(PDFScrollState& state, float xoffset, float winWidth) {
+void HandleHorizontalScroll(PDFScrollState& state, float xoffset, float winWidth, const std::vector<int>& pageHeights) {
     // xoffset: positive = scroll right, negative = scroll left
+    // IMPORTANT: horizontalOffset works in reverse - positive values move content LEFT
     
     // Only allow horizontal scrolling if content exceeds viewport width
-    if (state.pageWidthMax * state.zoomScale > winWidth) {
-        state.horizontalOffset += xoffset * (winWidth * 0.1f);
-        if (state.horizontalOffset < 0.0f) state.horizontalOffset = 0.0f;
-        if (state.horizontalOffset > state.maxHorizontalOffset) state.horizontalOffset = state.maxHorizontalOffset;
+    float visiblePageWidth = GetVisiblePageMaxWidth(state, pageHeights);
+    if (visiblePageWidth > winWidth) {
+        // Invert the xoffset because horizontalOffset works in reverse
+        state.horizontalOffset -= xoffset * (winWidth * 0.1f);
+        
+        // Apply correct bounds for the coordinate system based on rendering logic
+        float minHorizontalOffset = (winWidth - visiblePageWidth) / 2.0f;
+        float maxHorizontalOffset = (visiblePageWidth - winWidth) / 2.0f;
+        
+        if (state.horizontalOffset > maxHorizontalOffset) state.horizontalOffset = maxHorizontalOffset;
+        if (state.horizontalOffset < minHorizontalOffset) state.horizontalOffset = minHorizontalOffset;
     }
     // If content fits in viewport, keep it centered (no horizontal scrolling)
 }
@@ -120,6 +131,27 @@ void GetVisiblePageRange(const PDFScrollState& state, const std::vector<int>& pa
         int maxPage = (int)pageHeights.size() - 1;
         lastVisible = (2 < maxPage) ? 2 : maxPage;
     }
+}
+
+// Helper function to get the maximum width of currently visible pages
+float GetVisiblePageMaxWidth(const PDFScrollState& state, const std::vector<int>& pageHeights) {
+    if (!state.pageWidths || state.pageWidths->empty()) {
+        return state.pageWidthMax; // Fallback to existing logic
+    }
+    
+    int firstVisible, lastVisible;
+    GetVisiblePageRange(state, pageHeights, firstVisible, lastVisible);
+    
+    float maxVisibleWidth = 0.0f;
+    for (int i = firstVisible; i <= lastVisible && i < (int)state.pageWidths->size(); ++i) {
+        float pageWidth = (*state.pageWidths)[i] * state.zoomScale;
+        if (pageWidth > maxVisibleWidth) {
+            maxVisibleWidth = pageWidth;
+        }
+    }
+    
+    // If no visible pages found, fallback to the widest page overall
+    return maxVisibleWidth > 0.0f ? maxVisibleWidth : state.pageWidthMax;
 }
 
 bool IsPageVisible(const PDFScrollState& state, const std::vector<int>& pageHeights, 
@@ -278,16 +310,71 @@ void HandleZoom(PDFScrollState& state, float zoomDelta, float cursorX, float cur
         newScrollOffset = -(requiredYCenter - yOffsetFromPages - newPageH / 2.0f);
     }
     
-    // Step 4: Apply calculated offsets with safety limits
-    const float MAX_OFFSET = 1000000.0f; // Very large but finite limit
+    // Step 4: Apply calculated offsets with proper content boundary constraints
+    // Calculate the actual content dimensions at current zoom level for boundary checking
+    float zoomedPageWidthMax = GetVisiblePageMaxWidth(state, pageHeights);
+    float zoomedPageHeightSum = state.pageHeightSum;
     
-    // Clamp to prevent numerical instability while preserving freelook behavior
-    if (std::abs(newScrollOffset) < MAX_OFFSET) {
-        state.scrollOffset = newScrollOffset;
+    // Apply zoom-aware boundary constraints
+    if (state.zoomScale <= 1.0f) {
+        // ZOOM OUT MODE: Use standard boundary constraints
+        // Vertical constraints
+        if (zoomedPageHeightSum > winHeight) {
+            float minVerticalOffset = 0.0f;
+            float maxVerticalOffset = zoomedPageHeightSum - winHeight;
+            if (newScrollOffset < minVerticalOffset) newScrollOffset = minVerticalOffset;
+            if (newScrollOffset > maxVerticalOffset) newScrollOffset = maxVerticalOffset;
+        } else {
+            // Content fits in viewport - center it
+            newScrollOffset = -(winHeight - zoomedPageHeightSum) / 2.0f;
+        }
+        
+        // Horizontal constraints  
+        if (zoomedPageWidthMax > winWidth) {
+            // Content is wider than viewport - constrain within content bounds
+            // IMPORTANT: horizontalOffset works in reverse - positive values move content LEFT
+            // Use correct boundary calculation based on rendering coordinate system
+            float minHorizontalOffset = (winWidth - zoomedPageWidthMax) / 2.0f;
+            float maxHorizontalOffset = (zoomedPageWidthMax - winWidth) / 2.0f;
+            if (newHorizontalOffset > maxHorizontalOffset) newHorizontalOffset = maxHorizontalOffset;
+            if (newHorizontalOffset < minHorizontalOffset) newHorizontalOffset = minHorizontalOffset;
+        } else {
+            // Content fits in viewport - center it
+            newHorizontalOffset = 0.0f;
+        }
+    } else {
+        // ZOOM IN MODE: Constrained panning within content bounds
+        // Vertical constraints - allow viewing the entire zoomed content
+        float verticalContentOverflow = zoomedPageHeightSum - winHeight;
+        if (verticalContentOverflow > 0.0f) {
+            float minVerticalOffset = 0.0f;
+            float maxVerticalOffset = verticalContentOverflow;
+            if (newScrollOffset < minVerticalOffset) newScrollOffset = minVerticalOffset;
+            if (newScrollOffset > maxVerticalOffset) newScrollOffset = maxVerticalOffset;
+        } else {
+            // Content fits in viewport - center it
+            newScrollOffset = -verticalContentOverflow / 2.0f;
+        }
+        
+        // Horizontal constraints - allow viewing the entire zoomed content
+        // IMPORTANT: horizontalOffset works in reverse - positive values move content LEFT
+        float horizontalContentOverflow = zoomedPageWidthMax - winWidth;
+        if (horizontalContentOverflow > 0.0f) {
+            // Content is wider than viewport - constrain within content bounds
+            // Use correct boundary calculation based on rendering coordinate system
+            float minHorizontalOffset = (winWidth - zoomedPageWidthMax) / 2.0f;
+            float maxHorizontalOffset = (zoomedPageWidthMax - winWidth) / 2.0f;
+            if (newHorizontalOffset > maxHorizontalOffset) newHorizontalOffset = maxHorizontalOffset;
+            if (newHorizontalOffset < minHorizontalOffset) newHorizontalOffset = minHorizontalOffset;
+        } else {
+            // Content fits in viewport - center it
+            newHorizontalOffset = 0.0f;
+        }
     }
-    if (std::abs(newHorizontalOffset) < MAX_OFFSET) {
-        state.horizontalOffset = newHorizontalOffset;
-    }    
+    
+    // Apply the constrained offsets
+    state.scrollOffset = newScrollOffset;
+    state.horizontalOffset = newHorizontalOffset;    
     // Debug output for enhanced cursor tracking (can be removed in production)
     if (hasValidTarget) {
         // Enhanced cursor-based zoom successfully calculated precise position
@@ -308,9 +395,11 @@ void HandleZoom(PDFScrollState& state, float zoomDelta, float cursorX, float cur
             float pageWidth = pageHeights[i] * state.zoomScale * 0.77f; // Approximate aspect ratio
             if (pageWidth > state.pageWidthMax) state.pageWidthMax = pageWidth;
         }
-    }// Update maximum scroll offsets (for UI elements, but no clamping for freelook)
+    }// Update maximum scroll offsets (for UI elements)
     state.maxOffset = std::max(0.0f, state.pageHeightSum - winHeight);
-    state.maxHorizontalOffset = std::max(0.0f, state.pageWidthMax - winWidth);
+    // FIXED: maxHorizontalOffset calculation for the coordinate system
+    // Since horizontalOffset works in reverse (positive = move left), we need proper bounds
+    state.maxHorizontalOffset = std::max(0.0f, (state.pageWidthMax - winWidth) / 2.0f);
     
     // AUTO-CENTER PAGES WHEN ZOOMED OUT: Ensure pages stay centered when they fit in viewport
     if (state.zoomScale <= 1.0f) {
@@ -329,9 +418,12 @@ void HandleZoom(PDFScrollState& state, float zoomDelta, float cursorX, float cur
         if (state.pageWidthMax * state.zoomScale <= winWidth) {
             state.horizontalOffset = 0.0f;
         } else {
-            // Content exceeds viewport - clamp to valid bounds
-            if (state.horizontalOffset < 0.0f) state.horizontalOffset = 0.0f;
-            if (state.horizontalOffset > state.maxHorizontalOffset) state.horizontalOffset = state.maxHorizontalOffset;
+            // Content exceeds viewport - clamp to valid bounds using corrected coordinate system
+            float zoomedPageWidth = state.pageWidthMax * state.zoomScale;
+            float minHorizontalOffset = (winWidth - zoomedPageWidth) / 2.0f;
+            float maxHorizontalOffset = (zoomedPageWidth - winWidth) / 2.0f;
+            if (state.horizontalOffset > maxHorizontalOffset) state.horizontalOffset = maxHorizontalOffset;
+            if (state.horizontalOffset < minHorizontalOffset) state.horizontalOffset = minHorizontalOffset;
         }
     }
     // FREELOOK ZOOM: For zoom > 100%, maintain current position (no auto-centering)    // Mark that zoom has changed with immediate rendering for visible pages only
@@ -357,7 +449,7 @@ void StartPanning(PDFScrollState& state, double mouseX, double mouseY) {
     state.panStartHorizontalOffset = state.horizontalOffset;
 }
 
-void UpdatePanning(PDFScrollState& state, double mouseX, double mouseY, float winWidth, float winHeight) {
+void UpdatePanning(PDFScrollState& state, double mouseX, double mouseY, float winWidth, float winHeight, const std::vector<int>& pageHeights) {
     if (!state.isPanning) return;
     
     // Calculate mouse movement delta
@@ -409,26 +501,78 @@ void UpdatePanning(PDFScrollState& state, double mouseX, double mouseY, float wi
         }
         
         // Horizontal panning: Only allow if content exceeds viewport width  
-        if (state.pageWidthMax * state.zoomScale > winWidth) {
-            // Allow horizontal panning but constrain to content bounds
-            if (newHorizontalOffset < 0.0f) newHorizontalOffset = 0.0f;
-            if (newHorizontalOffset > state.maxHorizontalOffset) newHorizontalOffset = state.maxHorizontalOffset;
+        float visiblePageWidth = GetVisiblePageMaxWidth(state, pageHeights);
+        if (visiblePageWidth > winWidth) {
+            // Allow horizontal panning but constrain to content bounds - no gaps
+            // IMPORTANT: horizontalOffset works in reverse - positive values move content LEFT
+            
+            // Use correct boundary calculation based on rendering coordinate system
+            // Page left edge: (winWidth/2 - horizontalOffset) - pageW/2
+            // Page right edge: (winWidth/2 - horizontalOffset) + pageW/2
+            float minHorizontalOffset = (winWidth - visiblePageWidth) / 2.0f;
+            float maxHorizontalOffset = (visiblePageWidth - winWidth) / 2.0f;
+            
+            if (newHorizontalOffset > maxHorizontalOffset) newHorizontalOffset = maxHorizontalOffset;
+            if (newHorizontalOffset < minHorizontalOffset) newHorizontalOffset = minHorizontalOffset;
             state.horizontalOffset = newHorizontalOffset;
         } else {
             // Content fits in viewport - center it horizontally, no panning
             state.horizontalOffset = 0.0f;
         }
     } else {
-        // ZOOM IN MODE: Freelook panning for detailed navigation
-        // When zoomed in, allow unlimited panning for detailed document exploration
-        const float MAX_OFFSET = 1000000.0f; // Very large but finite limit
+        // ZOOM IN MODE: Constrained panning within content bounds
+        // When zoomed in, calculate proper bounds based on actual content dimensions
         
-        // Apply reasonable limits to prevent numerical instability
-        if (std::abs(newScrollOffset) < MAX_OFFSET) {
+        // Calculate the actual content dimensions at current zoom level
+        float zoomedPageWidthMax = GetVisiblePageMaxWidth(state, pageHeights);
+        float zoomedPageHeightSum = state.pageHeightSum;
+        
+        // Vertical panning constraints
+        // Allow panning only within the bounds of the zoomed content
+        float verticalContentOverflow = zoomedPageHeightSum - winHeight;
+        if (verticalContentOverflow > 0.0f) {
+            // Content is larger than viewport - constrain within content bounds
+            float minVerticalOffset = 0.0f;
+            float maxVerticalOffset = verticalContentOverflow;
+            
+            if (newScrollOffset < minVerticalOffset) newScrollOffset = minVerticalOffset;
+            if (newScrollOffset > maxVerticalOffset) newScrollOffset = maxVerticalOffset;
             state.scrollOffset = newScrollOffset;
+        } else {
+            // Content fits within viewport height - center it vertically
+            state.scrollOffset = -verticalContentOverflow / 2.0f;
         }
-        if (std::abs(newHorizontalOffset) < MAX_OFFSET) {
+        
+        // Horizontal panning constraints
+        // Allow panning only within the bounds of the zoomed content
+        // IMPORTANT: horizontalOffset works in reverse - positive values move content LEFT
+        // xCenter = (winWidth / 2.0f) - horizontalOffset
+        float horizontalContentOverflow = zoomedPageWidthMax - winWidth;
+        if (horizontalContentOverflow > 0.0f) {
+            // Content is wider than viewport - constrain to show only content, no gaps
+            // Page rendering: x = xCenter - pageW/2, where xCenter = winWidth/2 - horizontalOffset
+            // Page left edge: (winWidth/2 - horizontalOffset) - pageW/2
+            // Page right edge: (winWidth/2 - horizontalOffset) + pageW/2
+            
+            // For no right gap: page left edge should be <= 0 (content fills right side)
+            // (winWidth/2 - horizontalOffset) - pageW/2 <= 0
+            // winWidth/2 - pageW/2 <= horizontalOffset
+            // horizontalOffset >= (winWidth - pageW)/2
+            float minHorizontalOffset = (winWidth - zoomedPageWidthMax) / 2.0f;
+            
+            // For no left gap: page right edge should be >= winWidth (content fills left side)
+            // (winWidth/2 - horizontalOffset) + pageW/2 >= winWidth
+            // winWidth/2 + pageW/2 - winWidth >= horizontalOffset
+            // (pageW - winWidth)/2 >= horizontalOffset
+            // horizontalOffset <= (pageW - winWidth)/2
+            float maxHorizontalOffset = (zoomedPageWidthMax - winWidth) / 2.0f;
+            
+            if (newHorizontalOffset > maxHorizontalOffset) newHorizontalOffset = maxHorizontalOffset;
+            if (newHorizontalOffset < minHorizontalOffset) newHorizontalOffset = minHorizontalOffset;
             state.horizontalOffset = newHorizontalOffset;
+        } else {
+            // Content fits within viewport width - keep it centered
+            state.horizontalOffset = 0.0f;
         }
     }
 }

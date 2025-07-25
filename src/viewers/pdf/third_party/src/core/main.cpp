@@ -127,8 +127,8 @@ int APIENTRY WinMain(
         }
         
         // Handle panning if currently active
-        if (state->isPanning) {
-            UpdatePanning(*state, xpos, ypos, (float)winWidth, (float)winHeight);
+        if (state->isPanning && state->pageHeights) {
+            UpdatePanning(*state, xpos, ypos, (float)winWidth, (float)winHeight, *state->pageHeights);
         }
         
         // Handle scroll bar dragging if currently active
