@@ -76,7 +76,7 @@ find_package(OpenGL REQUIRED)
 
 # PCB Viewer vcpkg dependencies - use MinGW-compatible libraries
 set(PCB_VCPKG_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/vcpkg/packages)
-set(PCB_VCPKG_IMGUI_ROOT ${PCB_VCPKG_ROOT}/imgui_x64-mingw-dynamic)
+set(PCB_VCPKG_IMGUI_ROOT ${PCB_VCPKG_ROOT}/imgui_x64-mingw-dynamic)]
 set(PCB_VCPKG_GLFW_ROOT ${PCB_VCPKG_ROOT}/glfw3_x64-mingw-dynamic)
 set(PCB_VCPKG_GLEW_ROOT ${PCB_VCPKG_ROOT}/glew_x64-mingw-dynamic)
 
