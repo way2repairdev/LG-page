@@ -95,6 +95,9 @@ void PCBRenderer::SetPCBData(std::shared_ptr<BRDFileBase> data) {
     if (pcb_data && pcb_data->IsValid()) {
         LOG_INFO("PCB data set: " + std::to_string(pcb_data->parts.size()) + 
                 " parts, " + std::to_string(pcb_data->pins.size()) + " pins");
+        
+        // Build performance optimization cache
+        BuildPinGeometryCache();
     }
 }
 
@@ -149,9 +152,9 @@ void PCBRenderer::Render(int window_width, int window_height) {
     if (settings.show_part_outlines) {
         RenderPartOutlineImGui(draw_list, zoom, offset_x, offset_y);
     }
-    RenderCirclePinsImGui(draw_list, zoom, offset_x, offset_y);
-    RenderRectanglePinsImGui(draw_list, zoom, offset_x, offset_y);
-    RenderOvalPinsImGui(draw_list, zoom, offset_x, offset_y);
+    RenderCirclePinsImGui(draw_list, zoom, offset_x, offset_y, window_width, window_height);
+    RenderRectanglePinsImGui(draw_list, zoom, offset_x, offset_y, window_width, window_height);
+    RenderOvalPinsImGui(draw_list, zoom, offset_x, offset_y, window_width, window_height);
 
     // Collect part names for rendering on top
     CollectPartNamesForRendering(zoom, offset_x, offset_y);
@@ -160,7 +163,7 @@ void PCBRenderer::Render(int window_width, int window_height) {
     RenderPartNamesOnTop(draw_list);
 
     // Render pin numbers as text overlays
-    RenderPinNumbersAsText(draw_list, zoom, offset_x, offset_y);
+    RenderPinNumbersAsText(draw_list, zoom, offset_x, offset_y, window_width, window_height);
     
     // Render part highlighting on top of everything
     RenderPartHighlighting(draw_list, zoom, offset_x, offset_y);
@@ -805,13 +808,26 @@ void PCBRenderer::RenderPartHighlighting(ImDrawList* draw_list, float zoom, floa
     }
 }
 
-void PCBRenderer::RenderCirclePinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y) {
-    if (!pcb_data || pcb_data->circles.empty()) {
+void PCBRenderer::RenderCirclePinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y, int window_width, int window_height) {
+    if (!pcb_data || pcb_data->circles.empty() || pin_geometry_cache.empty()) {
         return;
     }
     
-    // Render all circles with red fill
-    for (const auto& circle : pcb_data->circles) {
+    // Pre-calculate selected net for highlighting (avoid string operations in loop)
+    std::string selected_net;
+    if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
+        selected_net = pcb_data->pins[selected_pin_index].net;
+    }
+    
+    // Render all circles with optimized visibility culling
+    for (size_t circle_idx = 0; circle_idx < pcb_data->circles.size(); ++circle_idx) {
+        const auto& circle = pcb_data->circles[circle_idx];
+        
+        // Early visibility culling - skip if circle is outside visible area
+        if (!IsElementVisible(circle.center.x, circle.center.y, circle.radius, zoom, offset_x, offset_y, window_width, window_height)) {
+            continue;
+        }
+        
         // Transform circle center coordinates to screen space with Y-axis mirroring
         float x = circle.center.x * zoom + offset_x;
         float y = offset_y - circle.center.y * zoom;  // Mirror Y-axis
@@ -822,22 +838,24 @@ void PCBRenderer::RenderCirclePinsImGui(ImDrawList* draw_list, float zoom, float
         // Ensure minimum visibility
         if (radius < 1.0f) radius = 1.0f;
         
-        // Check if this circle corresponds to a ground pin or selected pin and override color
+        // Check if this circle corresponds to a pin with cached data for color override
         float r = circle.r, g = circle.g, b = circle.b, a = circle.a;
-        std::string selected_net;
-        if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
-            selected_net = pcb_data->pins[selected_pin_index].net;
-        }
-        for (size_t pin_idx = 0; pin_idx < pcb_data->pins.size(); ++pin_idx) {
+        
+        // Find pin that matches this circle using cache (much faster than linear search)
+        for (size_t pin_idx = 0; pin_idx < pcb_data->pins.size() && pin_idx < pin_geometry_cache.size(); ++pin_idx) {
             const auto& pin = pcb_data->pins[pin_idx];
-            if (pin.pos.x == circle.center.x && pin.pos.y == circle.center.y) {
+            const auto& cache = pin_geometry_cache[pin_idx];
+            
+            // Quick check using cached geometry index
+            if (cache.circle_index == circle_idx) {
+                // Use cached pin type checks
                 if (!selected_net.empty() && pin.net == selected_net) {
                     // Highlight all pins on the same net
                     r = 1.0f; g = 1.0f; b = 0.7f; a = 1.0f;
-                } else if (IsNCPin(pin)) {
+                } else if (cache.is_nc) {
                     // Use blue color for NC pins
                     r = 0.0f; g = 0.3f; b = 0.3f; a = 1.0f;
-                } else if (IsGroundPin(pin)) {
+                } else if (cache.is_ground) {
                     // Use grey color for ground pins
                     r = 0.5f; g = 0.5f; b = 0.5f; a = 1.0f;
                 }
@@ -867,13 +885,27 @@ void PCBRenderer::RenderCirclePinsImGui(ImDrawList* draw_list, float zoom, float
     }
 }
 
-void PCBRenderer::RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y) {
-    if (!pcb_data || pcb_data->rectangles.empty()) {
+void PCBRenderer::RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y, int window_width, int window_height) {
+    if (!pcb_data || pcb_data->rectangles.empty() || pin_geometry_cache.empty()) {
         return;
     }
     
-    // Render all rectangles with red fill
-    for (const auto& rectangle : pcb_data->rectangles) {
+    // Pre-calculate selected net for highlighting (avoid string operations in loop)
+    std::string selected_net;
+    if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
+        selected_net = pcb_data->pins[selected_pin_index].net;
+    }
+    
+    // Render all rectangles with optimized visibility culling
+    for (size_t rect_idx = 0; rect_idx < pcb_data->rectangles.size(); ++rect_idx) {
+        const auto& rectangle = pcb_data->rectangles[rect_idx];
+        
+        // Early visibility culling using approximate radius
+        float approx_radius = std::max(rectangle.width, rectangle.height) * 0.5f;
+        if (!IsElementVisible(rectangle.center.x, rectangle.center.y, approx_radius, zoom, offset_x, offset_y, window_width, window_height)) {
+            continue;
+        }
+        
         // Transform rectangle center coordinates to screen space with Y-axis mirroring
         float center_x = rectangle.center.x * zoom + offset_x;
         float center_y = offset_y - rectangle.center.y * zoom;  // Mirror Y-axis
@@ -886,22 +918,24 @@ void PCBRenderer::RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, fl
         if (width < 2.0f) width = 2.0f;
         if (height < 2.0f) height = 2.0f;
         
-        // Check if this rectangle corresponds to a ground pin or selected pin and override color
+        // Check if this rectangle corresponds to a pin with cached data for color override
         float r = rectangle.r, g = rectangle.g, b = rectangle.b, a = rectangle.a;
-        std::string selected_net;
-        if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
-            selected_net = pcb_data->pins[selected_pin_index].net;
-        }
-        for (size_t pin_idx = 0; pin_idx < pcb_data->pins.size(); ++pin_idx) {
+        
+        // Find pin that matches this rectangle using cache (much faster than linear search)
+        for (size_t pin_idx = 0; pin_idx < pcb_data->pins.size() && pin_idx < pin_geometry_cache.size(); ++pin_idx) {
             const auto& pin = pcb_data->pins[pin_idx];
-            if (pin.pos.x == rectangle.center.x && pin.pos.y == rectangle.center.y) {
+            const auto& cache = pin_geometry_cache[pin_idx];
+            
+            // Quick check using cached geometry index
+            if (cache.rectangle_index == rect_idx) {
+                // Use cached pin type checks
                 if (!selected_net.empty() && pin.net == selected_net) {
                     // Highlight all pins on the same net
                     r = 1.0f; g = 1.0f; b = 0.7f; a = 1.0f;
-                } else if (IsNCPin(pin)) {
+                } else if (cache.is_nc) {
                     // Use blue color for NC pins
                     r = 0.0f; g = 0.3f; b = 0.3f; a = 1.0f;
-                } else if (IsGroundPin(pin)) {
+                } else if (cache.is_ground) {
                     // Use grey color for ground pins
                     r = 0.5f; g = 0.5f; b = 0.5f; a = 1.0f;
                 }
@@ -975,13 +1009,27 @@ void PCBRenderer::RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, fl
     }
 }
 
-void PCBRenderer::RenderOvalPinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y) {
-    if (!pcb_data || pcb_data->ovals.empty()) {
+void PCBRenderer::RenderOvalPinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y, int window_width, int window_height) {
+    if (!pcb_data || pcb_data->ovals.empty() || pin_geometry_cache.empty()) {
         return;
     }
     
-    // Render all ovals as stadium shapes (rounded rectangles)
-    for (const auto& oval : pcb_data->ovals) {
+    // Pre-calculate selected net for highlighting (avoid string operations in loop)
+    std::string selected_net;
+    if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
+        selected_net = pcb_data->pins[selected_pin_index].net;
+    }
+    
+    // Render all ovals as stadium shapes (rounded rectangles) with optimized visibility culling
+    for (size_t oval_idx = 0; oval_idx < pcb_data->ovals.size(); ++oval_idx) {
+        const auto& oval = pcb_data->ovals[oval_idx];
+        
+        // Early visibility culling using approximate radius
+        float approx_radius = std::max(oval.width, oval.height) * 0.5f;
+        if (!IsElementVisible(oval.center.x, oval.center.y, approx_radius, zoom, offset_x, offset_y, window_width, window_height)) {
+            continue;
+        }
+        
         // Transform oval center coordinates to screen space with Y-axis mirroring
         float center_x = oval.center.x * zoom + offset_x;
         float center_y = offset_y - oval.center.y * zoom;  // Mirror Y-axis
@@ -994,22 +1042,24 @@ void PCBRenderer::RenderOvalPinsImGui(ImDrawList* draw_list, float zoom, float o
         if (width < 2.0f) width = 2.0f;
         if (height < 2.0f) height = 2.0f;
         
-        // Check if this oval corresponds to a ground pin or selected pin and override color
+        // Check if this oval corresponds to a pin with cached data for color override
         float r = oval.r, g = oval.g, b = oval.b, a = oval.a;
-        std::string selected_net;
-        if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
-            selected_net = pcb_data->pins[selected_pin_index].net;
-        }
-        for (size_t pin_idx = 0; pin_idx < pcb_data->pins.size(); ++pin_idx) {
+        
+        // Find pin that matches this oval using cache (much faster than linear search)
+        for (size_t pin_idx = 0; pin_idx < pcb_data->pins.size() && pin_idx < pin_geometry_cache.size(); ++pin_idx) {
             const auto& pin = pcb_data->pins[pin_idx];
-            if (pin.pos.x == oval.center.x && pin.pos.y == oval.center.y) {
+            const auto& cache = pin_geometry_cache[pin_idx];
+            
+            // Quick check using cached geometry index
+            if (cache.oval_index == oval_idx) {
+                // Use cached pin type checks
                 if (!selected_net.empty() && pin.net == selected_net) {
                     // Highlight all pins on the same net
                     r = 1.0f; g = 1.0f; b = 0.7f; a = 1.0f;
-                } else if (IsNCPin(pin)) {
+                } else if (cache.is_nc) {
                     // Use blue color for NC pins
                     r = 0.0f; g = 0.3f; b = 0.3f; a = 1.0f;
-                } else if (IsGroundPin(pin)) {
+                } else if (cache.is_ground) {
                     // Use grey color for ground pins
                     r = 0.5f; g = 0.5f; b = 0.5f; a = 1.0f;
                 }
@@ -1158,53 +1208,124 @@ bool PCBRenderer::IsNCPin(const BRDPin& pin) {
             net_upper.find("NC") == 0);  // Starts with NC (NC1, NC2, etc.)
 }
 
+// Performance optimization methods
+void PCBRenderer::BuildPinGeometryCache() {
+    if (!pcb_data) return;
+    
+    pin_geometry_cache.clear();
+    pin_geometry_cache.resize(pcb_data->pins.size());
+    
+    LOG_INFO("Building pin geometry cache for " + std::to_string(pcb_data->pins.size()) + " pins");
+    
+    for (size_t pin_idx = 0; pin_idx < pcb_data->pins.size(); ++pin_idx) {
+        const auto& pin = pcb_data->pins[pin_idx];
+        auto& cache = pin_geometry_cache[pin_idx];
+        
+        // Pre-compute pin type checks
+        cache.is_ground = IsGroundPin(pin);
+        cache.is_nc = IsNCPin(pin);
+        
+        // Find geometry for this pin
+        bool found_geometry = false;
+        
+        // Check circles
+        for (size_t circle_idx = 0; circle_idx < pcb_data->circles.size(); ++circle_idx) {
+            const auto& circle = pcb_data->circles[circle_idx];
+            if (circle.center.x == pin.pos.x && circle.center.y == pin.pos.y) {
+                cache.circle_index = circle_idx;
+                cache.radius = circle.radius;
+                found_geometry = true;
+                break;
+            }
+        }
+        
+        // Check rectangles if no circle found
+        if (!found_geometry) {
+            for (size_t rect_idx = 0; rect_idx < pcb_data->rectangles.size(); ++rect_idx) {
+                const auto& rect = pcb_data->rectangles[rect_idx];
+                if (rect.center.x == pin.pos.x && rect.center.y == pin.pos.y) {
+                    cache.rectangle_index = rect_idx;
+                    found_geometry = true;
+                    break;
+                }
+            }
+        }
+        
+        // Check ovals if no other geometry found
+        if (!found_geometry) {
+            for (size_t oval_idx = 0; oval_idx < pcb_data->ovals.size(); ++oval_idx) {
+                const auto& oval = pcb_data->ovals[oval_idx];
+                if (oval.center.x == pin.pos.x && oval.center.y == pin.pos.y) {
+                    cache.oval_index = oval_idx;
+                    found_geometry = true;
+                    break;
+                }
+            }
+        }
+        
+        // Fallback radius if no geometry found
+        if (!found_geometry) {
+            cache.radius = static_cast<float>(pin.radius);
+            if (cache.radius < 1.0f) {
+                cache.radius = 6.5f;
+            }
+        }
+    }
+    
+    LOG_INFO("Pin geometry cache built successfully");
+}
+
+bool PCBRenderer::IsElementVisible(float x, float y, float radius, float zoom, float offset_x, float offset_y, int window_width, int window_height) {
+    // Transform to screen coordinates
+    float screen_x = x * zoom + offset_x;
+    float screen_y = offset_y - y * zoom;
+    float screen_radius = radius * zoom;
+    
+    // Add some margin for smooth culling
+    float margin = 10.0f;
+    
+    // Check if element is within screen bounds
+    return (screen_x + screen_radius + margin >= 0 &&
+            screen_x - screen_radius - margin <= window_width &&
+            screen_y + screen_radius + margin >= 0 &&
+            screen_y - screen_radius - margin <= window_height);
+}
+
 
 // Pin selection functionality
 bool PCBRenderer::HandleMouseClick(float screen_x, float screen_y, int window_width, int window_height) {
-    if (!pcb_data || pcb_data->pins.empty()) {
+    if (!pcb_data || pcb_data->pins.empty() || pin_geometry_cache.empty()) {
         return false;
     }
     
     // Convert screen coordinates to world coordinates
     float world_x, world_y;
     ScreenToWorld(screen_x, screen_y, world_x, world_y, window_width, window_height);
-      // Check if click is near any pin
-    // Remove extra click radius: selection is now only within the real pin geometry
-    float click_radius = 0.0f;
     
-    for (size_t i = 0; i < pcb_data->pins.size(); ++i) {
+    // Check if click is near any pin using cached geometry data
+    for (size_t i = 0; i < pcb_data->pins.size() && i < pin_geometry_cache.size(); ++i) {
         const auto& pin = pcb_data->pins[i];
-        // Skip ground pins and NC pins - they are not selectable
-        if (IsGroundPin(pin) || IsNCPin(pin)) {
+        const auto& cache = pin_geometry_cache[i];
+        
+        // Skip ground pins and NC pins using cached data - they are not selectable
+        if (cache.is_ground || cache.is_nc) {
             continue;
         }
 
-        // Check if this pin is a rectangle (square/rectangular pin)
-        bool is_rect = false;
-        float rect_width = 0.0f, rect_height = 0.0f, rect_rotation = 0.0f;
-        // Try to find a rectangle at this pin position
-        for (const auto& rect : pcb_data->rectangles) {
-            if (rect.center.x == pin.pos.x && rect.center.y == pin.pos.y) {
-                is_rect = true;
-                rect_width = rect.width;
-                rect_height = rect.height;
-                rect_rotation = rect.rotation;
-                break;
-            }
-        }
-
-        if (is_rect) {
+        // Use cached geometry data for hit testing
+        if (cache.rectangle_index != SIZE_MAX) {
             // Rectangle pin: check if click is inside the rectangle (with rotation)
+            const auto& rect = pcb_data->rectangles[cache.rectangle_index];
             float dx = world_x - pin.pos.x;
             float dy = world_y - pin.pos.y;
             // Undo rotation
-            float angle_rad = -rect_rotation * 3.14159265f / 180.0f;
+            float angle_rad = -rect.rotation * 3.14159265f / 180.0f;
             float cos_a = std::cos(angle_rad);
             float sin_a = std::sin(angle_rad);
             float local_x = dx * cos_a - dy * sin_a;
             float local_y = dx * sin_a + dy * cos_a;
-            float half_w = rect_width / 2.0f;
-            float half_h = rect_height / 2.0f;
+            float half_w = rect.width / 2.0f;
+            float half_h = rect.height / 2.0f;
             if (std::abs(local_x) <= half_w && std::abs(local_y) <= half_h) {
                 if (selected_pin_index == static_cast<int>(i)) {
                     selected_pin_index = -1;
@@ -1216,29 +1337,18 @@ bool PCBRenderer::HandleMouseClick(float screen_x, float screen_y, int window_wi
             continue;
         }
 
-        // Check if this pin is an oval (stadium shape)
-        bool is_oval = false;
-        float oval_width = 0.0f, oval_height = 0.0f, oval_rotation = 0.0f;
-        for (const auto& oval : pcb_data->ovals) {
-            if (oval.center.x == pin.pos.x && oval.center.y == pin.pos.y) {
-                is_oval = true;
-                oval_width = oval.width;
-                oval_height = oval.height;
-                oval_rotation = oval.rotation;
-                break;
-            }
-        }
-        if (is_oval) {
+        if (cache.oval_index != SIZE_MAX) {
             // Oval pin: check if click is inside the rotated ellipse (approximate)
+            const auto& oval = pcb_data->ovals[cache.oval_index];
             float dx = world_x - pin.pos.x;
             float dy = world_y - pin.pos.y;
-            float angle_rad = -oval_rotation * 3.14159265f / 180.0f;
+            float angle_rad = -oval.rotation * 3.14159265f / 180.0f;
             float cos_a = std::cos(angle_rad);
             float sin_a = std::sin(angle_rad);
             float local_x = dx * cos_a - dy * sin_a;
             float local_y = dx * sin_a + dy * cos_a;
-            float rx = oval_width / 2.0f;
-            float ry = oval_height / 2.0f;
+            float rx = oval.width / 2.0f;
+            float ry = oval.height / 2.0f;
             if ((local_x * local_x) / (rx * rx) + (local_y * local_y) / (ry * ry) <= 1.0f) {
                 if (selected_pin_index == static_cast<int>(i)) {
                     selected_pin_index = -1;
@@ -1250,20 +1360,12 @@ bool PCBRenderer::HandleMouseClick(float screen_x, float screen_y, int window_wi
             continue;
         }
 
-        // Otherwise, treat as circle (default)
+        // Otherwise, treat as circle (default) using cached radius
         float dx = world_x - pin.pos.x;
         float dy = world_y - pin.pos.y;
         float distance = std::sqrt(dx * dx + dy * dy);
         
-        // Find the corresponding circle data for this pin position
-        float circle_radius = static_cast<float>(pin.radius); // fallback to pin radius
-        for (const auto& circle : pcb_data->circles) {
-            if (circle.center.x == pin.pos.x && circle.center.y == pin.pos.y) {
-                circle_radius = circle.radius;
-                break;
-            }
-        }
-        
+        float circle_radius = cache.radius;
         if (circle_radius < 1.0f) {
             circle_radius = 5.0f;
         }
@@ -1288,7 +1390,7 @@ void PCBRenderer::ClearSelection() {
 }
 
 int PCBRenderer::GetHoveredPin(float screen_x, float screen_y, int window_width, int window_height) {
-    if (!pcb_data || pcb_data->pins.empty()) {
+    if (!pcb_data || pcb_data->pins.empty() || pin_geometry_cache.empty()) {
         return -1;
     }
     
@@ -1296,89 +1398,59 @@ int PCBRenderer::GetHoveredPin(float screen_x, float screen_y, int window_width,
     float world_x, world_y;
     ScreenToWorld(screen_x, screen_y, world_x, world_y, window_width, window_height);
     
-    for (size_t i = 0; i < pcb_data->pins.size(); ++i) {
+    for (size_t i = 0; i < pcb_data->pins.size() && i < pin_geometry_cache.size(); ++i) {
         const auto& pin = pcb_data->pins[i];
+        const auto& cache = pin_geometry_cache[i];
         
-        // Skip ground pins and NC pins - they are not hoverable
-        if (IsGroundPin(pin) || IsNCPin(pin)) {
+        // Skip ground pins and NC pins using cached data - they are not hoverable
+        if (cache.is_ground || cache.is_nc) {
             continue;
         }
 
-        // Check if this pin is a rectangle (square/rectangular pin)
-        bool is_rect = false;
-        float rect_width = 0.0f, rect_height = 0.0f, rect_rotation = 0.0f;
-        // Try to find a rectangle at this pin position
-        for (const auto& rect : pcb_data->rectangles) {
-            if (rect.center.x == pin.pos.x && rect.center.y == pin.pos.y) {
-                is_rect = true;
-                rect_width = rect.width;
-                rect_height = rect.height;
-                rect_rotation = rect.rotation;
-                break;
-            }
-        }
-
-        if (is_rect) {
+        // Use cached geometry data for hit testing
+        if (cache.rectangle_index != SIZE_MAX) {
             // Rectangle pin: check if mouse is inside the rectangle (with rotation)
+            const auto& rect = pcb_data->rectangles[cache.rectangle_index];
             float dx = world_x - pin.pos.x;
             float dy = world_y - pin.pos.y;
             // Undo rotation
-            float angle_rad = -rect_rotation * 3.14159265f / 180.0f;
+            float angle_rad = -rect.rotation * 3.14159265f / 180.0f;
             float cos_a = std::cos(angle_rad);
             float sin_a = std::sin(angle_rad);
             float local_x = dx * cos_a - dy * sin_a;
             float local_y = dx * sin_a + dy * cos_a;
-            float half_w = rect_width / 2.0f;
-            float half_h = rect_height / 2.0f;
+            float half_w = rect.width / 2.0f;
+            float half_h = rect.height / 2.0f;
             if (std::abs(local_x) <= half_w && std::abs(local_y) <= half_h) {
                 return static_cast<int>(i);
             }
             continue;
         }
 
-        // Check if this pin is an oval (stadium shape)
-        bool is_oval = false;
-        float oval_width = 0.0f, oval_height = 0.0f, oval_rotation = 0.0f;
-        for (const auto& oval : pcb_data->ovals) {
-            if (oval.center.x == pin.pos.x && oval.center.y == pin.pos.y) {
-                is_oval = true;
-                oval_width = oval.width;
-                oval_height = oval.height;
-                oval_rotation = oval.rotation;
-                break;
-            }
-        }
-        if (is_oval) {
+        if (cache.oval_index != SIZE_MAX) {
             // Oval pin: check if mouse is inside the rotated ellipse (approximate)
+            const auto& oval = pcb_data->ovals[cache.oval_index];
             float dx = world_x - pin.pos.x;
             float dy = world_y - pin.pos.y;
-            float angle_rad = -oval_rotation * 3.14159265f / 180.0f;
+            float angle_rad = -oval.rotation * 3.14159265f / 180.0f;
             float cos_a = std::cos(angle_rad);
             float sin_a = std::sin(angle_rad);
             float local_x = dx * cos_a - dy * sin_a;
             float local_y = dx * sin_a + dy * cos_a;
-            float rx = oval_width / 2.0f;
-            float ry = oval_height / 2.0f;
+            float rx = oval.width / 2.0f;
+            float ry = oval.height / 2.0f;
             if ((local_x * local_x) / (rx * rx) + (local_y * local_y) / (ry * ry) <= 1.0f) {
                 return static_cast<int>(i);
             }
             continue;
         }
 
-        // Otherwise, treat as circle (default)
+        // Otherwise, treat as circle (default) using cached radius
         float dx = world_x - pin.pos.x;
         float dy = world_y - pin.pos.y;
         float distance = std::sqrt(dx * dx + dy * dy);
         
-        // Find the corresponding circle data for this pin position
-        float circle_radius = static_cast<float>(pin.radius); // fallback to pin radius
-        for (const auto& circle : pcb_data->circles) {
-            if (circle.center.x == pin.pos.x && circle.center.y == pin.pos.y) {
-                circle_radius = circle.radius;
-                break;
-            }
-        }
-        
+        float circle_radius = cache.radius;
         if (circle_radius < 1.0f) {
             circle_radius = 5.0f; // Default fallback for very small pins
         }
@@ -1570,8 +1642,8 @@ void PCBRenderer::CollectPartNamesForRendering(float zoom, float offset_x, float
     }
 }
 
-void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, float offset_x, float offset_y) {
-    if (!pcb_data || pcb_data->pins.empty()) {
+void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, float offset_x, float offset_y, int window_width, int window_height) {
+    if (!pcb_data || pcb_data->pins.empty() || pin_geometry_cache.empty()) {
         return;
     }
 
@@ -1580,57 +1652,44 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
         return;
     }
 
-    for (size_t pin_index = 0; pin_index < pcb_data->pins.size(); ++pin_index) {
+    for (size_t pin_index = 0; pin_index < pcb_data->pins.size() && pin_index < pin_geometry_cache.size(); ++pin_index) {
         const auto& pin = pcb_data->pins[pin_index];
+        const auto& cache = pin_geometry_cache[pin_index];
+        
+        // Early visibility culling for pins
+        float approx_radius = cache.radius > 0 ? cache.radius : 10.0f;
+        if (!IsElementVisible(pin.pos.x, pin.pos.y, approx_radius, zoom, offset_x, offset_y, window_width, window_height)) {
+            continue;
+        }
         
         // Transform pin coordinates to screen space with Y-axis mirroring
         float x = pin.pos.x * zoom + offset_x;
         float y = offset_y - pin.pos.y * zoom;
         
-        // Calculate pin dimensions using the same logic as HandleMouseClick
+        // Calculate pin dimensions using cached geometry data
         float pin_width = 0.0f, pin_height = 0.0f;
-        bool is_rect = false, is_oval = false;
         
-        // Check if this pin is a rectangle (square/rectangular pin)
-        for (const auto& rect : pcb_data->rectangles) {
-            if (rect.center.x == pin.pos.x && rect.center.y == pin.pos.y) {
-                is_rect = true;
-                pin_width = rect.width * zoom;
-                pin_height = rect.height * zoom;
-                break;
-            }
-        }
-        
-        // Check if this pin is an oval (stadium shape)
-        if (!is_rect) {
-            for (const auto& oval : pcb_data->ovals) {
-                if (oval.center.x == pin.pos.x && oval.center.y == pin.pos.y) {
-                    is_oval = true;
-                    pin_width = oval.width * zoom;
-                    pin_height = oval.height * zoom;
-                    break;
-                }
-            }
-        }
-        
-        // Otherwise, treat as circle (default)
-        float pin_radius = 0.0f;
-        if (!is_rect && !is_oval) {
-            // Find the corresponding circle data for this pin position
-            float circle_radius = static_cast<float>(pin.radius); // fallback to pin radius
-            for (const auto& circle : pcb_data->circles) {
-                if (circle.center.x == pin.pos.x && circle.center.y == pin.pos.y) {
-                    circle_radius = circle.radius;
-                    break;
-                }
-            }
-            
-            if (circle_radius < 1.0f) {
-                circle_radius = 6.5f; // Default fallback
-            }
-            pin_radius = circle_radius * zoom;
-            pin_width = pin_radius * 2.0f;
-            pin_height = pin_radius * 2.0f;
+        if (cache.rectangle_index != SIZE_MAX) {
+            // Rectangle pin
+            const auto& rect = pcb_data->rectangles[cache.rectangle_index];
+            pin_width = rect.width * zoom;
+            pin_height = rect.height * zoom;
+        } else if (cache.oval_index != SIZE_MAX) {
+            // Oval pin
+            const auto& oval = pcb_data->ovals[cache.oval_index];
+            pin_width = oval.width * zoom;
+            pin_height = oval.height * zoom;
+        } else if (cache.circle_index != SIZE_MAX) {
+            // Circle pin
+            const auto& circle = pcb_data->circles[cache.circle_index];
+            float radius = circle.radius * zoom;
+            pin_width = radius * 2.0f;
+            pin_height = radius * 2.0f;
+        } else {
+            // Fallback using cached radius
+            float radius = cache.radius * zoom;
+            pin_width = radius * 2.0f;
+            pin_height = radius * 2.0f;
         }
         
         // Ensure minimum visibility for all pin types

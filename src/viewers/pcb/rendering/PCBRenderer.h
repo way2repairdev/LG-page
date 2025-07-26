@@ -18,7 +18,6 @@ struct RenderSettings {
     bool show_outline = true;
     bool show_part_outlines = true;
     bool show_nets = false;
-    bool enable_imgui_overlay = false;  // Added ImGui overlay control
     
     float part_alpha = 1.0f;
     float pin_alpha = 1.0f;
@@ -83,11 +82,11 @@ public:
     // ImGui-based rendering methods (like original OpenBoardView)
     void RenderOutlineImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y);
     void RenderPartOutlineImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y);
-    void RenderCirclePinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y);
-    void RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y);
-    void RenderOvalPinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y);
+    void RenderCirclePinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y, int window_width, int window_height);
+    void RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y, int window_width, int window_height);
+    void RenderOvalPinsImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y, int window_width, int window_height);
     void RenderPartNamesOnTop(ImDrawList* draw_list);  // Render collected part names on top
-    void RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, float offset_x, float offset_y); // Render pin numbers as text overlays
+    void RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, float offset_x, float offset_y, int window_width, int window_height); // Render pin numbers as text overlays
     void CollectPartNamesForRendering(float zoom, float offset_x, float offset_y); // Collect part names for rendering
     void RenderPartHighlighting(ImDrawList* draw_list, float zoom, float offset_x, float offset_y); // Render part highlighting on top
     
@@ -126,6 +125,17 @@ private:
     int selected_pin_index = -1;  // -1 means no selection
     int hovered_pin_index = -1;   // -1 means no hover
     
+    // Performance optimization caches
+    struct PinGeometryCache {
+        size_t circle_index = SIZE_MAX;
+        size_t rectangle_index = SIZE_MAX;
+        size_t oval_index = SIZE_MAX;
+        float radius = 0.0f;
+        bool is_ground = false;
+        bool is_nc = false;
+    };
+    std::vector<PinGeometryCache> pin_geometry_cache;
+    
     // Part name rendering (collected during rendering, drawn on top)
     std::vector<PartNameInfo> part_names_to_render;
     
@@ -141,12 +151,18 @@ private:
     void RenderOutline();
     void RenderParts();
     void RenderPins();
-      // Enhanced rendering methods
+    // Enhanced rendering methods
     void RenderPartOutline(const BRDPart& part, const std::vector<BRDPin>& part_pins);
     float DeterminePinMargin(const BRDPart& part, const std::vector<BRDPin>& part_pins, float distance);
     float DeterminePinSize(const BRDPart& part, const std::vector<BRDPin>& part_pins);
     void RenderGenericComponentOutline(float min_x, float min_y, float max_x, float max_y, float margin);
-    void RenderConnectorComponentImGui(ImDrawList* draw_list, const BRDPart& part, const std::vector<BRDPin>& part_pins, float zoom, float offset_x, float offset_y);    // Pin utilities
+    void RenderConnectorComponentImGui(ImDrawList* draw_list, const BRDPart& part, const std::vector<BRDPin>& part_pins, float zoom, float offset_x, float offset_y);
+    
+    // Performance optimization methods
+    void BuildPinGeometryCache();
+    bool IsElementVisible(float x, float y, float radius, float zoom, float offset_x, float offset_y, int window_width, int window_height);
+    
+    // Pin utilities
     bool IsGroundPin(const BRDPin& pin);
     bool IsNCPin(const BRDPin& pin);
     bool IsUnconnectedPin(const BRDPin& pin);
