@@ -87,9 +87,7 @@ bool PCBViewerEmbedder::initialize(void* parentWindowHandle, int width, int heig
     // Set up GLFW callbacks
     setupCallbacks();
 
-    // Create sample PCB data for testing
-    createSamplePCB();
-
+    
     m_initialized = true;
     handleStatus("PCB viewer embedder initialized successfully");
     return true;
@@ -202,9 +200,7 @@ void PCBViewerEmbedder::closePCB()
     m_pdfLoaded = false;
     m_currentFilePath.clear();
     
-    // Create sample data for display
-    createSamplePCB();
-    
+        
     handleStatus("PCB file closed");
 }
 
@@ -683,87 +679,7 @@ void PCBViewerEmbedder::setupCallbacks()
     glfwSetFramebufferSizeCallback(m_glfwWindow, framebufferSizeCallback);
 }
 
-bool PCBViewerEmbedder::createSamplePCB()
-{
-    handleStatus("Creating sample PCB data for testing");
 
-    try {
-        // Create sample PCB file for demonstration - matching main.cpp CreateSamplePCB()
-        auto samplePcb = std::make_shared<XZZPCBFile>();
-        
-        // Board outline (rectangle) - exact copy from main.cpp
-        samplePcb->format = {
-            {0, 0}, {10000, 0}, {10000, 7000}, {0, 7000}
-        };
-        
-        // Outline segments - exact copy from main.cpp
-        for (size_t i = 0; i < samplePcb->format.size(); ++i) {
-            size_t next = (i + 1) % samplePcb->format.size();
-            samplePcb->outline_segments.push_back({samplePcb->format[i], samplePcb->format[next]});
-        }
-        
-        // Sample parts - exact copy from main.cpp
-        BRDPart part1;
-        part1.name = "U1";
-        part1.mounting_side = BRDPartMountingSide::Top;
-        part1.part_type = BRDPartType::SMD;
-        part1.p1 = {2000, 2000};
-        part1.p2 = {4000, 3000};
-        samplePcb->parts.push_back(part1);
-        
-        BRDPart part2;
-        part2.name = "U2";
-        part2.mounting_side = BRDPartMountingSide::Top;
-        part2.part_type = BRDPartType::SMD;
-        part2.p1 = {6000, 4000};
-        part2.p2 = {8000, 5000};
-        samplePcb->parts.push_back(part2);
-        
-        // Sample pins with meaningful net names - exact copy from main.cpp
-        std::vector<std::string> netNames = {"VCC", "GND", "LCD_VSN", "NET1816", "VPH_PWR", "SPMI_CLK", "SPMI_DATA", "UNCONNECTED"};
-        std::vector<std::string> netNames2 = {"NET1807", "NET1789", "VREG_L5_1P8", "GND", "LCD_VSN", "VPH_PWR"};
-        
-        for (int i = 0; i < 8; ++i) {
-            BRDPin pin;
-            pin.pos = {2000 + i * 250, 2000};
-            pin.part = 0;
-            pin.name = std::to_string(i + 1);  // Pin number
-            pin.net = (i < netNames.size()) ? netNames[i] : "NET_" + std::to_string(i);
-            pin.snum = std::to_string(i + 1);
-            pin.radius = 50;
-            samplePcb->pins.push_back(pin);
-        }
-        
-        for (int i = 0; i < 6; ++i) {
-            BRDPin pin;
-            pin.pos = {6000 + i * 300, 4000};
-            pin.part = 1;
-            pin.name = std::to_string(i + 1);  // Pin number
-            pin.net = (i < netNames2.size()) ? netNames2[i] : "NET_" + std::to_string(i + 8);
-            pin.snum = std::to_string(i + 1);
-            pin.radius = 60;
-            samplePcb->pins.push_back(pin);
-        }
-        
-        // Validate and set data - matching main.cpp
-        samplePcb->SetValid(true);  // For demo data, we know it's valid
-        
-        m_pcbData = std::static_pointer_cast<BRDFileBase>(samplePcb);
-        if (m_renderer) {
-            m_renderer->SetPCBData(m_pcbData);
-            m_renderer->ZoomToFit(m_windowWidth, m_windowHeight);
-        }
-        
-        handleStatus("Sample PCB data created successfully with " + 
-                    std::to_string(samplePcb->parts.size()) + " parts and " + 
-                    std::to_string(samplePcb->pins.size()) + " pins");
-        return true;
-    }
-    catch (const std::exception& e) {
-        handleError("Failed to create sample PCB: " + std::string(e.what()));
-        return false;
-    }
-}
 
 void PCBViewerEmbedder::handleError(const std::string& error)
 {
