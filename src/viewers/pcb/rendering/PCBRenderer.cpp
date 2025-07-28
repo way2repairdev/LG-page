@@ -795,8 +795,8 @@ void PCBRenderer::RenderPartHighlighting(ImDrawList* draw_list, float zoom, floa
                     ImVec2 bottom_right(max_x * zoom + offset_x, offset_y - min_y * zoom);
                     
                     // Draw highlighted bounding box around the part
-                    ImU32 highlight_color = IM_COL32(255, 255, 179, 128); // Semi-transparent yellow
-                    ImU32 highlight_border = IM_COL32(255, 255, 0, 200);  // More opaque yellow border
+                    ImU32 highlight_color = IM_COL32(255, 255, 0, 125); // Semi-transparent yellow
+                    ImU32 highlight_border = IM_COL32(255, 255, 0, 0);  // More opaque yellow border
                     
                     // Draw filled rectangle
                     draw_list->AddRectFilled(top_left, bottom_right, highlight_color);
@@ -851,13 +851,13 @@ void PCBRenderer::RenderCirclePinsImGui(ImDrawList* draw_list, float zoom, float
                 // Use cached pin type checks
                 if (!selected_net.empty() && pin.net == selected_net) {
                     // Highlight all pins on the same net
-                    r = 1.0f; g = 1.0f; b = 0.7f; a = 1.0f;
+                    r = 1.0f; g = 1.0f; b = 0.0f; a = 1.0f;
                 } else if (cache.is_nc) {
                     // Use blue color for NC pins
                     r = 0.0f; g = 0.3f; b = 0.3f; a = 1.0f;
                 } else if (cache.is_ground) {
                     // Use grey color for ground pins
-                    r = 0.5f; g = 0.5f; b = 0.5f; a = 1.0f;
+                    r = 0.376f; g = 0.376f; b = 0.376f; a = 1.0f;
                 }
                 break;
             }
@@ -931,13 +931,13 @@ void PCBRenderer::RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, fl
                 // Use cached pin type checks
                 if (!selected_net.empty() && pin.net == selected_net) {
                     // Highlight all pins on the same net
-                    r = 1.0f; g = 1.0f; b = 0.7f; a = 1.0f;
+                    r = 1.0f; g = 1.0f; b = 0.0f; a = 1.0f;
                 } else if (cache.is_nc) {
                     // Use blue color for NC pins
                     r = 0.0f; g = 0.3f; b = 0.3f; a = 1.0f;
                 } else if (cache.is_ground) {
                     // Use grey color for ground pins
-                    r = 0.5f; g = 0.5f; b = 0.5f; a = 1.0f;
+                    r = 0.376f; g = 0.376f; b = 0.376f; a = 1.0f;
                 }
                 break;
             }
@@ -1055,13 +1055,13 @@ void PCBRenderer::RenderOvalPinsImGui(ImDrawList* draw_list, float zoom, float o
                 // Use cached pin type checks
                 if (!selected_net.empty() && pin.net == selected_net) {
                     // Highlight all pins on the same net
-                    r = 1.0f; g = 1.0f; b = 0.7f; a = 1.0f;
+                    r = 1.0f; g = 1.0f; b = 0.0f; a = 1.0f;
                 } else if (cache.is_nc) {
                     // Use blue color for NC pins
                     r = 0.0f; g = 0.3f; b = 0.3f; a = 1.0f;
                 } else if (cache.is_ground) {
                     // Use grey color for ground pins
-                    r = 0.5f; g = 0.5f; b = 0.5f; a = 1.0f;
+                    r = 0.376f; g = 0.376f; b = 0.376f; a = 1.0f;
                 }
                 break;
             }
@@ -1834,7 +1834,7 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
             for (const auto& line : pin_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
                 ImVec2 pin_text_pos(x - line_size.x * 0.5f, current_y);
-                draw_list->AddText(pin_text_pos, IM_COL32(255, 255, 255, 255), line.c_str());
+                draw_list->AddText(pin_text_pos, IM_COL32(128, 128, 128, 255), line.c_str());
                 current_y += ImGui::GetTextLineHeight();
             }
             
@@ -1844,7 +1844,7 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
             for (const auto& line : net_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
                 ImVec2 net_text_pos(x - line_size.x * 0.5f, current_y);
-                draw_list->AddText(net_text_pos, IM_COL32(255, 255, 0, 255), line.c_str());
+                draw_list->AddText(net_text_pos, IM_COL32(128, 128, 128, 255), line.c_str());
                 current_y += ImGui::GetTextLineHeight();
             }
         }
@@ -1854,7 +1854,7 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
             for (const auto& line : pin_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
                 ImVec2 pin_text_pos(x - line_size.x * 0.5f, current_y);
-                draw_list->AddText(pin_text_pos, IM_COL32(255, 255, 255, 255), line.c_str());
+                draw_list->AddText(pin_text_pos, IM_COL32(128, 128, 128, 255), line.c_str());
                 current_y += ImGui::GetTextLineHeight();
             }
         }
