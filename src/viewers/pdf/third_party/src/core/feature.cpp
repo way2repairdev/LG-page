@@ -459,8 +459,8 @@ void UpdatePanning(PDFScrollState& state, double mouseX, double mouseY, float wi
     // When zoomed IN more, panning should be LESS sensitive (finer control)
     // When zoomed OUT, panning should be MORE sensitive (coarser movement)
     // Use a more refined sensitivity curve that works well at extreme zoom levels
-      float panSensitivity;
-    if (state.zoomScale <= 1.0f) {
+      float panSensitivity = 1.0f;
+    /* if (state.zoomScale <= 1.0f) {
         // Zoom out mode: Higher sensitivity for faster navigation
         panSensitivity = 1.0f / state.zoomScale;
         if (panSensitivity > 4.0f) panSensitivity = 4.0f; // Cap at 4x for very low zoom
@@ -478,7 +478,7 @@ void UpdatePanning(PDFScrollState& state, double mouseX, double mouseY, float wi
         // Ensure minimum responsiveness while maintaining fine control
         if (panSensitivity < 0.15f) panSensitivity = 0.15f; // Increased minimum for better feel
         if (panSensitivity > 0.4f) panSensitivity = 0.4f;   // Cap to prevent oversensitivity
-    }
+    } */
     
     // Calculate potential new offsets
     float newScrollOffset = state.panStartScrollOffset - (float)deltaY * panSensitivity;
