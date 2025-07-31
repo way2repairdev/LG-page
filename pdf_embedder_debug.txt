@@ -1,0 +1,248 @@
+DEBUG: Page 0 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 1 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 2 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 3 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 4 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 5 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 6 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 7 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 8 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 9 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 10 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 11 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 12 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 13 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 14 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 15 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 16 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 17 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 18 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 19 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 20 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 21 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 22 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 23 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 24 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 25 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 26 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 27 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 28 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 29 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 30 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 0 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 1 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 2 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 3 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 4 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 5 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 6 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 7 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 8 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 9 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 10 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 11 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 12 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 13 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 14 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 15 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 16 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 17 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 18 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 19 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 20 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 21 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 22 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 23 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 24 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 25 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 26 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 27 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 28 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 29 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 30 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.83276
+Page height ratio to window: 0.988904
+WARNING: Page appears to be auto-fitted to window!

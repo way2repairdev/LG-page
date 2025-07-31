@@ -1454,50 +1454,33 @@ void PDFViewerEmbedder::onScroll(double xoffset, double yoffset)
 {
     if (!m_scrollState) return;
     
-    // Get cursor position for scroll bar detection only
+    // Get cursor position
     double cursorX = m_scrollState->lastCursorX;
+    double cursorY = m_scrollState->lastCursorY;
     
     // Check if cursor is over the scroll bar area (right side of window)
     float barMargin = 0.01f * m_windowWidth;
     float barWidth = 0.025f * m_windowWidth;
     float barX = m_windowWidth - barMargin - barWidth;
     
-    // If cursor is over scroll bar area, disable mouse wheel input
-    bool isOverScrollBar = (cursorX >= barX && cursorX <= m_windowWidth - barMargin);
-    
-    if (isOverScrollBar) {
-        return; // Don't handle scroll when over scroll bar
+    // If cursor is over scroll bar area, handle scrolling
+    if (cursorX >= barX) {
+        // Handle scroll bar scrolling using existing logic
+        HandleScroll(*m_scrollState, (float)yoffset);
+        return;
     }
     
-    // Get key modifier states for different scroll behaviors
-    bool shiftPressed = (glfwGetKey(m_glfwWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || 
-                        glfwGetKey(m_glfwWindow, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
-    bool ctrlPressed = (glfwGetKey(m_glfwWindow, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS || 
-                       glfwGetKey(m_glfwWindow, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
-    
-    if (ctrlPressed) {
-        // Ctrl + mouse wheel: Cursor-based zooming (like standalone viewer)
-        // Get current cursor position for zoom focal point
-        double cursorX = m_scrollState->lastCursorX;
-        double cursorY = m_scrollState->lastCursorY;
+    // Otherwise, handle cursor-based zooming with mouse wheel
+    if (std::abs(yoffset) > 0.01) {
+        float zoomDelta = (yoffset > 0) ? 1.1f : 1.0f / 1.1f;
         
-        // Calculate zoom delta based on scroll direction
-        float zoomDelta = (yoffset > 0) ? 1.2f : (1.0f / 1.2f);
-        
-        // Apply cursor-based zoom using the same logic as standalone viewer
-        HandleZoom(*m_scrollState, zoomDelta, (float)cursorX, (float)cursorY,
+        // Use current cursor position as zoom focal point
+        HandleZoom(*m_scrollState, zoomDelta, (float)cursorX, (float)cursorY, 
                    (float)m_windowWidth, (float)m_windowHeight, 
                    m_pageHeights, m_pageWidths);
         
-        std::cout << "PDFViewerEmbedder: Cursor-based zoom to " << m_scrollState->zoomScale 
-                  << " at cursor position (" << cursorX << ", " << cursorY << ")" << std::endl;
-                  
-    } else if (shiftPressed) {
-        // Horizontal scrolling with Shift + mouse wheel
-        HandleHorizontalScroll(*m_scrollState, (float)yoffset, (float)m_windowWidth);
-    } else {
-        // Default: Vertical scrolling
-        HandleScroll(*m_scrollState, (float)yoffset);
+        std::cout << "PDFViewerEmbedder: Mouse wheel zoom at cursor (" << cursorX << ", " << cursorY 
+                  << ") with delta " << zoomDelta << " to zoom " << m_scrollState->zoomScale << std::endl;
     }
 }
 
