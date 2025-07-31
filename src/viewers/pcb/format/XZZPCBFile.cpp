@@ -774,16 +774,41 @@ void XZZPCBFile::ParsePostV6(std::vector<char>::iterator v6_pos, std::vector<cha
     unsigned int current_pointer = v6_pos - buf.begin() + 11;
     current_pointer += 7; // While post v6 isnt handled properly
     if (current_pointer >= buf.size()) return;
-    if (buf[current_pointer] == 0x0A) {
-        // Type 1
-        // 0x0A '=480=N65594(1)'
+    
+    // Check for Type 1 variants
+    bool is_type1_0x0A = (buf[current_pointer] == 0x0A);
+    bool is_type1_0x0D0A = (current_pointer + 1 < buf.size() && 
+                            buf[current_pointer] == 0x0D && 
+                            buf[current_pointer + 1] == 0x0A);
+    
+    if (is_type1_0x0A || is_type1_0x0D0A) {
+        // Type 1 - Two variants:
+        // Type 1A: 0x0A '=480=N65594(1)'
+        // Type 1B: 0x0D 0x0A '=480=N65594(1)'
         diode_readings_type = 1;
+        
+        // Skip the initial delimiter(s)
+        if (is_type1_0x0D0A) {
+            current_pointer += 2; // Skip 0x0D 0x0A
+        } else {
+            current_pointer += 1; // Skip 0x0A
+        }
+        
         while (current_pointer < buf.size()) {
-            current_pointer += 1;
-            if (current_pointer >= buf.size()) {
-                return;
+            // Look for the start of a diode reading entry
+            // For Type 1B, entries might be separated by 0x0D 0x0A
+            if (is_type1_0x0D0A && current_pointer + 1 < buf.size() && 
+                buf[current_pointer] == 0x0D && buf[current_pointer + 1] == 0x0A) {
+                current_pointer += 2; // Skip 0x0D 0x0A separator
+                if (current_pointer >= buf.size()) return;
             }
-            current_pointer += 1; // =
+            
+            // Check if we found the start of a reading (should start with '=')
+            if (current_pointer >= buf.size() || buf[current_pointer] != 0x3D) {
+                current_pointer += 1;
+                continue;
+            }
+            current_pointer += 1; // Skip '='
             std::string volt_reading = "";
             while (current_pointer < buf.size() && buf[current_pointer] != 0x3D) {
                 volt_reading += buf[current_pointer];

@@ -1712,6 +1712,12 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
             pin_number = pin.name;
         }
         
+        // Get diode reading from pin comment
+        std::string diode_reading = "";
+        if (!pin.comment.empty()) {
+            diode_reading = pin.comment;
+        }
+        
         // Get net name (prefer meaningful names)
         std::string net_name = "";
         if (!pin.net.empty() && pin.net != "UNCONNECTED" && pin.net != "") {
@@ -1730,6 +1736,7 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
         // Calculate base text sizes
         ImVec2 pin_text_size = ImGui::CalcTextSize(pin_number.c_str());
         ImVec2 net_text_size = net_name.empty() ? ImVec2(0,0) : ImGui::CalcTextSize(net_name.c_str());
+        ImVec2 diode_text_size = diode_reading.empty() ? ImVec2(0,0) : ImGui::CalcTextSize(diode_reading.c_str());
         
         // Calculate maximum text dimensions that fit in pin area (with margin)
         float max_text_width = pin_width * 0.95f;   // Use ~95% of pin width for text
@@ -1789,26 +1796,44 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
         // Break texts into lines if needed
         std::vector<std::string> pin_lines = breakTextIntoLines(pin_number, max_text_width);
         std::vector<std::string> net_lines = breakTextIntoLines(net_name, max_text_width);
+        std::vector<std::string> diode_lines = breakTextIntoLines(diode_reading, max_text_width);
         
         // Calculate total heights for multiline text
         float pin_text_height = pin_lines.empty() ? 0.0f : pin_lines.size() * ImGui::GetTextLineHeight();
         float net_text_height = net_lines.empty() ? 0.0f : net_lines.size() * ImGui::GetTextLineHeight();
+        float diode_text_height = diode_lines.empty() ? 0.0f : diode_lines.size() * ImGui::GetTextLineHeight();
         
         // Check if texts fit within the pin
         bool show_pin_text = !pin_lines.empty() && pin_text_height <= max_text_height;
         bool show_net_text = !net_lines.empty() && net_text_height <= max_text_height;
+        bool show_diode_text = !diode_lines.empty() && diode_text_height <= max_text_height;
         
-        // If we have both texts, check if they fit stacked vertically
-        if (show_pin_text && show_net_text) {
-            float text_spacing = 2.0f;
+        // If we have multiple texts, check if they fit stacked vertically
+        // Priority: diode reading (top), pin number (middle), net name (bottom)
+        float text_spacing = 2.0f;
+        if (show_diode_text && show_pin_text && show_net_text) {
+            float total_text_height = diode_text_height + pin_text_height + net_text_height + 2 * text_spacing;
+            if (total_text_height > max_text_height) {
+                show_net_text = false; // Drop net text first
+                total_text_height = diode_text_height + pin_text_height + text_spacing;
+                if (total_text_height > max_text_height) {
+                    show_diode_text = false; // Drop diode text if still doesn't fit
+                }
+            }
+        } else if (show_diode_text && show_pin_text) {
+            float total_text_height = diode_text_height + pin_text_height + text_spacing;
+            if (total_text_height > max_text_height) {
+                show_diode_text = false; // Drop diode text if doesn't fit with pin
+            }
+        } else if (show_pin_text && show_net_text) {
             float total_text_height = pin_text_height + net_text_height + text_spacing;
             if (total_text_height > max_text_height) {
-                show_net_text = false; // Disable net text if both don't fit
+                show_net_text = false; // Drop net text if doesn't fit with pin
             }
         }
         
         // Skip if no text will be shown
-        if (!show_pin_text && !show_net_text) {
+        if (!show_pin_text && !show_net_text && !show_diode_text) {
             continue;
         }
         
@@ -1824,12 +1849,70 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
             true
         );
         
-        if (show_pin_text && show_net_text) {
+        if (show_diode_text && show_pin_text && show_net_text) {
+            // All three texts - stack them vertically: diode (top), pin (middle), net (bottom)
+            float text_spacing = 2.0f;
+            float total_text_height = diode_text_height + pin_text_height + net_text_height + 2 * text_spacing;
+            
+            // Position diode reading lines at TOP (CYAN text for visibility)
+            float current_y = y - total_text_height * 0.5f;
+            for (const auto& line : diode_lines) {
+                ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
+                ImVec2 diode_text_pos(x - line_size.x * 0.5f, current_y);
+                draw_list->AddText(diode_text_pos, IM_COL32(0, 255, 255, 255), line.c_str()); // Cyan
+                current_y += ImGui::GetTextLineHeight();
+            }
+            
+            current_y += text_spacing;
+            
+            // Position pin number lines in MIDDLE (original gray text)
+            for (const auto& line : pin_lines) {
+                ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
+                ImVec2 pin_text_pos(x - line_size.x * 0.5f, current_y);
+                draw_list->AddText(pin_text_pos, IM_COL32(128, 128, 128, 255), line.c_str());
+                current_y += ImGui::GetTextLineHeight();
+            }
+            
+            current_y += text_spacing;
+            
+            // Position net name lines at BOTTOM (original gray text)
+            for (const auto& line : net_lines) {
+                ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
+                ImVec2 net_text_pos(x - line_size.x * 0.5f, current_y);
+                draw_list->AddText(net_text_pos, IM_COL32(128, 128, 128, 255), line.c_str());
+                current_y += ImGui::GetTextLineHeight();
+            }
+        }
+        else if (show_diode_text && show_pin_text) {
+            // Diode and pin texts - stack them vertically: diode (top), pin (bottom)
+            float text_spacing = 2.0f;
+            float total_text_height = diode_text_height + pin_text_height + text_spacing;
+            
+            // Position diode reading lines at TOP (CYAN text)
+            float current_y = y - total_text_height * 0.5f;
+            for (const auto& line : diode_lines) {
+                ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
+                ImVec2 diode_text_pos(x - line_size.x * 0.5f, current_y);
+                draw_list->AddText(diode_text_pos, IM_COL32(0, 255, 255, 255), line.c_str()); // Cyan
+                current_y += ImGui::GetTextLineHeight();
+            }
+            
+            current_y += text_spacing;
+            
+            // Position pin number lines at BOTTOM (original gray text)
+            for (const auto& line : pin_lines) {
+                ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
+                ImVec2 pin_text_pos(x - line_size.x * 0.5f, current_y);
+                draw_list->AddText(pin_text_pos, IM_COL32(128, 128, 128, 255), line.c_str());
+                current_y += ImGui::GetTextLineHeight();
+            }
+        }
+        else if (show_pin_text && show_net_text) {
             // Both texts - stack them vertically
             float text_spacing = 2.0f;
             float total_text_height = pin_text_height + net_text_height + text_spacing;
             
-            // Position pin number lines at TOP of circle (WHITE text for better contrast)
+            // Position pin number lines at TOP of circle (original gray text)
             float current_y = y - total_text_height * 0.5f;
             for (const auto& line : pin_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
@@ -1840,11 +1923,21 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
             
             current_y += text_spacing;
             
-            // Position net name lines at BOTTOM of circle (YELLOW text for visibility)
+            // Position net name lines at BOTTOM of circle (original gray text)
             for (const auto& line : net_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
                 ImVec2 net_text_pos(x - line_size.x * 0.5f, current_y);
                 draw_list->AddText(net_text_pos, IM_COL32(128, 128, 128, 255), line.c_str());
+                current_y += ImGui::GetTextLineHeight();
+            }
+        }
+        else if (show_diode_text) {
+            // Only diode reading - center it
+            float current_y = y - diode_text_height * 0.5f;
+            for (const auto& line : diode_lines) {
+                ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
+                ImVec2 diode_text_pos(x - line_size.x * 0.5f, current_y);
+                draw_list->AddText(diode_text_pos, IM_COL32(0, 255, 255, 255), line.c_str()); // Cyan
                 current_y += ImGui::GetTextLineHeight();
             }
         }
