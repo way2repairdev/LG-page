@@ -29,10 +29,6 @@ struct TextSelection {
     double endX = 0.0;
     double endY = 0.0;
     
-    // Initial screen coordinates for drag distance calculation
-    double initialScreenX = 0.0;
-    double initialScreenY = 0.0;
-    
     // Track zoom/pan state when selection was made for coordinate updates
     float selectionZoomScale = 1.0f;
     float selectionScrollOffset = 0.0f;
@@ -143,7 +139,7 @@ struct PDFScrollState {
 
 void UpdateScrollState(PDFScrollState& state, float winHeight, const std::vector<int>& pageHeights);
 void HandleScroll(PDFScrollState& state, float yoffset);
-void HandleHorizontalScroll(PDFScrollState& state, float xoffset, float winWidth, const std::vector<int>& pageHeights);
+void HandleHorizontalScroll(PDFScrollState& state, float xoffset, float winWidth);
 void DrawScrollBar(const PDFScrollState& state);
 int GetCurrentPageIndex(const PDFScrollState& state, const std::vector<int>& pageHeights);
 void HandleZoom(PDFScrollState& state, float zoomDelta, float cursorX, float cursorY, float winWidth, float winHeight, std::vector<int>& pageHeights, const std::vector<int>& pageWidths);

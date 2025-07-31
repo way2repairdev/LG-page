@@ -542,6 +542,8 @@ void MenuIntegration::OnFileExit() {
 void MenuIntegration::OnViewZoomIn() {
     if (g_scrollState) {
         g_scrollState->zoomScale *= 1.2f;
+        // Use SAME limits as HandleZoom function in feature.cpp for consistency
+        if (g_scrollState->zoomScale > 5.0f) g_scrollState->zoomScale = 5.0f;
         g_scrollState->zoomChanged = true;
         std::cout << "Zoom In: " << g_scrollState->zoomScale << std::endl;
     }
@@ -550,7 +552,8 @@ void MenuIntegration::OnViewZoomIn() {
 void MenuIntegration::OnViewZoomOut() {
     if (g_scrollState) {
         g_scrollState->zoomScale /= 1.2f;
-        if (g_scrollState->zoomScale < 0.1f) g_scrollState->zoomScale = 0.1f;
+        // Use SAME limits as HandleZoom function in feature.cpp for consistency
+        if (g_scrollState->zoomScale < 0.35f) g_scrollState->zoomScale = 0.35f;
         g_scrollState->zoomChanged = true;
         std::cout << "Zoom Out: " << g_scrollState->zoomScale << std::endl;
     }

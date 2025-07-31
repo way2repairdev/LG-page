@@ -381,8 +381,7 @@ void MainApplication::openPDFInTab(const QString &filePath)
     PDFViewerWidget *pdfViewer = new PDFViewerWidget();
     pdfViewer->setProperty("filePath", filePath);
     
-    // Start with toolbar hidden - it will be shown when tab becomes active
-    pdfViewer->toggleControls(false);
+    // No toolbar to hide - PDF viewer is now toolbar-free
     
     // Connect PDF viewer signals
     connect(pdfViewer, &PDFViewerWidget::pdfLoaded, this, [this, filePath](const QString &loadedPath) {
@@ -611,14 +610,13 @@ void MainApplication::onTabChangedByType(int index, DualTabWidget::TabType type)
             pdfViewer->setVisible(true);
             pdfViewer->raise();
             
-            // Show PDF toolbar
-            pdfViewer->toggleControls(true);
+            // No toolbar to show - PDF viewer is now toolbar-free
             
             // Force layout updates
             pdfViewer->updateGeometry();
             pdfViewer->update();
             
-            statusBar()->showMessage("PDF viewer active - Page navigation and search available");
+            statusBar()->showMessage("PDF viewer active - Use keyboard shortcuts for navigation");
         }
     } else if (type == DualTabWidget::PCB_TAB) {
         if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(currentWidget)) {
@@ -667,11 +665,10 @@ void MainApplication::hideAllViewerToolbars()
         QString tabName = m_tabWidget->tabText(i, DualTabWidget::PDF_TAB);
         
         if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(widget)) {
-            qDebug() << "Hiding PDF viewer toolbar for tab:" << tabName;
+            qDebug() << "Hiding PDF viewer for tab:" << tabName;
             
-            // Force hide with multiple methods
-            pdfViewer->toggleControls(false);
-            pdfViewer->setVisible(false); // Temporarily hide entire widget
+            // Force hide the PDF viewer widget
+            pdfViewer->setVisible(false); // Hide entire widget
             pdfViewer->lower(); // Send to back
             
             // Force layout update
@@ -726,8 +723,8 @@ void MainApplication::debugToolbarStates()
         QString tabName = m_tabWidget->tabText(i, DualTabWidget::PDF_TAB);
         
         if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(widget)) {
-            bool toolbarVisible = pdfViewer->isToolbarVisible();
-            qDebug() << "PDF Tab" << i << "(" << tabName << "): toolbar visible:" << toolbarVisible;
+            // PDF viewer now has no toolbar - always report as simplified viewer
+            qDebug() << "PDF Tab" << i << "(" << tabName << "): toolbar-free viewer";
         }
     }
     

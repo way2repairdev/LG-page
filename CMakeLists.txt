@@ -133,7 +133,6 @@ set(UI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/dualtabwidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/ui/pdfviewerwidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/core/PDFViewerEmbedder.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/ui/QtPDFViewerWidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/rendering/OpenGLPipelineManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/ui/pcbviewerwidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/core/PCBViewerEmbedder.cpp
@@ -183,7 +182,6 @@ set(UI_HEADERS
     ${INCLUDE_DIR}/ui/dualtabwidget.h
     ${INCLUDE_DIR}/viewers/pdf/pdfviewerwidget.h
     ${INCLUDE_DIR}/viewers/pdf/PDFViewerEmbedder.h
-    ${INCLUDE_DIR}/viewers/pdf/QtPDFViewerWidget.h
     ${INCLUDE_DIR}/viewers/pdf/OpenGLPipelineManager.h
     ${INCLUDE_DIR}/viewers/pcb/PCBViewerWidget.h
     ${INCLUDE_DIR}/viewers/pcb/PCBViewerEmbedder.h

@@ -46,22 +46,14 @@ void HandleScroll(PDFScrollState& state, float yoffset) {
     // If content fits in viewport, keep it centered (no scrolling)
 }
 
-void HandleHorizontalScroll(PDFScrollState& state, float xoffset, float winWidth, const std::vector<int>& pageHeights) {
+void HandleHorizontalScroll(PDFScrollState& state, float xoffset, float winWidth) {
     // xoffset: positive = scroll right, negative = scroll left
-    // IMPORTANT: horizontalOffset works in reverse - positive values move content LEFT
-    
+
     // Only allow horizontal scrolling if content exceeds viewport width
-    float visiblePageWidth = GetVisiblePageMaxWidth(state, pageHeights);
-    if (visiblePageWidth > winWidth) {
-        // Invert the xoffset because horizontalOffset works in reverse
-        state.horizontalOffset -= xoffset * (winWidth * 0.1f);
-        
-        // Apply correct bounds for the coordinate system based on rendering logic
-        float minHorizontalOffset = (winWidth - visiblePageWidth) / 2.0f;
-        float maxHorizontalOffset = (visiblePageWidth - winWidth) / 2.0f;
-        
-        if (state.horizontalOffset > maxHorizontalOffset) state.horizontalOffset = maxHorizontalOffset;
-        if (state.horizontalOffset < minHorizontalOffset) state.horizontalOffset = minHorizontalOffset;
+    if (state.pageWidthMax * state.zoomScale > winWidth) {
+        state.horizontalOffset += xoffset * (winWidth * 0.1f);
+        if (state.horizontalOffset < 0.0f) state.horizontalOffset = 0.0f;
+        if (state.horizontalOffset > state.maxHorizontalOffset) state.horizontalOffset = state.maxHorizontalOffset;
     }
     // If content fits in viewport, keep it centered (no horizontal scrolling)
 }
@@ -401,30 +393,21 @@ void HandleZoom(PDFScrollState& state, float zoomDelta, float cursorX, float cur
     // Since horizontalOffset works in reverse (positive = move left), we need proper bounds
     state.maxHorizontalOffset = std::max(0.0f, (state.pageWidthMax - winWidth) / 2.0f);
     
-    // AUTO-CENTER PAGES WHEN ZOOMED OUT: Ensure pages stay centered when they fit in viewport
-    if (state.zoomScale <= 1.0f) {
-        // When zoomed out (100% or less), automatically center pages
-        
-        // Center vertically if content fits in viewport
-        if (state.pageHeightSum <= winHeight) {
-            state.scrollOffset = 0.0f;
-        } else {
-            // Content exceeds viewport - clamp to valid bounds
-            if (state.scrollOffset < 0.0f) state.scrollOffset = 0.0f;
-            if (state.scrollOffset > state.maxOffset) state.scrollOffset = state.maxOffset;
-        }
-        
-        // Center horizontally if content fits in viewport
-        if (state.pageWidthMax * state.zoomScale <= winWidth) {
-            state.horizontalOffset = 0.0f;
-        } else {
-            // Content exceeds viewport - clamp to valid bounds using corrected coordinate system
-            float zoomedPageWidth = state.pageWidthMax * state.zoomScale;
-            float minHorizontalOffset = (winWidth - zoomedPageWidth) / 2.0f;
-            float maxHorizontalOffset = (zoomedPageWidth - winWidth) / 2.0f;
-            if (state.horizontalOffset > maxHorizontalOffset) state.horizontalOffset = maxHorizontalOffset;
-            if (state.horizontalOffset < minHorizontalOffset) state.horizontalOffset = minHorizontalOffset;
-        }
+    // DISABLED AUTO-CENTERING: Allow manual zoom control without auto-fitting
+    // Only apply boundary constraints to prevent content from going out of bounds
+    
+    // Apply boundary constraints for all zoom levels
+    // Vertical constraints
+    if (state.scrollOffset < 0.0f) state.scrollOffset = 0.0f;
+    if (state.scrollOffset > state.maxOffset) state.scrollOffset = state.maxOffset;
+    
+    // Horizontal constraints - only clamp if content exceeds viewport
+    if (state.pageWidthMax * state.zoomScale > winWidth) {
+        float zoomedPageWidth = state.pageWidthMax * state.zoomScale;
+        float minHorizontalOffset = (winWidth - zoomedPageWidth) / 2.0f;
+        float maxHorizontalOffset = (zoomedPageWidth - winWidth) / 2.0f;
+        if (state.horizontalOffset > maxHorizontalOffset) state.horizontalOffset = maxHorizontalOffset;
+        if (state.horizontalOffset < minHorizontalOffset) state.horizontalOffset = minHorizontalOffset;
     }
     // FREELOOK ZOOM: For zoom > 100%, maintain current position (no auto-centering)    // Mark that zoom has changed with immediate rendering for visible pages only
     state.zoomChanged = true;
@@ -775,10 +758,6 @@ void StartTextSelection(PDFScrollState& state, double mouseX, double mouseY, flo
     state.textSelection.endX = pdfX;
     state.textSelection.endY = pdfY;
     
-    // Store initial screen coordinates for drag distance calculation
-    state.textSelection.initialScreenX = mouseX;
-    state.textSelection.initialScreenY = mouseY;
-    
     // Store current zoom/pan state for coordinate tracking
     state.textSelection.selectionZoomScale = state.zoomScale;
     state.textSelection.selectionScrollOffset = state.scrollOffset;
@@ -807,17 +786,8 @@ void StartTextSelection(PDFScrollState& state, double mouseX, double mouseY, flo
 void UpdateTextSelection(PDFScrollState& state, double mouseX, double mouseY, float winWidth, float winHeight, const std::vector<int>& pageHeights, const std::vector<int>& pageWidths) {
     if (!state.textSelection.isDragging) return;
     
-    // Check if we've moved enough to start a real selection (activate visual selection)
-    if (!state.textSelection.isActive) {
-        double dragDistance = sqrt(pow(mouseX - state.textSelection.initialScreenX, 2) + pow(mouseY - state.textSelection.initialScreenY, 2));
-        const double MIN_DRAG_DISTANCE = 3.0; // pixels
-        
-        if (dragDistance > MIN_DRAG_DISTANCE) {
-            state.textSelection.isActive = true; // Now activate visual selection
-        } else {
-            return; // Don't update selection until we've dragged enough
-        }
-    }
+    // Activate selection immediately when dragging (simplified from old version)
+    state.textSelection.isActive = true;
     
     // Find which page the mouse is over
     int pageIndex = GetPageAtScreenPosition(mouseY, state, pageHeights);
@@ -935,8 +905,6 @@ void ClearTextSelection(PDFScrollState& state) {
     state.textSelection.endPageIndex = -1;
     state.textSelection.startCharIndex = -1;
     state.textSelection.endCharIndex = -1;
-    state.textSelection.initialScreenX = 0.0;
-    state.textSelection.initialScreenY = 0.0;
     state.textSelection.needsCoordinateUpdate = false;
 }
 

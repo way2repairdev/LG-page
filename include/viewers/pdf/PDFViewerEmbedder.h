@@ -80,7 +80,6 @@ public:
      */
     void zoomIn();
     void zoomOut();
-    void zoomToFit();
     void setZoom(float zoomLevel);
     void goToPage(int pageNumber);
     void nextPage();

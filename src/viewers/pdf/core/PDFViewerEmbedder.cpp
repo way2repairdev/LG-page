@@ -5,6 +5,7 @@
 #include "../third_party/include/rendering/pdf-render.h"
 #include "../third_party/include/core/feature.h"
 #include "../third_party/include/ui/menu-integration.h"
+#include "../third_party/include/utils/Resource.h"
 
 // GLFW includes
 #include <GLFW/glfw3.h>
@@ -200,11 +201,38 @@ bool PDFViewerEmbedder::loadPDF(const std::string& filePath)
         try {
             m_renderer->GetOriginalPageSize(i, m_originalPageWidths[i], m_originalPageHeights[i]);
             
-            // Calculate initial display dimensions
-            int pageW = 0, pageH = 0;
-            m_renderer->GetBestFitSize(i, m_windowWidth, m_windowHeight, pageW, pageH);
-            m_pageWidths[i] = pageW;
-            m_pageHeights[i] = pageH;
+            // DEBUG: Print actual PDF page dimensions to debug file
+            std::ofstream debugFile("pdf_embedder_debug.txt", std::ios::app);
+            if (debugFile.is_open()) {
+                debugFile << "DEBUG: Page " << i << " original dimensions: " 
+                          << m_originalPageWidths[i] << " x " << m_originalPageHeights[i] << " points" << std::endl;
+                
+                // Calculate ratio to window size
+                float widthRatio = m_originalPageWidths[i] / (float)m_windowWidth;
+                float heightRatio = m_originalPageHeights[i] / (float)m_windowHeight;
+                debugFile << "Page width ratio to window: " << widthRatio << std::endl;
+                debugFile << "Page height ratio to window: " << heightRatio << std::endl;
+                
+                // Check if page appears to be auto-fitted
+                if (std::abs(widthRatio - 1.0f) < 0.1f || std::abs(heightRatio - 1.0f) < 0.1f) {
+                    debugFile << "WARNING: Page appears to be auto-fitted to window!" << std::endl;
+                }
+                
+                debugFile.close();
+            }
+            
+            // Also print to console
+            std::cout << "DEBUG: Page " << i << " original dimensions: " 
+                      << m_originalPageWidths[i] << " x " << m_originalPageHeights[i] << " points" << std::endl;
+            
+            // Use ACTUAL page dimensions (not window-fitted) for initial display
+            m_pageWidths[i] = static_cast<int>(m_originalPageWidths[i]);
+            m_pageHeights[i] = static_cast<int>(m_originalPageHeights[i]);
+            
+            // DEBUG: Print what we're storing as base dimensions
+            std::cout << "DEBUG: Storing base dimensions: " 
+                      << m_pageWidths[i] << " x " << m_pageHeights[i] << " pixels" << std::endl;
+            
         } catch (const std::exception& e) {
             return false;
         }
@@ -259,6 +287,28 @@ bool PDFViewerEmbedder::loadPDF(const std::string& filePath)
 
     // Initialize scroll state for the new document
     try {
+        // CRITICAL DEBUGGING: Check initial zoom and page dimensions
+        std::cout << "=== CRITICAL DEBUG: ZOOM INITIALIZATION ===" << std::endl;
+        std::cout << "Initial zoom scale: " << m_scrollState->zoomScale << std::endl;
+        std::cout << "Window dimensions: " << m_windowWidth << " x " << m_windowHeight << std::endl;
+        
+        // Calculate what the page will look like at current zoom
+        if (!m_pageWidths.empty() && !m_pageHeights.empty()) {
+            float pageDisplayWidth = m_pageWidths[0] * m_scrollState->zoomScale;
+            float pageDisplayHeight = m_pageHeights[0] * m_scrollState->zoomScale;
+            std::cout << "Page 0 will display at: " << pageDisplayWidth << " x " << pageDisplayHeight << " pixels" << std::endl;
+            std::cout << "Page width ratio to window: " << (pageDisplayWidth / m_windowWidth) << std::endl;
+            std::cout << "Page height ratio to window: " << (pageDisplayHeight / m_windowHeight) << std::endl;
+            
+            // Check if the page appears to be auto-fitted
+            float widthRatio = pageDisplayWidth / m_windowWidth;
+            float heightRatio = pageDisplayHeight / m_windowHeight;
+            if (widthRatio > 0.8f && widthRatio < 1.2f && heightRatio > 0.8f && heightRatio < 1.2f) {
+                std::cout << "WARNING: Page appears to be auto-fitted to window!" << std::endl;
+            }
+        }
+        std::cout << "================================================" << std::endl;
+        
         UpdateScrollState(*m_scrollState, (float)m_windowHeight, m_pageHeights);
     } catch (const std::exception& e) {
         return false;
@@ -297,13 +347,34 @@ void PDFViewerEmbedder::update()
         m_windowHeight = currentHeight;
     }
 
-    // Handle texture regeneration (from your main.cpp logic)
-    if (m_needsFullRegeneration || m_needsVisibleRegeneration) {
-        if (m_needsFullRegeneration) {
-            regenerateTextures();
-        } else {
-            regenerateVisibleTextures();
+    // SAME ZOOM HANDLING LOGIC AS STANDALONE VIEWER'S MAIN LOOP
+    // Check if we need to regenerate textures due to window resize or zoom change
+    bool needsFullRegeneration = (currentWidth != m_lastWinWidth || currentHeight != m_lastWinHeight);
+    bool needsVisibleRegeneration = false;
+    
+    if (m_scrollState->zoomChanged) {
+        float zoomDifference = std::abs(m_scrollState->zoomScale - m_scrollState->lastRenderedZoom) / m_scrollState->lastRenderedZoom;
+        
+        // For immediate responsive zoom, regenerate visible pages with lower threshold (1%)
+        if (m_scrollState->immediateRenderRequired && zoomDifference > 0.01f) {
+            needsVisibleRegeneration = true;
+            m_scrollState->immediateRenderRequired = false;
         }
+        // For full regeneration, use higher threshold (3%) to avoid too frequent full regens
+        else if (zoomDifference > 0.03f) {
+            needsFullRegeneration = true;
+            m_scrollState->lastRenderedZoom = m_scrollState->zoomScale;
+        }
+        m_scrollState->zoomChanged = false; // Reset the flag
+    }
+    
+    // Handle texture regeneration using the same logic as standalone viewer
+    if (needsFullRegeneration) {
+        regenerateTextures();
+        m_lastWinWidth = currentWidth;
+        m_lastWinHeight = currentHeight;
+    } else if (needsVisibleRegeneration) {
+        regenerateVisibleTextures();
     }
 
     // IMPORTANT: Update search state and trigger search if needed
@@ -329,14 +400,23 @@ void PDFViewerEmbedder::resize(int width, int height)
         return;
     }
 
+    // Only update if size actually changed significantly
+    bool significantChange = (std::abs(width - m_windowWidth) > 5 || std::abs(height - m_windowHeight) > 5);
+    
+    if (!significantChange) {
+        return; // Ignore minor resize events to prevent interference with zoom
+    }
+
     m_windowWidth = width;
     m_windowHeight = height;
     
     // Update GLFW window size
     glfwSetWindowSize(m_glfwWindow, width, height);
     
-    // Force regeneration on next update
+    // Force regeneration on next update only for significant size changes
     m_needsFullRegeneration = true;
+    
+    std::cout << "PDFViewerEmbedder: Significant resize to " << width << "x" << height << std::endl;
 }
 
 void PDFViewerEmbedder::shutdown()
@@ -368,56 +448,108 @@ void PDFViewerEmbedder::shutdown()
 // Navigation methods
 void PDFViewerEmbedder::zoomIn()
 {
-    if (!m_initialized || !m_pdfLoaded) return;
+    if (!m_scrollState) return;
     
-    float newZoom = m_scrollState->zoomScale * 1.2f;
-    if (newZoom > 5.0f) newZoom = 5.0f; // Max zoom limit
+    float oldZoom = m_scrollState->zoomScale;
     
-    m_scrollState->zoomScale = newZoom;
-    m_scrollState->zoomChanged = true;
-    m_needsFullRegeneration = true;
+    // Write zoom debug to file
+    std::ofstream debugFile("pdf_embedder_debug.txt", std::ios::app);
+    if (debugFile.is_open()) {
+        debugFile << "ZOOM DEBUG: ZoomIn called - Current zoom: " << oldZoom << std::endl;
+        debugFile.close();
+    }
+    
+    std::cout << "DEBUG: ZoomIn called - Current zoom: " << oldZoom << std::endl;
+    
+    // Use the SAME cursor-based zoom as standalone viewer's HandleZoom function
+    // Get center of viewport as zoom focal point
+    float centerX = m_windowWidth / 2.0f;
+    float centerY = m_windowHeight / 2.0f;
+    
+    // Call HandleZoom with 1.2f zoom delta (same as MenuIntegration)
+    HandleZoom(*m_scrollState, 1.2f, centerX, centerY, 
+               (float)m_windowWidth, (float)m_windowHeight, 
+               m_pageHeights, m_pageWidths);
+    
+    float newZoom = m_scrollState->zoomScale;
+    
+    // Write zoom result to debug file
+    std::ofstream debugFile2("pdf_embedder_debug.txt", std::ios::app);
+    if (debugFile2.is_open()) {
+        debugFile2 << "ZOOM DEBUG: ZoomIn completed - New zoom: " << newZoom << " (delta: " << (newZoom/oldZoom) << ")" << std::endl;
+        debugFile2 << "Page 0 pixel dimensions after zoom: " << (m_pageWidths[0] * newZoom) << " x " << (m_pageHeights[0] * newZoom) << " pixels" << std::endl;
+        debugFile2.close();
+    }
+    
+    std::cout << "DEBUG: ZoomIn completed - New zoom: " << newZoom << " (delta: " << (newZoom/oldZoom) << ")" << std::endl;
+    std::cout << "DEBUG: Page 0 will render at: " << (m_pageWidths[0] * newZoom) << " x " << (m_pageHeights[0] * newZoom) << " pixels" << std::endl;
+    std::cout << "Embedded viewer: HandleZoom zoom in to " << m_scrollState->zoomScale << std::endl;
 }
 
 void PDFViewerEmbedder::zoomOut()
 {
-    if (!m_initialized || !m_pdfLoaded) return;
+    if (!m_scrollState) return;
     
-    float newZoom = m_scrollState->zoomScale / 1.2f;
-    if (newZoom < 0.2f) newZoom = 0.2f; // Min zoom limit
+    float oldZoom = m_scrollState->zoomScale;
     
-    m_scrollState->zoomScale = newZoom;
-    m_scrollState->zoomChanged = true;
-    m_needsFullRegeneration = true;
+    // Write zoom debug to file
+    std::ofstream debugFile("pdf_embedder_debug.txt", std::ios::app);
+    if (debugFile.is_open()) {
+        debugFile << "ZOOM DEBUG: ZoomOut called - Current zoom: " << oldZoom << std::endl;
+        debugFile.close();
+    }
+    
+    std::cout << "DEBUG: ZoomOut called - Current zoom: " << oldZoom << std::endl;
+    
+    // Use the SAME cursor-based zoom as standalone viewer's HandleZoom function
+    // Get center of viewport as zoom focal point
+    float centerX = m_windowWidth / 2.0f;
+    float centerY = m_windowHeight / 2.0f;
+    
+    // Call HandleZoom with 1/1.2f zoom delta (same as MenuIntegration)
+    HandleZoom(*m_scrollState, 1.0f/1.2f, centerX, centerY, 
+               (float)m_windowWidth, (float)m_windowHeight, 
+               m_pageHeights, m_pageWidths);
+    
+    float newZoom = m_scrollState->zoomScale;
+    
+    // Write zoom result to debug file
+    std::ofstream debugFile2("pdf_embedder_debug.txt", std::ios::app);
+    if (debugFile2.is_open()) {
+        debugFile2 << "ZOOM DEBUG: ZoomOut completed - New zoom: " << newZoom << " (delta: " << (newZoom/oldZoom) << ")" << std::endl;
+        debugFile2 << "Page 0 pixel dimensions after zoom: " << (m_pageWidths[0] * newZoom) << " x " << (m_pageHeights[0] * newZoom) << " pixels" << std::endl;
+        debugFile2.close();
+    }
+    
+    std::cout << "DEBUG: ZoomOut completed - New zoom: " << newZoom << " (delta: " << (newZoom/oldZoom) << ")" << std::endl;
+    std::cout << "DEBUG: Page 0 will render at: " << (m_pageWidths[0] * newZoom) << " x " << (m_pageHeights[0] * newZoom) << " pixels" << std::endl;
+    std::cout << "Embedded viewer: HandleZoom zoom out to " << m_scrollState->zoomScale << std::endl;
 }
 
 void PDFViewerEmbedder::setZoom(float zoomLevel)
 {
-    if (!m_initialized || !m_pdfLoaded) return;
+    if (!m_scrollState) return;
     
-    if (zoomLevel < 0.2f) zoomLevel = 0.2f;
+    // Apply SAME zoom limits as HandleZoom function (0.35f to 5.0f)
+    if (zoomLevel < 0.35f) zoomLevel = 0.35f;
     if (zoomLevel > 5.0f) zoomLevel = 5.0f;
     
-    m_scrollState->zoomScale = zoomLevel;
-    m_scrollState->zoomChanged = true;
-    m_needsFullRegeneration = true;
-}
-
-void PDFViewerEmbedder::zoomToFit()
-{
-    if (!m_initialized || !m_pdfLoaded || m_pageWidths.empty()) return;
+    // Calculate zoom delta to reach target zoom level
+    float currentZoom = m_scrollState->zoomScale;
+    if (std::abs(currentZoom - zoomLevel) < 0.001f) return; // Already at target zoom
     
-    // Calculate zoom level to fit the page width to window
-    float windowWidth = static_cast<float>(m_windowWidth);
-    float pageWidth = static_cast<float>(m_pageWidths[0]); // Use first page as reference
+    float zoomDelta = zoomLevel / currentZoom;
     
-    if (pageWidth > 0) {
-        float fitZoom = (windowWidth - 40.0f) / pageWidth; // Leave some margin
-        if (fitZoom < 0.2f) fitZoom = 0.2f;
-        if (fitZoom > 5.0f) fitZoom = 5.0f;
-        
-        m_scrollState->zoomScale = fitZoom;
-        m_needsFullRegeneration = true;
-    }
+    // Use center-based zoom like HandleZoom function
+    float centerX = m_windowWidth / 2.0f;
+    float centerY = m_windowHeight / 2.0f;
+    
+    // Call HandleZoom with calculated delta
+    HandleZoom(*m_scrollState, zoomDelta, centerX, centerY, 
+               (float)m_windowWidth, (float)m_windowHeight, 
+               m_pageHeights, m_pageWidths);
+    
+    std::cout << "Embedded viewer: Set zoom to " << m_scrollState->zoomScale << std::endl;
 }
 
 void PDFViewerEmbedder::goToPage(int pageNumber)
@@ -881,22 +1013,29 @@ void PDFViewerEmbedder::regenerateTextures()
     m_pageWidths.resize(pageCount);
     m_pageHeights.resize(pageCount);
     
-    // Regenerate all textures
+    // Regenerate all textures using ACTUAL page dimensions (not window-fitted)
     for (int i = 0; i < pageCount; ++i) {
-        int pageW = 0, pageH = 0;
-        // FIXED: Remove hard 0.5x threshold - use actual zoom with proper minimum
-        float effectiveZoom = std::max(0.2f, m_scrollState->zoomScale);
-        m_renderer->GetBestFitSize(i, static_cast<int>(m_windowWidth * effectiveZoom), 
-                                   static_cast<int>(m_windowHeight * effectiveZoom), pageW, pageH);
+        // Get the ACTUAL page dimensions from PDF (not window-fitted)
+        double originalPageWidth, originalPageHeight;
+        m_renderer->GetOriginalPageSize(i, originalPageWidth, originalPageHeight);
         
-        FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, pageW, pageH);
-        m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), pageW, pageH);
+        // Calculate texture size based on zoom level applied to ACTUAL page dimensions
+        float effectiveZoom = (m_scrollState->zoomScale > 0.5f) ? m_scrollState->zoomScale : 0.5f;
+        int textureWidth = static_cast<int>(originalPageWidth * effectiveZoom);
+        int textureHeight = static_cast<int>(originalPageHeight * effectiveZoom);
         
-        // Store base page dimensions for layout calculations
-        int baseW = 0, baseH = 0;
-        m_renderer->GetBestFitSize(i, m_windowWidth, m_windowHeight, baseW, baseH);
-        m_pageWidths[i] = baseW;
-        m_pageHeights[i] = baseH;
+        // Ensure minimum texture size for readability
+        if (textureWidth < 200) textureWidth = 200;
+        if (textureHeight < 200) textureHeight = 200;
+        
+        // Render at calculated size using actual page dimensions (no window fitting)
+        FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, textureWidth, textureHeight);
+        m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+        
+        // Store BASE dimensions (ACTUAL page dimensions, not window-fitted)
+        // These will be scaled by zoomScale during rendering
+        m_pageWidths[i] = static_cast<int>(originalPageWidth);
+        m_pageHeights[i] = static_cast<int>(originalPageHeight);
         
         FPDFBitmap_Destroy(bmp);
     }
@@ -916,27 +1055,33 @@ void PDFViewerEmbedder::regenerateVisibleTextures()
     int firstVisible, lastVisible;
     GetVisiblePageRange(*m_scrollState, m_pageHeights, firstVisible, lastVisible);
     
-    // Only regenerate textures for visible pages
+    // Only regenerate textures for visible pages using ACTUAL page dimensions
     for (int i = firstVisible; i <= lastVisible && i < pageCount; ++i) {
         if (m_textures[i]) {
             glDeleteTextures(1, &m_textures[i]);
         }
         
-        int pageW = 0, pageH = 0;
-        // FIXED: Remove hard 0.5x threshold - use actual zoom with proper minimum
-        float effectiveZoom = std::max(0.2f, m_scrollState->zoomScale);
-        m_renderer->GetBestFitSize(i, static_cast<int>(m_windowWidth * effectiveZoom), 
-                                   static_cast<int>(m_windowHeight * effectiveZoom), pageW, pageH);
+        // Get the ACTUAL page dimensions from PDF (not window-fitted)
+        double originalPageWidth, originalPageHeight;
+        m_renderer->GetOriginalPageSize(i, originalPageWidth, originalPageHeight);
         
-        FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, pageW, pageH);
-        m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), pageW, pageH);
+        // Calculate texture size based on zoom level applied to ACTUAL page dimensions
+        float effectiveZoom = (m_scrollState->zoomScale > 0.5f) ? m_scrollState->zoomScale : 0.5f;
+        int textureWidth = static_cast<int>(originalPageWidth * effectiveZoom);
+        int textureHeight = static_cast<int>(originalPageHeight * effectiveZoom);
         
-        // Update page dimensions with new resolution
-        // Store base dimensions properly scaled for layout calculations
-        int baseW = 0, baseH = 0;
-        m_renderer->GetBestFitSize(i, m_windowWidth, m_windowHeight, baseW, baseH);
-        m_pageWidths[i] = baseW;
-        m_pageHeights[i] = baseH;
+        // Ensure minimum texture size for readability
+        if (textureWidth < 200) textureWidth = 200;
+        if (textureHeight < 200) textureHeight = 200;
+        
+        // Render at calculated size using actual page dimensions (no window fitting)
+        FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, textureWidth, textureHeight);
+        m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+        
+        // Store BASE dimensions (ACTUAL page dimensions, not window-fitted)
+        // These will be scaled by zoomScale during rendering
+        m_pageWidths[i] = static_cast<int>(originalPageWidth);
+        m_pageHeights[i] = static_cast<int>(originalPageHeight);
         
         FPDFBitmap_Destroy(bmp);
     }
@@ -953,15 +1098,30 @@ void PDFViewerEmbedder::regeneratePageTexture(int pageIndex)
         glDeleteTextures(1, &m_textures[pageIndex]);
     }
     
-    // Generate new texture
-    int pageW = 0, pageH = 0;
-    // FIXED: Remove hard 0.5x threshold - use actual zoom with proper minimum
-    float effectiveZoom = std::max(0.2f, m_scrollState->zoomScale);
-    m_renderer->GetBestFitSize(pageIndex, static_cast<int>(m_windowWidth * effectiveZoom), 
-                               static_cast<int>(m_windowHeight * effectiveZoom), pageW, pageH);
+    // Generate new texture using ACTUAL page dimensions (not window-fitted)
     
-    FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(pageIndex, pageW, pageH);
-    m_textures[pageIndex] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), pageW, pageH);
+    // Get the ACTUAL page dimensions from PDF (not window-fitted)
+    double originalPageWidth, originalPageHeight;
+    m_renderer->GetOriginalPageSize(pageIndex, originalPageWidth, originalPageHeight);
+    
+    // Calculate texture size based on zoom level applied to ACTUAL page dimensions
+    float effectiveZoom = (m_scrollState->zoomScale > 0.5f) ? m_scrollState->zoomScale : 0.5f;
+    int textureWidth = static_cast<int>(originalPageWidth * effectiveZoom);
+    int textureHeight = static_cast<int>(originalPageHeight * effectiveZoom);
+    
+    // Ensure minimum texture size for readability
+    if (textureWidth < 200) textureWidth = 200;
+    if (textureHeight < 200) textureHeight = 200;
+    
+    // Render at calculated size using actual page dimensions (no window fitting)
+    FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(pageIndex, textureWidth, textureHeight);
+    m_textures[pageIndex] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+    
+    // Store BASE dimensions (ACTUAL page dimensions, not window-fitted)
+    // These will be scaled by zoomScale during rendering
+    m_pageWidths[pageIndex] = static_cast<int>(originalPageWidth);
+    m_pageHeights[pageIndex] = static_cast<int>(originalPageHeight);
+    
     FPDFBitmap_Destroy(bmp);
 }
 
@@ -986,15 +1146,18 @@ void PDFViewerEmbedder::handleBackgroundRendering()
                 glDeleteTextures(1, &m_textures[backgroundRenderIndex]);
             }
             
-            int pageW = 0, pageH = 0;
+            // Get ACTUAL page dimensions for background rendering (not window-fitted)
+            double originalPageWidth, originalPageHeight;
+            m_renderer->GetOriginalPageSize(backgroundRenderIndex, originalPageWidth, originalPageHeight);
+            
+            // Calculate background texture size using actual page dimensions with zoom scaling
             float backgroundZoom = m_scrollState->zoomScale * 0.7f;
             backgroundZoom = (backgroundZoom > 0.3f) ? backgroundZoom : 0.3f;
-            m_renderer->GetBestFitSize(backgroundRenderIndex, 
-                                       static_cast<int>(m_windowWidth * backgroundZoom), 
-                                       static_cast<int>(m_windowHeight * backgroundZoom), pageW, pageH);
+            int textureWidth = static_cast<int>(originalPageWidth * backgroundZoom);
+            int textureHeight = static_cast<int>(originalPageHeight * backgroundZoom);
             
-            FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(backgroundRenderIndex, pageW, pageH);
-            m_textures[backgroundRenderIndex] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), pageW, pageH);
+            FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(backgroundRenderIndex, textureWidth, textureHeight);
+            m_textures[backgroundRenderIndex] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
             FPDFBitmap_Destroy(bmp);
             break;
         }
@@ -1190,9 +1353,8 @@ void PDFViewerEmbedder::onScroll(double xoffset, double yoffset)
 {
     if (!m_scrollState) return;
     
-    // Get cursor position for cursor-based zooming
+    // Get cursor position for scroll bar detection only
     double cursorX = m_scrollState->lastCursorX;
-    double cursorY = m_scrollState->lastCursorY;
     
     // Check if cursor is over the scroll bar area (right side of window)
     float barMargin = 0.01f * m_windowWidth;
@@ -1209,25 +1371,32 @@ void PDFViewerEmbedder::onScroll(double xoffset, double yoffset)
     // Get key modifier states for different scroll behaviors
     bool shiftPressed = (glfwGetKey(m_glfwWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || 
                         glfwGetKey(m_glfwWindow, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
+    bool ctrlPressed = (glfwGetKey(m_glfwWindow, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS || 
+                       glfwGetKey(m_glfwWindow, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
     
-    if (shiftPressed) {
+    if (ctrlPressed) {
+        // Ctrl + mouse wheel: Cursor-based zooming (like standalone viewer)
+        // Get current cursor position for zoom focal point
+        double cursorX = m_scrollState->lastCursorX;
+        double cursorY = m_scrollState->lastCursorY;
+        
+        // Calculate zoom delta based on scroll direction
+        float zoomDelta = (yoffset > 0) ? 1.2f : (1.0f / 1.2f);
+        
+        // Apply cursor-based zoom using the same logic as standalone viewer
+        HandleZoom(*m_scrollState, zoomDelta, (float)cursorX, (float)cursorY,
+                   (float)m_windowWidth, (float)m_windowHeight, 
+                   m_pageHeights, m_pageWidths);
+        
+        std::cout << "PDFViewerEmbedder: Cursor-based zoom to " << m_scrollState->zoomScale 
+                  << " at cursor position (" << cursorX << ", " << cursorY << ")" << std::endl;
+                  
+    } else if (shiftPressed) {
         // Horizontal scrolling with Shift + mouse wheel
-        HandleHorizontalScroll(*m_scrollState, (float)yoffset, (float)m_windowWidth, m_pageHeights);
+        HandleHorizontalScroll(*m_scrollState, (float)yoffset, (float)m_windowWidth);
     } else {
-        // Always zoom with mouse wheel (no Ctrl modifier required)
-        // Use zoom FACTOR not delta - same as standalone PDF viewer
-        float zoomFactor = (yoffset > 0) ? 1.1f : 1.0f / 1.1f;
-        
-        // FIXED: Simply use HandleZoom - it already has proper cursor-based zoom logic
-        // The issue was that we were overcomplicating it with manual coordinate calculations
-        HandleZoom(*m_scrollState, zoomFactor, (float)cursorX, (float)cursorY, 
-                   (float)m_windowWidth, (float)m_windowHeight, m_pageHeights, m_pageWidths);
-        
-        // Check if zoom changed and force regeneration
-        if (m_scrollState->zoomChanged) {
-            m_needsVisibleRegeneration = true;
-            m_scrollState->zoomChanged = false;
-        }
+        // Default: Vertical scrolling
+        HandleScroll(*m_scrollState, (float)yoffset);
     }
 }
 
@@ -1319,14 +1488,14 @@ void PDFViewerEmbedder::onKey(int key, int scancode, int action, int mods)
             if (mods & GLFW_MOD_CONTROL) {
                 previousPage();
             } else {
-                HandleHorizontalScroll(*m_scrollState, -1.0f, (float)m_windowWidth, m_pageHeights);
+                HandleHorizontalScroll(*m_scrollState, -1.0f, (float)m_windowWidth);
             }
         } else if (key == GLFW_KEY_RIGHT) {
             // Arrow right: Horizontal scroll or next page
             if (mods & GLFW_MOD_CONTROL) {
                 nextPage();
             } else {
-                HandleHorizontalScroll(*m_scrollState, 1.0f, (float)m_windowWidth, m_pageHeights);
+                HandleHorizontalScroll(*m_scrollState, 1.0f, (float)m_windowWidth);
             }
         } else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_9 && (mods & GLFW_MOD_CONTROL)) {
             // Ctrl+1-9: Quick zoom levels
@@ -1335,9 +1504,6 @@ void PDFViewerEmbedder::onKey(int key, int scancode, int action, int mods)
             if (index < 9) {
                 setZoom(zoomLevels[index]);
             }
-        } else if (key == GLFW_KEY_0 && (mods & GLFW_MOD_CONTROL)) {
-            // Ctrl+0: Zoom to fit
-            zoomToFit();
         } else if (key == GLFW_KEY_EQUAL && (mods & GLFW_MOD_CONTROL)) {
             // Ctrl+= (Plus): Zoom in
             zoomIn();
