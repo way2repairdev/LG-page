@@ -307,8 +307,6 @@ void PDFViewerWidget::focusInEvent(QFocusEvent* event)
     }
 }
 
-/
-
 void PDFViewerWidget::checkForSelectedText()
 {
     if (!isPDFLoaded() || !m_pdfEmbedder) {
@@ -320,4 +318,101 @@ void PDFViewerWidget::checkForSelectedText()
     
     // Store the current selected text for next comparison
     m_lastSelectedText = selectedText;
+}
+
+void PDFViewerWidget::setupViewerArea()
+{
+    // Create viewer container widget
+    m_viewerContainer = new QWidget(this);
+    m_viewerContainer->setMinimumSize(400, 300);
+    m_viewerContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_viewerContainer->setStyleSheet(
+        "QWidget {"
+        "    background-color: #ffffff;"
+        "    border: 1px solid #cccccc;"
+        "}"
+    );
+}
+
+// Navigation slots
+void PDFViewerWidget::zoomIn()
+{
+    if (isPDFLoaded()) {
+        m_pdfEmbedder->zoomIn();
+    }
+}
+
+void PDFViewerWidget::zoomOut()
+{
+    if (isPDFLoaded()) {
+        m_pdfEmbedder->zoomOut();
+    }
+}
+
+void PDFViewerWidget::goToPage(int pageNumber)
+{
+    if (isPDFLoaded()) {
+        m_pdfEmbedder->goToPage(pageNumber);
+    }
+}
+
+void PDFViewerWidget::nextPage()
+{
+    if (isPDFLoaded()) {
+        m_pdfEmbedder->nextPage();
+    }
+}
+
+void PDFViewerWidget::previousPage()
+{
+    if (isPDFLoaded()) {
+        m_pdfEmbedder->previousPage();
+    }
+}
+
+void PDFViewerWidget::updateViewer()
+{
+    if (m_pdfEmbedder && m_viewerInitialized) {
+        m_pdfEmbedder->update();
+        
+        // Check for state changes and emit signals
+        if (isPDFLoaded()) {
+            int currentPage = getCurrentPage();
+            int pageCount = getPageCount();
+            double zoomLevel = getCurrentZoom();
+            
+            // Emit signals if values changed
+            if (currentPage != m_lastCurrentPage || pageCount != m_lastPageCount) {
+                m_lastCurrentPage = currentPage;
+                m_lastPageCount = pageCount;
+                emit pageChanged(currentPage, pageCount);
+            }
+            
+            if (std::abs(zoomLevel - m_lastZoomLevel) > 0.01) {
+                m_lastZoomLevel = zoomLevel;
+                emit zoomChanged(zoomLevel);
+            }
+        }
+    }
+}
+
+// Event handlers
+void PDFViewerWidget::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    
+    if (m_pdfEmbedder && m_viewerInitialized) {
+        // Resize the embedded viewer
+        m_pdfEmbedder->resize(event->size().width(), event->size().height());
+    }
+}
+
+void PDFViewerWidget::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    
+    // Initialize the PDF viewer when first shown
+    if (!m_viewerInitialized) {
+        initializePDFViewer();
+    }
 }
