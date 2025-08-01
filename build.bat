@@ -94,6 +94,37 @@ if not exist %BUILD_DIR% (
     mkdir %BUILD_DIR%
 )
 
+:: Clean up debug files from previous runs
+echo Cleaning up debug files from build directory...
+:: Clean log files
+if exist "%BUILD_DIR%\*.log" (
+    del /Q "%BUILD_DIR%\*.log" >nul 2>&1
+)
+:: Clean specific debug files (not all txt files to preserve CMake files)
+if exist "%BUILD_DIR%\pdf_debug.txt" (
+    del /Q "%BUILD_DIR%\pdf_debug.txt" >nul 2>&1
+)
+if exist "%BUILD_DIR%\pdf_embedder_debug.txt" (
+    del /Q "%BUILD_DIR%\pdf_embedder_debug.txt" >nul 2>&1
+)
+if exist "%BUILD_DIR%\opengl_debug.txt" (
+    del /Q "%BUILD_DIR%\opengl_debug.txt" >nul 2>&1
+)
+if exist "%BUILD_DIR%\pipeline_debug.txt" (
+    del /Q "%BUILD_DIR%\pipeline_debug.txt" >nul 2>&1
+)
+if exist "%BUILD_DIR%\pcb_debug.txt" (
+    del /Q "%BUILD_DIR%\pcb_debug.txt" >nul 2>&1
+)
+if exist "%BUILD_DIR%\dualtab_debug.txt" (
+    del /Q "%BUILD_DIR%\dualtab_debug.txt" >nul 2>&1
+)
+:: Clean any files with "debug" in the name (but preserve cmake and other important files)
+for %%f in ("%BUILD_DIR%\*debug*.txt") do (
+    if exist "%%f" del /Q "%%f" >nul 2>&1
+)
+echo Debug files cleaned.
+
 :: Configure CMake
 echo Configuring CMake...
 cd %BUILD_DIR%
@@ -188,6 +219,37 @@ if exist "%BUILD_DIR%\Qt6Core.dll" (
     echo Dependency deployment completed.
     echo.
 )
+
+:: Final cleanup of debug files before runtime
+echo Performing final cleanup of debug files...
+:: Clean log files
+if exist "%BUILD_DIR%\*.log" (
+    del /Q "%BUILD_DIR%\*.log" >nul 2>&1
+)
+:: Clean specific debug files that might be generated (preserve CMake and other important files)
+if exist "%BUILD_DIR%\pdf_debug.txt" (
+    del /Q "%BUILD_DIR%\pdf_debug.txt" >nul 2>&1
+)
+if exist "%BUILD_DIR%\pdf_embedder_debug.txt" (
+    del /Q "%BUILD_DIR%\pdf_embedder_debug.txt" >nul 2>&1
+)
+if exist "%BUILD_DIR%\opengl_debug.txt" (
+    del /Q "%BUILD_DIR%\opengl_debug.txt" >nul 2>&1
+)
+if exist "%BUILD_DIR%\pipeline_debug.txt" (
+    del /Q "%BUILD_DIR%\pipeline_debug.txt" >nul 2>&1
+)
+if exist "%BUILD_DIR%\pcb_debug.txt" (
+    del /Q "%BUILD_DIR%\pcb_debug.txt" >nul 2>&1
+)
+if exist "%BUILD_DIR%\dualtab_debug.txt" (
+    del /Q "%BUILD_DIR%\dualtab_debug.txt" >nul 2>&1
+)
+:: Clean any files with "debug" in the name
+for %%f in ("%BUILD_DIR%\*debug*.txt") do (
+    if exist "%%f" del /Q "%%f" >nul 2>&1
+)
+echo Runtime environment prepared - debug files removed.
 
 :: Ask if user wants to run the application
 set /p run_app=Do you want to run the application? (y/n): 

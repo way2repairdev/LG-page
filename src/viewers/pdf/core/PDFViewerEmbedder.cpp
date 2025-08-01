@@ -60,29 +60,57 @@ PDFViewerEmbedder::~PDFViewerEmbedder()
 
 bool PDFViewerEmbedder::initialize(HWND parentHwnd, int width, int height)
 {
+    std::cout << "PDFViewerEmbedder::initialize() called - parent: " << parentHwnd << ", size: " << width << "x" << height << std::endl;
+    
     if (m_initialized) {
-        return false; // Already initialized
+        std::cout << "PDFViewerEmbedder: Already initialized, returning true" << std::endl;
+        return true; // Already initialized - return success, not failure
+    }
+
+    if (!parentHwnd || !IsWindow(parentHwnd)) {
+        std::cerr << "PDFViewerEmbedder: Invalid parent window handle!" << std::endl;
+        return false;
     }
 
     m_parentHwnd = parentHwnd;
     m_windowWidth = width;
     m_windowHeight = height;
 
-    // Initialize GLFW if not already done (should be safe to call multiple times)
-    if (!glfwInit()) {
-        std::cerr << "PDFViewerEmbedder: Failed to initialize GLFW" << std::endl;
-        return false;
+    std::cout << "PDFViewerEmbedder: Checking GLFW initialization..." << std::endl;
+    // Initialize GLFW if not already done - use static counter to track initialization
+    static int glfwInitCount = 0;
+    static bool glfwInitialized = false;
+    
+    if (!glfwInitialized) {
+        if (!glfwInit()) {
+            const char* description;
+            int error = glfwGetError(&description);
+            std::cerr << "PDFViewerEmbedder: Failed to initialize GLFW. Error: " << error << " - " << (description ? description : "No description") << std::endl;
+            return false;
+        }
+        glfwInitialized = true;
+        std::cout << "PDFViewerEmbedder: GLFW initialized for first time" << std::endl;
+    } else {
+        std::cout << "PDFViewerEmbedder: GLFW already initialized, reusing" << std::endl;
     }
+    glfwInitCount++;
+    std::cout << "PDFViewerEmbedder: GLFW instance count: " << glfwInitCount << std::endl;
 
+    std::cout << "PDFViewerEmbedder: Creating embedded window..." << std::endl;
     // Create embedded OpenGL window
     if (!createEmbeddedWindow()) {
+        std::cerr << "PDFViewerEmbedder: Failed to create embedded window" << std::endl;
         return false;
     }
+    std::cout << "PDFViewerEmbedder: Embedded window created successfully" << std::endl;
 
+    std::cout << "PDFViewerEmbedder: Initializing OpenGL..." << std::endl;
     // Initialize OpenGL
     if (!initializeOpenGL()) {
+        std::cerr << "PDFViewerEmbedder: Failed to initialize OpenGL" << std::endl;
         return false;
     }
+    std::cout << "PDFViewerEmbedder: OpenGL initialized successfully" << std::endl;
 
     // Initialize PDF renderer
     m_renderer = std::make_unique<PDFRenderer>();
@@ -201,8 +229,8 @@ bool PDFViewerEmbedder::loadPDF(const std::string& filePath)
         try {
             m_renderer->GetOriginalPageSize(i, m_originalPageWidths[i], m_originalPageHeights[i]);
             
-            // DEBUG: Print actual PDF page dimensions to debug file
-            std::ofstream debugFile("pdf_embedder_debug.txt", std::ios::app);
+            // DEBUG: Print actual PDF page dimensions to debug file (in build folder)
+            std::ofstream debugFile("build/pdf_embedder_debug.txt", std::ios::app);
             if (debugFile.is_open()) {
                 debugFile << "DEBUG: Page " << i << " original dimensions: " 
                           << m_originalPageWidths[i] << " x " << m_originalPageHeights[i] << " points" << std::endl;
@@ -425,22 +453,49 @@ void PDFViewerEmbedder::shutdown()
         return;
     }
 
-    // Clean up textures
+    std::cout << "PDFViewerEmbedder: Starting shutdown..." << std::endl;
+
+    // Clean up textures first
     cleanupTextures();
     
     // Clean up GLFW window
     if (m_glfwWindow) {
+        std::cout << "PDFViewerEmbedder: Destroying GLFW window..." << std::endl;
         glfwDestroyWindow(m_glfwWindow);
         m_glfwWindow = nullptr;
+        m_childHwnd = nullptr;
     }
 
     // Reset state
-    m_renderer.reset();
-    m_scrollState.reset();
-    m_menuIntegration.reset();
+    if (m_renderer) {
+        std::cout << "PDFViewerEmbedder: Cleaning up renderer..." << std::endl;
+        m_renderer.reset();
+    }
+    
+    if (m_scrollState) {
+        std::cout << "PDFViewerEmbedder: Cleaning up scroll state..." << std::endl;
+        m_scrollState.reset();
+    }
+    
+    if (m_menuIntegration) {
+        std::cout << "PDFViewerEmbedder: Cleaning up menu integration..." << std::endl;
+        m_menuIntegration.reset();
+    }
+    
+    if (m_pipelineManager) {
+        std::cout << "PDFViewerEmbedder: Cleaning up pipeline manager..." << std::endl;
+        m_pipelineManager.reset();
+    }
     
     m_initialized = false;
     m_pdfLoaded = false;
+    
+    // Update static counter for GLFW cleanup tracking
+    static int glfwInitCount = 0;
+    if (glfwInitCount > 0) {
+        glfwInitCount--;
+        std::cout << "PDFViewerEmbedder: GLFW instance count after cleanup: " << glfwInitCount << std::endl;
+    }
     
     std::cout << "PDFViewerEmbedder: Shutdown complete" << std::endl;
 }

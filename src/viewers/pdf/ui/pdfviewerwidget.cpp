@@ -12,6 +12,8 @@
 #include <QApplication>
 #include <QStyle>
 #include <QSizePolicy>
+#include <QTimer>
+#include <QThread>
 #include <fstream>
 
 // Enhanced debug logging to file for PDFViewerWidget
@@ -20,7 +22,7 @@ void WriteQtDebugToFile(const QString& message) {
     static bool fileInitialized = false;
     
     if (!fileInitialized) {
-        std::string logPath = "pdf_debug.txt";  // Write to current build directory
+        std::string logPath = "build/pdf_debug.txt";  // Write to build directory
         debugFile.open(logPath, std::ios::app);
         fileInitialized = true;
     }
@@ -193,15 +195,49 @@ bool PDFViewerWidget::loadPDF(const QString& filePath)
 
 void PDFViewerWidget::initializePDFViewer()
 {
+    static bool globalInitializationInProgress = false;
+    
     if (m_viewerInitialized) {
+        qDebug() << "PDFViewerWidget: Already initialized, skipping";
         return;
     }
+    
+    // Prevent multiple simultaneous initialization attempts across all instances
+    if (globalInitializationInProgress) {
+        qDebug() << "PDFViewerWidget: Global initialization in progress, waiting...";
+        // Small delay and retry once
+        QApplication::processEvents();
+        QThread::msleep(50);
+        if (m_viewerInitialized || globalInitializationInProgress) {
+            return;
+        }
+    }
+    
+    globalInitializationInProgress = true;
+    qDebug() << "PDFViewerWidget: Starting PDF viewer initialization";
     
     // Get the native Windows handle of the viewer container
     HWND containerHwnd = reinterpret_cast<HWND>(m_viewerContainer->winId());
     
+    // Verify the container has a valid size
+    if (m_viewerContainer->width() <= 0 || m_viewerContainer->height() <= 0) {
+        qDebug() << "PDFViewerWidget: Container has invalid size, deferring initialization";
+        globalInitializationInProgress = false;
+        // Defer initialization until we have proper size
+        QTimer::singleShot(100, this, [this]() {
+            if (!m_viewerInitialized && m_viewerContainer->width() > 0 && m_viewerContainer->height() > 0) {
+                initializePDFViewer();
+            }
+        });
+        return;
+    }
+    
     // Initialize the embedded PDF viewer
-    if (!m_pdfEmbedder->initialize(containerHwnd, m_viewerContainer->width(), m_viewerContainer->height())) {
+    bool initSuccess = m_pdfEmbedder->initialize(containerHwnd, m_viewerContainer->width(), m_viewerContainer->height());
+    
+    globalInitializationInProgress = false;
+    
+    if (!initSuccess) {
         qCritical() << "PDFViewerWidget: Failed to initialize embedded PDF viewer";
         emit errorOccurred("Failed to initialize PDF rendering engine");
         return;
@@ -411,8 +447,14 @@ void PDFViewerWidget::showEvent(QShowEvent* event)
 {
     QWidget::showEvent(event);
     
-    // Initialize the PDF viewer when first shown
-    if (!m_viewerInitialized) {
-        initializePDFViewer();
+    // Only initialize when actually shown and has proper size
+    if (!m_viewerInitialized && isVisible() && width() > 0 && height() > 0) {
+        qDebug() << "PDFViewerWidget: Widget shown, initializing PDF viewer";
+        // Small delay to ensure the widget is fully ready
+        QTimer::singleShot(10, this, [this]() {
+            if (!m_viewerInitialized && isVisible()) {
+                initializePDFViewer();
+            }
+        });
     }
 }

@@ -246,3 +246,1311 @@ DEBUG: Page 30 original dimensions: 841.92 x 595.32 points
 Page width ratio to window: 0.83276
 Page height ratio to window: 0.988904
 WARNING: Page appears to be auto-fitted to window!
+DEBUG: Page 0 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 1 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 2 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 3 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 4 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 5 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 6 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 7 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 8 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 9 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 10 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 11 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 12 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 13 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 14 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 15 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 16 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 17 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 18 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 19 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 20 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 21 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 22 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 23 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 24 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 25 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 26 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 27 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 28 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 29 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 30 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 0 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 1 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 2 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 3 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 4 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 5 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 6 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 7 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 8 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 9 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 10 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 11 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 12 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 13 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 14 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 15 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 16 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 17 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 18 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 19 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 20 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 21 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 22 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 23 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 24 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 25 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 26 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 27 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 28 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 29 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 30 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 0 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 1 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 2 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 3 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 4 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 5 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 6 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 7 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 8 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 9 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 10 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 11 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 12 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 13 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 14 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 15 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 16 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 17 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 18 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 19 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 20 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 21 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 22 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 23 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 24 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 25 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 26 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 27 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 28 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 29 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 30 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 0 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 1 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 2 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 3 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 4 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 5 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 6 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 7 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 8 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 9 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 10 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 11 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 12 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 13 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 14 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 15 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 16 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 17 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 18 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 19 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 20 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 21 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 22 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 23 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 24 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 25 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 26 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 27 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 28 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 29 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 30 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 0 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 1 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 2 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 3 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 4 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 5 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 6 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 7 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 8 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 9 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 10 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 11 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 12 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 13 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 14 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 15 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 16 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 17 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 18 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 19 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 20 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 21 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 22 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 23 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 24 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 25 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 26 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 27 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 28 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 29 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 30 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 0 original dimensions: 842 x 595 points
+Page width ratio to window: 0.560213
+Page height ratio to window: 0.656733
+DEBUG: Page 1 original dimensions: 842 x 595 points
+Page width ratio to window: 0.560213
+Page height ratio to window: 0.656733
+DEBUG: Page 2 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 3 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 4 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 5 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 6 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 7 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 8 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 9 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 10 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 11 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 12 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 13 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 14 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 15 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 16 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 17 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 18 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 19 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 20 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 21 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 22 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 23 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 24 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 25 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 26 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 27 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 28 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 29 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 30 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 31 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 0 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 1 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 2 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 3 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 4 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 5 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 6 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 7 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 8 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 9 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 10 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 11 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 12 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 13 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 14 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 15 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 16 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 17 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 18 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 19 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 20 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 21 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 22 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 23 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 24 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 25 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 26 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 27 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 28 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 29 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 30 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 0 original dimensions: 842 x 595 points
+Page width ratio to window: 0.560213
+Page height ratio to window: 0.656733
+DEBUG: Page 1 original dimensions: 842 x 595 points
+Page width ratio to window: 0.560213
+Page height ratio to window: 0.656733
+DEBUG: Page 2 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 3 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 4 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 5 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 6 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 7 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 8 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 9 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 10 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 11 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 12 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 13 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 14 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 15 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 16 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 17 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 18 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 19 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 20 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 21 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 22 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 23 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 24 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 25 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 26 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 27 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 28 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 29 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 30 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 31 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 0 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 1 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 2 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 3 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 4 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 5 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 6 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 7 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 8 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 9 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 10 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 11 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 12 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 13 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 14 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 15 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 16 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 17 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 18 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 19 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 20 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 21 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 22 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 23 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 24 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 25 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 26 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 27 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 28 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 29 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 30 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 0 original dimensions: 842 x 595 points
+Page width ratio to window: 0.560213
+Page height ratio to window: 0.656733
+DEBUG: Page 1 original dimensions: 842 x 595 points
+Page width ratio to window: 0.560213
+Page height ratio to window: 0.656733
+DEBUG: Page 2 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 3 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 4 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 5 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 6 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 7 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 8 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 9 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 10 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 11 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 12 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 13 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 14 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 15 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 16 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 17 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 18 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 19 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 20 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 21 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 22 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 23 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 24 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 25 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 26 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 27 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 28 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 29 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 30 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 31 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 0 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 1 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 2 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 3 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 4 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 5 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 6 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 7 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 8 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 9 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 10 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 11 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 12 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 13 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 14 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 15 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 16 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 17 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 18 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 19 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 20 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 21 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 22 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 23 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 24 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 25 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 26 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 27 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 28 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 29 original dimensions: 843 x 596 points
+Page width ratio to window: 0.560878
+Page height ratio to window: 0.657837
+DEBUG: Page 0 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 1 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 2 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 3 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 4 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 5 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 6 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 7 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 8 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 9 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 10 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 11 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 12 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 13 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 14 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 15 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 16 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 17 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 18 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 19 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 20 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 21 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 22 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 23 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 24 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 25 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 26 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 27 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 28 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 29 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 30 original dimensions: 841.92 x 595.32 points
+Page width ratio to window: 0.56016
+Page height ratio to window: 0.657086
+DEBUG: Page 0 original dimensions: 842 x 595 points
+Page width ratio to window: 0.560213
+Page height ratio to window: 0.656733
+DEBUG: Page 1 original dimensions: 842 x 595 points
+Page width ratio to window: 0.560213
+Page height ratio to window: 0.656733
+DEBUG: Page 2 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 3 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 4 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 5 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 6 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 7 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 8 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 9 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 10 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 11 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 12 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 13 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 14 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 15 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 16 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 17 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 18 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 19 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 20 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 21 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 22 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 23 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 24 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 25 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 26 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 27 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 28 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 29 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 30 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 31 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 0 original dimensions: 842 x 595 points
+Page width ratio to window: 0.560213
+Page height ratio to window: 0.656733
+DEBUG: Page 1 original dimensions: 842 x 595 points
+Page width ratio to window: 0.560213
+Page height ratio to window: 0.656733
+DEBUG: Page 2 original dimensions: 217.12 x 195.109 points
+Page width ratio to window: 0.144457
+Page height ratio to window: 0.215352
+DEBUG: Page 3 original dimensions: 212.471 x 195.109 points
+Page width ratio to window: 0.141364
+Page height ratio to window: 0.215352
+DEBUG: Page 0 original dimensions: 1224 x 792 points
+Page width ratio to window: 0.814371
+Page height ratio to window: 0.874172
+DEBUG: Page 1 original dimensions: 1224 x 792 points
+Page width ratio to window: 0.814371
+Page height ratio to window: 0.874172
+DEBUG: Page 2 original dimensions: 1224 x 792 points
+Page width ratio to window: 0.814371
+Page height ratio to window: 0.874172
+DEBUG: Page 0 original dimensions: 842 x 595 points
+Page width ratio to window: 0.560213
+Page height ratio to window: 0.656733
+DEBUG: Page 1 original dimensions: 842 x 595 points
+Page width ratio to window: 0.560213
+Page height ratio to window: 0.656733
+DEBUG: Page 0 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 1 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 2 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 3 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 4 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 5 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 6 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 7 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 8 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 9 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 10 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 11 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 12 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 13 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 14 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 15 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 16 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 17 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 18 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 19 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
+DEBUG: Page 20 original dimensions: 3370 x 2383 points
+Page width ratio to window: 2.24218
+Page height ratio to window: 2.63024
