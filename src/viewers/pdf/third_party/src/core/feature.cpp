@@ -303,9 +303,13 @@ void HandleZoom(PDFScrollState& state, float zoomDelta, float cursorX, float cur
     }
     
     // Step 4: Apply calculated offsets with proper content boundary constraints
-    // Calculate the actual content dimensions at current zoom level for boundary checking
+    // CRITICAL FIX: Calculate the actual content dimensions at NEW zoom level for boundary checking
+    // BEFORE: Used old state.pageHeightSum which caused incorrect boundary calculations
+    float zoomedPageHeightSum = 0.0f;
+    for (int i = 0; i < (int)pageHeights.size(); ++i) {
+        zoomedPageHeightSum += pageHeights[i] * state.zoomScale;  // Use NEW zoomScale, not old
+    }
     float zoomedPageWidthMax = GetVisiblePageMaxWidth(state, pageHeights);
-    float zoomedPageHeightSum = state.pageHeightSum;
     
     // Apply zoom-aware boundary constraints
     if (state.zoomScale <= 1.0f) {
@@ -454,7 +458,7 @@ void UpdatePanning(PDFScrollState& state, double mouseX, double mouseY, float wi
         // High zoom mode: Improved sensitivity curve for smooth and responsive panning
         // Use a modified inverse relationship that maintains good responsiveness
         // Formula: base sensitivity * scale factor for smooth transition from 3.0x
-        float baseAtThreeX = 1.0f / 3.0f; // Sensitivity at 3.0x zoom (≈0.333)
+        float baseAtThreeX = 1.0f / 3.0f; // Sensitivity at 3.0x zoom (�0.333)
         float scaleFactor = 3.0f / state.zoomScale; // Reduces as zoom increases
         panSensitivity = baseAtThreeX * scaleFactor * 1.2f; // 1.2f boost for better responsiveness
         
@@ -1678,7 +1682,7 @@ void PerformTextSearch(PDFScrollState& state, const std::vector<int>& pageHeight
 }
 
 void NavigateToNextSearchResult(PDFScrollState& state, const std::vector<int>& pageHeights) {
-    std::ofstream logFile("debug.log", std::ios::app);
+    std::ofstream logFile("build/debug.log", std::ios::app);
     if (logFile.is_open()) {
         logFile << "NavigateToNextSearchResult: CALLED" << std::endl;
         logFile << "  results.size()=" << state.textSearch.results.size() << std::endl;
@@ -1687,7 +1691,7 @@ void NavigateToNextSearchResult(PDFScrollState& state, const std::vector<int>& p
     logFile.close();
     
     if (state.textSearch.results.empty()) {
-        std::ofstream logFile2("x64/Debug/debug.log", std::ios::app);
+        std::ofstream logFile2("build/debug.log", std::ios::app);
         if (logFile2.is_open()) {
             logFile2 << "NavigateToNextSearchResult: EARLY RETURN - no results" << std::endl;
         }
@@ -1699,7 +1703,7 @@ void NavigateToNextSearchResult(PDFScrollState& state, const std::vector<int>& p
     if (state.textSearch.currentResultIndex >= (int)state.textSearch.results.size()) {
         state.textSearch.currentResultIndex = 0; // Wrap around to first result
     }
-      std::ofstream logFile3("x64/Debug/debug.log", std::ios::app);
+      std::ofstream logFile3("build/debug.log", std::ios::app);
     if (logFile3.is_open()) {
         logFile3 << "NavigateToNextSearchResult: currentResultIndex AFTER=" << state.textSearch.currentResultIndex << std::endl;
         logFile3 << "  Calling NavigateToSearchResultPrecise with index=" << state.textSearch.currentResultIndex << std::endl;
@@ -1711,7 +1715,7 @@ void NavigateToNextSearchResult(PDFScrollState& state, const std::vector<int>& p
 }
 
 void NavigateToPreviousSearchResult(PDFScrollState& state, const std::vector<int>& pageHeights) {
-    std::ofstream logFile("x64/Debug/debug.log", std::ios::app);
+    std::ofstream logFile("build/debug.log", std::ios::app);
     if (logFile.is_open()) {
         logFile << "NavigateToPreviousSearchResult: CALLED" << std::endl;
         logFile << "  results.size()=" << state.textSearch.results.size() << std::endl;
@@ -1720,7 +1724,7 @@ void NavigateToPreviousSearchResult(PDFScrollState& state, const std::vector<int
     logFile.close();
     
     if (state.textSearch.results.empty()) {
-        std::ofstream logFile2("x64/Debug/debug.log", std::ios::app);
+        std::ofstream logFile2("build/debug.log", std::ios::app);
         if (logFile2.is_open()) {
             logFile2 << "NavigateToPreviousSearchResult: EARLY RETURN - no results" << std::endl;
         }
@@ -1733,7 +1737,7 @@ void NavigateToPreviousSearchResult(PDFScrollState& state, const std::vector<int
         state.textSearch.currentResultIndex = (int)state.textSearch.results.size() - 1; // Wrap around to last result
     }
     
-    std::ofstream logFile3("x64/Debug/debug.log", std::ios::app);
+    std::ofstream logFile3("build/debug.log", std::ios::app);
     if (logFile3.is_open()) {
         logFile3 << "NavigateToPreviousSearchResult: currentResultIndex AFTER=" << state.textSearch.currentResultIndex << std::endl;
         logFile3 << "  Calling NavigateToSearchResultPrecise with index=" << state.textSearch.currentResultIndex << std::endl;
@@ -2003,7 +2007,7 @@ void NavigateToSearchResultPrecise(PDFScrollState& state, const std::vector<int>
     const SearchResult& result = state.textSearch.results[resultIndex];
     if (!result.isValid || result.pageIndex >= (int)pageHeights.size()) return;
     
-    std::ofstream logFile("debug.log", std::ios::app);
+    std::ofstream logFile("build/debug.log", std::ios::app);
     if (logFile.is_open()) {
         logFile << "NavigateToSearchResultPrecise: CALLED for result " << resultIndex << std::endl;
         logFile << "  result.pageIndex=" << result.pageIndex << ", result.charIndex=" << result.charIndex << std::endl;
@@ -2134,7 +2138,7 @@ void NavigateToSearchResultPrecise(PDFScrollState& state, const std::vector<int>
                     
                     // Force immediate redraw
                     glfwPostEmptyEvent();                    // ENHANCED DEBUG LOGGING WITH COORDINATE SYSTEM ANALYSIS
-                    std::ofstream logFile2("debug.log", std::ios::app);
+                    std::ofstream logFile2("build/debug.log", std::ios::app);
                     if (logFile2.is_open()) {
                         logFile2 << "NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT" << std::endl;
                         logFile2 << "  PDF coordinates: left=" << left << ", top=" << top << ", right=" << right << ", bottom=" << bottom << std::endl;
@@ -2183,14 +2187,14 @@ void NavigateToSearchResultPrecise(PDFScrollState& state, const std::vector<int>
                     }
                     logFile2.close();
                 } else {
-                    std::ofstream logFile3("debug.log", std::ios::app);
+                    std::ofstream logFile3("build/debug.log", std::ios::app);
                     if (logFile3.is_open()) {
                         logFile3 << "NavigateToSearchResultPrecise: FAILED to get text rect for charIndex=" << result.charIndex << std::endl;
                     }
                     logFile3.close();
                 }
             } else {
-                std::ofstream logFile4("debug.log", std::ios::app);
+                std::ofstream logFile4("build/debug.log", std::ios::app);
                 if (logFile4.is_open()) {
                     logFile4 << "NavigateToSearchResultPrecise: No text rectangles found for charIndex=" << result.charIndex << ", charCount=" << result.charCount << std::endl;
                 }
@@ -2199,3 +2203,4 @@ void NavigateToSearchResultPrecise(PDFScrollState& state, const std::vector<int>
         }
     }
 }
+

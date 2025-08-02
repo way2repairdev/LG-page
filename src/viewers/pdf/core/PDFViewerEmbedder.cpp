@@ -424,27 +424,7 @@ void PDFViewerEmbedder::update()
 
 void PDFViewerEmbedder::resize(int width, int height)
 {
-    if (!m_initialized) {
-        return;
-    }
-
-    // Only update if size actually changed significantly
-    bool significantChange = (std::abs(width - m_windowWidth) > 5 || std::abs(height - m_windowHeight) > 5);
-    
-    if (!significantChange) {
-        return; // Ignore minor resize events to prevent interference with zoom
-    }
-
-    m_windowWidth = width;
-    m_windowHeight = height;
-    
-    // Update GLFW window size
-    glfwSetWindowSize(m_glfwWindow, width, height);
-    
-    // Force regeneration on next update only for significant size changes
-    m_needsFullRegeneration = true;
-    
-    std::cout << "PDFViewerEmbedder: Significant resize to " << width << "x" << height << std::endl;
+  
 }
 
 void PDFViewerEmbedder::shutdown()
@@ -529,7 +509,7 @@ void PDFViewerEmbedder::zoomIn()
     float newZoom = m_scrollState->zoomScale;
     
     // Write zoom result to debug file
-    std::ofstream debugFile2("pdf_embedder_debug.txt", std::ios::app);
+    std::ofstream debugFile2("build/pdf_embedder_debug.txt", std::ios::app);
     if (debugFile2.is_open()) {
         debugFile2 << "ZOOM DEBUG: ZoomIn completed - New zoom: " << newZoom << " (delta: " << (newZoom/oldZoom) << ")" << std::endl;
         debugFile2 << "Page 0 pixel dimensions after zoom: " << (m_pageWidths[0] * newZoom) << " x " << (m_pageHeights[0] * newZoom) << " pixels" << std::endl;
@@ -609,27 +589,9 @@ void PDFViewerEmbedder::setZoom(float zoomLevel)
 
 void PDFViewerEmbedder::goToPage(int pageNumber)
 {
-    if (!m_initialized || !m_pdfLoaded) return;
     
-    int pageCount = m_renderer->GetPageCount();
-    if (pageNumber < 1 || pageNumber > pageCount) return;
     
-    // Calculate scroll position for the target page
-    float targetOffset = 0.0f;
-    for (int i = 0; i < pageNumber - 1; ++i) {
-        targetOffset += m_pageHeights[i] * m_scrollState->zoomScale;
-    }
     
-    m_scrollState->scrollOffset = targetOffset;
-    
-    // Update visible page range
-    int newFirst, newLast;
-    GetVisiblePageRange(*m_scrollState, m_pageHeights, newFirst, newLast);
-    if (newFirst != m_scrollState->firstVisiblePage || newLast != m_scrollState->lastVisiblePage) {
-        m_scrollState->firstVisiblePage = newFirst;
-        m_scrollState->lastVisiblePage = newLast;
-        m_needsVisibleRegeneration = true;
-    }
 }
 
 void PDFViewerEmbedder::nextPage()
@@ -646,14 +608,12 @@ void PDFViewerEmbedder::previousPage()
 
 int PDFViewerEmbedder::getPageCount() const
 {
-    if (!m_pdfLoaded) return 0;
-    return m_renderer->GetPageCount();
+ 
 }
 
 float PDFViewerEmbedder::getCurrentZoom() const
 {
-    if (!m_initialized) return 1.0f;
-    return m_scrollState->zoomScale;
+
 }
 
 int PDFViewerEmbedder::getCurrentPage() const
@@ -1068,35 +1028,58 @@ void PDFViewerEmbedder::regenerateTextures()
     m_pageWidths.resize(pageCount);
     m_pageHeights.resize(pageCount);
     
-    // Regenerate all textures using SAME LOGIC AS STANDALONE VIEWER
+    // Regenerate all textures using ACTUAL page dimensions (not window-fitted)
     for (int i = 0; i < pageCount; ++i) {
-        int pageW = 0, pageH = 0;
-        // Apply zoom scale to get higher resolution textures (SAME AS STANDALONE)
+        // Get the ACTUAL page dimensions from PDF (not window-fitted)
+        double originalPageWidth, originalPageHeight;
+        m_renderer->GetOriginalPageSize(i, originalPageWidth, originalPageHeight);
+        
+        // Calculate texture size based on zoom level applied to ACTUAL page dimensions
+        // FIXED: Apply texture size limits to prevent blank screen at high zoom levels
         float effectiveZoom = (m_scrollState->zoomScale > 0.5f) ? m_scrollState->zoomScale : 0.5f;
         
-        // CRITICAL: Use GetBestFitSize like standalone viewer (window-fitted dimensions)
-        m_renderer->GetBestFitSize(i, static_cast<int>(m_windowWidth * effectiveZoom), 
-                                   static_cast<int>(m_windowHeight * effectiveZoom), pageW, pageH);
+        // Apply maximum texture zoom to prevent exceeding OpenGL limits
+        // From pipeline debug, max texture size is 16384 - stay well below this
+        effectiveZoom = std::min(effectiveZoom, 3.0f); // Limit texture resolution
         
-        // Render texture using the calculated best-fit size
-        FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, pageW, pageH);
-        m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), pageW, pageH);
+        int textureWidth = static_cast<int>(originalPageWidth * effectiveZoom);
+        int textureHeight = static_cast<int>(originalPageHeight * effectiveZoom);
         
-        // CRITICAL: Store the BASE page dimensions (without zoom) for layout calculations
-        // This matches the standalone viewer logic exactly
-        int baseW = 0, baseH = 0;
-        m_renderer->GetBestFitSize(i, m_windowWidth, m_windowHeight, baseW, baseH);
-        m_pageWidths[i] = baseW;
-        m_pageHeights[i] = baseH;
+        // Additional safety check: ensure we don't exceed reasonable texture sizes
+        const int MAX_TEXTURE_DIM = 8192; // Conservative limit for older GPUs
+        if (textureWidth > MAX_TEXTURE_DIM) {
+            float scale = (float)MAX_TEXTURE_DIM / textureWidth;
+            textureWidth = MAX_TEXTURE_DIM;
+            textureHeight = static_cast<int>(textureHeight * scale);
+        }
+        if (textureHeight > MAX_TEXTURE_DIM) {
+            float scale = (float)MAX_TEXTURE_DIM / textureHeight;
+            textureHeight = MAX_TEXTURE_DIM;
+            textureWidth = static_cast<int>(textureWidth * scale);
+        }
+        
+        // Ensure minimum texture size for readability
+        if (textureWidth < 200) textureWidth = 200;
+        if (textureHeight < 200) textureHeight = 200;
+        
+        // Debug output for high zoom levels
+        if (m_scrollState->zoomScale > 3.0f) {
+            std::cout << "HIGH ZOOM DEBUG (Full): ZoomScale=" << m_scrollState->zoomScale 
+                      << ", EffectiveZoom=" << effectiveZoom 
+                      << ", TextureSize=" << textureWidth << "x" << textureHeight 
+                      << ", OriginalPage=" << originalPageWidth << "x" << originalPageHeight << std::endl;
+        }
+        
+        // Render at calculated size using actual page dimensions (no window fitting)
+        FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, textureWidth, textureHeight);
+        m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+        
+        // Store BASE dimensions (ACTUAL page dimensions, not window-fitted)
+        // These will be scaled by zoomScale during rendering
+        m_pageWidths[i] = static_cast<int>(originalPageWidth);
+        m_pageHeights[i] = static_cast<int>(originalPageHeight);
         
         FPDFBitmap_Destroy(bmp);
-        
-        // Debug output for verification
-        if (i == 0) {
-            std::cout << "EMBEDDED DEBUG: Page 0 - BaseSize=" << baseW << "x" << baseH 
-                      << ", TextureSize=" << pageW << "x" << pageH 
-                      << ", EffectiveZoom=" << effectiveZoom << std::endl;
-        }
     }
     
     // Update scroll state
@@ -1114,30 +1097,64 @@ void PDFViewerEmbedder::regenerateVisibleTextures()
     int firstVisible, lastVisible;
     GetVisiblePageRange(*m_scrollState, m_pageHeights, firstVisible, lastVisible);
     
-    // Only regenerate textures for visible pages using SAME LOGIC AS STANDALONE
+    // Only regenerate textures for visible pages using ACTUAL page dimensions
     for (int i = firstVisible; i <= lastVisible && i < pageCount; ++i) {
         if (m_textures[i]) {
             glDeleteTextures(1, &m_textures[i]);
         }
         
-        int pageW = 0, pageH = 0;
+        // Get the ACTUAL page dimensions from PDF (not window-fitted)
+        double originalPageWidth, originalPageHeight;
+        m_renderer->GetOriginalPageSize(i, originalPageWidth, originalPageHeight);
+        
+        // Calculate texture size based on zoom level applied to ACTUAL page dimensions
+        // FIXED: Apply texture size limits to prevent blank screen at high zoom levels
         float effectiveZoom = (m_scrollState->zoomScale > 0.5f) ? m_scrollState->zoomScale : 0.5f;
         
-        // CRITICAL: Use GetBestFitSize like standalone viewer
-        m_renderer->GetBestFitSize(i, static_cast<int>(m_windowWidth * effectiveZoom), 
-                                   static_cast<int>(m_windowHeight * effectiveZoom), pageW, pageH);
+        // Apply maximum texture zoom to prevent exceeding OpenGL limits
+        // From pipeline debug, max texture size is 16384 - stay well below this
+        effectiveZoom = std::min(effectiveZoom, 3.0f); // Limit texture resolution
         
-        // Render texture using the calculated best-fit size
-        FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, pageW, pageH);
-        m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), pageW, pageH);
+        int textureWidth = static_cast<int>(originalPageWidth * effectiveZoom);
+        int textureHeight = static_cast<int>(originalPageHeight * effectiveZoom);
+        
+        // Additional safety check: ensure we don't exceed reasonable texture sizes
+        const int MAX_TEXTURE_DIM = 8192; // Conservative limit for older GPUs
+        if (textureWidth > MAX_TEXTURE_DIM) {
+            float scale = (float)MAX_TEXTURE_DIM / textureWidth;
+            textureWidth = MAX_TEXTURE_DIM;
+            textureHeight = static_cast<int>(textureHeight * scale);
+        }
+        if (textureHeight > MAX_TEXTURE_DIM) {
+            float scale = (float)MAX_TEXTURE_DIM / textureHeight;
+            textureHeight = MAX_TEXTURE_DIM;
+            textureWidth = static_cast<int>(textureWidth * scale);
+        }
+        
+        // Ensure minimum texture size for readability
+        if (textureWidth < 200) textureWidth = 200;
+        if (textureHeight < 200) textureHeight = 200;
+        
+        // Debug output for high zoom levels
+        if (m_scrollState->zoomScale > 3.0f) {
+            std::cout << "HIGH ZOOM DEBUG (Visible): ZoomScale=" << m_scrollState->zoomScale 
+                      << ", EffectiveZoom=" << effectiveZoom 
+                      << ", TextureSize=" << textureWidth << "x" << textureHeight 
+                      << ", OriginalPage=" << originalPageWidth << "x" << originalPageHeight << std::endl;
+        }
+        if (textureWidth < 200) textureWidth = 200;
+        if (textureHeight < 200) textureHeight = 200;
+        
+        // Render at calculated size using actual page dimensions (no window fitting)
+        FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, textureWidth, textureHeight);
+        m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+        
+        // Store BASE dimensions (ACTUAL page dimensions, not window-fitted)
+        // These will be scaled by zoomScale during rendering
+        m_pageWidths[i] = static_cast<int>(originalPageWidth);
+        m_pageHeights[i] = static_cast<int>(originalPageHeight);
         
         FPDFBitmap_Destroy(bmp);
-        
-        // Debug output for verification
-        if (i == firstVisible) {
-            std::cout << "EMBEDDED VISIBLE DEBUG: Page " << i << " - TextureSize=" << pageW << "x" << pageH 
-                      << ", EffectiveZoom=" << effectiveZoom << std::endl;
-        }
     }
     
     m_needsVisibleRegeneration = false;
@@ -1152,27 +1169,64 @@ void PDFViewerEmbedder::regeneratePageTexture(int pageIndex)
         glDeleteTextures(1, &m_textures[pageIndex]);
     }
     
-    int pageW = 0, pageH = 0;
+    // Generate new texture using ACTUAL page dimensions (not window-fitted)
+    
+    // Get the ACTUAL page dimensions from PDF (not window-fitted)
+    double originalPageWidth, originalPageHeight;
+    m_renderer->GetOriginalPageSize(pageIndex, originalPageWidth, originalPageHeight);
+    
+    // Calculate texture size based on zoom level applied to ACTUAL page dimensions
+    // FIXED: Apply texture size limits to prevent blank screen at high zoom levels
     float effectiveZoom = (m_scrollState->zoomScale > 0.5f) ? m_scrollState->zoomScale : 0.5f;
     
-    // CRITICAL: Use GetBestFitSize like standalone viewer
-    m_renderer->GetBestFitSize(pageIndex, static_cast<int>(m_windowWidth * effectiveZoom), 
-                               static_cast<int>(m_windowHeight * effectiveZoom), pageW, pageH);
+    // Apply maximum texture zoom to prevent exceeding OpenGL limits
+    // From pipeline debug, max texture size is 16384 - stay well below this
+    effectiveZoom = std::min(effectiveZoom, 3.0f); // Limit texture resolution
     
-    // Render texture using the calculated best-fit size
-    FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(pageIndex, pageW, pageH);
-    m_textures[pageIndex] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), pageW, pageH);
+    int textureWidth = static_cast<int>(originalPageWidth * effectiveZoom);
+    int textureHeight = static_cast<int>(originalPageHeight * effectiveZoom);
+    
+    // Additional safety check: ensure we don't exceed reasonable texture sizes
+    const int MAX_TEXTURE_DIM = 8192; // Conservative limit for older GPUs
+    if (textureWidth > MAX_TEXTURE_DIM) {
+        float scale = (float)MAX_TEXTURE_DIM / textureWidth;
+        textureWidth = MAX_TEXTURE_DIM;
+        textureHeight = static_cast<int>(textureHeight * scale);
+    }
+    if (textureHeight > MAX_TEXTURE_DIM) {
+        float scale = (float)MAX_TEXTURE_DIM / textureHeight;
+        textureHeight = MAX_TEXTURE_DIM;
+        textureWidth = static_cast<int>(textureWidth * scale);
+    }
+    
+    // Ensure minimum texture size for readability
+    if (textureWidth < 200) textureWidth = 200;
+    if (textureHeight < 200) textureHeight = 200;
+    
+    // Debug output for high zoom levels
+    if (m_scrollState->zoomScale > 3.0f) {
+        std::cout << "HIGH ZOOM DEBUG (Single): Page=" << pageIndex 
+                  << ", ZoomScale=" << m_scrollState->zoomScale 
+                  << ", EffectiveZoom=" << effectiveZoom 
+                  << ", TextureSize=" << textureWidth << "x" << textureHeight 
+                  << ", OriginalPage=" << originalPageWidth << "x" << originalPageHeight << std::endl;
+    }
+    
+    // Render at calculated size using actual page dimensions (no window fitting)
+    FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(pageIndex, textureWidth, textureHeight);
+    m_textures[pageIndex] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+    
+    // Store BASE dimensions (ACTUAL page dimensions, not window-fitted)
+    // These will be scaled by zoomScale during rendering
+    m_pageWidths[pageIndex] = static_cast<int>(originalPageWidth);
+    m_pageHeights[pageIndex] = static_cast<int>(originalPageHeight);
     
     FPDFBitmap_Destroy(bmp);
-    
-    // Debug output for verification
-    std::cout << "EMBEDDED SINGLE DEBUG: Page " << pageIndex << " - TextureSize=" << pageW << "x" << pageH 
-              << ", EffectiveZoom=" << effectiveZoom << std::endl;
 }
 
 void PDFViewerEmbedder::handleBackgroundRendering()
 {
-    // Background rendering logic (SAME AS STANDALONE VIEWER)
+    // Background rendering logic (from your main.cpp)
     static int backgroundRenderIndex = 0;
     static int frameCounter = 0;
     frameCounter++;
@@ -1191,17 +1245,35 @@ void PDFViewerEmbedder::handleBackgroundRendering()
                 glDeleteTextures(1, &m_textures[backgroundRenderIndex]);
             }
             
-            // CRITICAL: Use SAME background logic as standalone viewer
-            int pageW = 0, pageH = 0;
-            float backgroundZoom = m_scrollState->zoomScale * 0.7f; // Lower res for background (SAME AS STANDALONE)
+            // Get ACTUAL page dimensions for background rendering (not window-fitted)
+            double originalPageWidth, originalPageHeight;
+            m_renderer->GetOriginalPageSize(backgroundRenderIndex, originalPageWidth, originalPageHeight);
+            
+            // Calculate background texture size using actual page dimensions with zoom scaling
+            // FIXED: Apply texture size limits to prevent issues at high zoom levels
+            float backgroundZoom = m_scrollState->zoomScale * 0.7f;
             backgroundZoom = (backgroundZoom > 0.3f) ? backgroundZoom : 0.3f;
+            // Apply same texture limit for background rendering
+            backgroundZoom = std::min(backgroundZoom, 2.0f); // Even more conservative for background
             
-            // Use GetBestFitSize like standalone viewer
-            m_renderer->GetBestFitSize(backgroundRenderIndex, static_cast<int>(m_windowWidth * backgroundZoom), 
-                                       static_cast<int>(m_windowHeight * backgroundZoom), pageW, pageH);
+            int textureWidth = static_cast<int>(originalPageWidth * backgroundZoom);
+            int textureHeight = static_cast<int>(originalPageHeight * backgroundZoom);
             
-            FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(backgroundRenderIndex, pageW, pageH);
-            m_textures[backgroundRenderIndex] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), pageW, pageH);
+            // Apply texture size limits for background rendering too
+            const int MAX_BACKGROUND_DIM = 4096; // Even more conservative for background
+            if (textureWidth > MAX_BACKGROUND_DIM) {
+                float scale = (float)MAX_BACKGROUND_DIM / textureWidth;
+                textureWidth = MAX_BACKGROUND_DIM;
+                textureHeight = static_cast<int>(textureHeight * scale);
+            }
+            if (textureHeight > MAX_BACKGROUND_DIM) {
+                float scale = (float)MAX_BACKGROUND_DIM / textureHeight;
+                textureHeight = MAX_BACKGROUND_DIM;
+                textureWidth = static_cast<int>(textureWidth * scale);
+            }
+            
+            FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(backgroundRenderIndex, textureWidth, textureHeight);
+            m_textures[backgroundRenderIndex] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
             FPDFBitmap_Destroy(bmp);
             break;
         }
@@ -1235,9 +1307,9 @@ unsigned int PDFViewerEmbedder::createTextureFromPDFBitmap(void* buffer, int wid
 // Texture optimization method for smooth zoom transitions
 float PDFViewerEmbedder::getOptimalTextureZoom(float currentZoom) const
 {
-    // MATCH STANDALONE VIEWER: No artificial limits that would prevent proper zoom scaling
-    // The texture generation now uses GetBestFitSize which handles optimization properly
-    return currentZoom; // Return actual zoom without artificial clamping
+    // FIXED: Apply texture zoom limits that match our texture generation
+    // This prevents coordinate misplacement and texture size issues
+    return std::clamp(currentZoom, 0.2f, 3.0f); // Match the 3.0f limit from texture generation
 }
 
 // Static callback wrappers
@@ -1417,10 +1489,69 @@ void PDFViewerEmbedder::onScroll(double xoffset, double yoffset)
     if (std::abs(yoffset) > 0.01) {
         float zoomDelta = (yoffset > 0) ? 1.1f : 1.0f / 1.1f;
         
+        // CRITICAL DEBUG: Log detailed state before HandleZoom
+        std::ofstream debugFile("build/zoom_debug.txt", std::ios::app);
+        int firstVisible = -1, lastVisible = -1;
+        if (debugFile.is_open()) {
+            debugFile << "=== ZOOM DEBUG - BEFORE HandleZoom ===" << std::endl;
+            debugFile << "Cursor position: (" << cursorX << ", " << cursorY << ")" << std::endl;
+            debugFile << "Window size: " << m_windowWidth << "x" << m_windowHeight << std::endl;
+            debugFile << "Current zoom: " << m_scrollState->zoomScale << std::endl;
+            debugFile << "Current scrollOffset: " << m_scrollState->scrollOffset << std::endl;
+            debugFile << "Current horizontalOffset: " << m_scrollState->horizontalOffset << std::endl;
+            debugFile << "Zoom delta: " << zoomDelta << std::endl;
+            debugFile << "Page count: " << (m_pageHeights.size()) << std::endl;
+            
+            // Log current visible page range
+            GetVisiblePageRange(*m_scrollState, m_pageHeights, firstVisible, lastVisible);
+            debugFile << "Visible pages: " << firstVisible << " to " << lastVisible << std::endl;
+            
+            // SPECIAL DEBUG for last page issue
+            bool isNearLastPage = (lastVisible >= (int)m_pageHeights.size() - 3);
+            debugFile << "NEAR LAST PAGE: " << (isNearLastPage ? "YES" : "NO") << std::endl;
+            
+            // Log page heights for context (only log relevant pages to reduce spam)
+            int startPage = std::max(0, firstVisible - 1);
+            int endPage = std::min((int)m_pageHeights.size() - 1, lastVisible + 1);
+            for (int i = startPage; i <= endPage; ++i) {
+                debugFile << "Page " << i << " height: " << m_pageHeights[i] << " (scaled: " 
+                          << (m_pageHeights[i] * m_scrollState->zoomScale) << ")" << std::endl;
+            }
+            debugFile << "===========================================" << std::endl;
+        }
+        
         // Use current cursor position as zoom focal point
         HandleZoom(*m_scrollState, zoomDelta, (float)cursorX, (float)cursorY, 
                    (float)m_windowWidth, (float)m_windowHeight, 
                    m_pageHeights, m_pageWidths);
+        
+        // CRITICAL DEBUG: Log detailed state after HandleZoom
+        if (debugFile.is_open()) {
+            debugFile << "=== ZOOM DEBUG - AFTER HandleZoom ===" << std::endl;
+            debugFile << "New zoom: " << m_scrollState->zoomScale << std::endl;
+            debugFile << "New scrollOffset: " << m_scrollState->scrollOffset << std::endl;
+            debugFile << "New horizontalOffset: " << m_scrollState->horizontalOffset << std::endl;
+            
+            // Log new visible page range
+            int newFirstVisible, newLastVisible;
+            GetVisiblePageRange(*m_scrollState, m_pageHeights, newFirstVisible, newLastVisible);
+            debugFile << "New visible pages: " << newFirstVisible << " to " << newLastVisible << std::endl;
+            debugFile << "ZOOM JUMP DETECTED: " << ((newFirstVisible < firstVisible) ? "YES" : "NO") << std::endl;
+            
+            // Calculate how much scroll offset changed
+            float scrollOffsetDelta = m_scrollState->scrollOffset - firstVisible;  // This should be the old scrollOffset
+            debugFile << "Scroll offset change: " << scrollOffsetDelta << std::endl;
+            
+            // CRITICAL: Log if we jumped from near last page to earlier page
+            bool wasNearLastPage = (lastVisible >= (int)m_pageHeights.size() - 3);
+            bool isNowNearLastPage = (newLastVisible >= (int)m_pageHeights.size() - 3);
+            if (wasNearLastPage && !isNowNearLastPage) {
+                debugFile << "!!! PROBLEMATIC JUMP: Was on last pages, now on earlier pages !!!" << std::endl;
+            }
+            
+            debugFile << "===========================================" << std::endl;
+            debugFile.close();
+        }
         
         std::cout << "PDFViewerEmbedder: Mouse wheel zoom at cursor (" << cursorX << ", " << cursorY 
                   << ") with delta " << zoomDelta << " to zoom " << m_scrollState->zoomScale << std::endl;
