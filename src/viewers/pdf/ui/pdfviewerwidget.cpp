@@ -437,9 +437,16 @@ void PDFViewerWidget::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
     
-    if (m_pdfEmbedder && m_viewerInitialized) {
-        // Resize the embedded viewer
-        m_pdfEmbedder->resize(event->size().width(), event->size().height());
+    if (m_pdfEmbedder && m_viewerInitialized && m_viewerContainer) {
+        // Resize the embedded viewer to match the container size
+        // Use the container's actual size, not the event size, to account for layout margins
+        int containerWidth = m_viewerContainer->width();
+        int containerHeight = m_viewerContainer->height();
+        
+        // Only resize if container has valid dimensions
+        if (containerWidth > 0 && containerHeight > 0) {
+            m_pdfEmbedder->resize(containerWidth, containerHeight);
+        }
     }
 }
 

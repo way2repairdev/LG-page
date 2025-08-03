@@ -22,7 +22,10 @@ void UpdateScrollState(PDFScrollState& state, float winHeight, const std::vector
     state.viewportHeight = winHeight;
     state.pageHeightSum = 0.0f;
     for (int h : pageHeights) state.pageHeightSum += (float)h * state.zoomScale;
-    state.maxOffset = std::max(0.0f, state.pageHeightSum - winHeight);
+    
+    // Add bottom padding to ensure last page content is fully visible
+    float bottomPadding = winHeight * 0.1f; // 10% of viewport height as bottom padding
+    state.maxOffset = std::max(0.0f, state.pageHeightSum - winHeight + bottomPadding);
     
     // Only clamp scroll offset if not preventing override (e.g., during navigation)
     if (!state.preventScrollOffsetOverride) {
@@ -60,11 +63,24 @@ void HandleHorizontalScroll(PDFScrollState& state, float xoffset, float winWidth
 
 void DrawScrollBar(const PDFScrollState& state) {
     if (state.pageHeightSum <= state.viewportHeight) return; // No need for scroll bar
-    float barX = 1.0f - state.barMargin - state.barWidth;
-    float barY = -1.0f + state.barMargin;
-    float barH = 2.0f - 2 * state.barMargin;
+    
+    // Use dynamic margins based on viewport size to ensure scroll bar is always visible
+    float dynamicMargin = std::min(state.barMargin, state.viewportHeight * 0.01f);
+    float barX = 1.0f - dynamicMargin - state.barWidth;
+    float barY = -1.0f + dynamicMargin;
+    float barH = 2.0f - 2 * dynamicMargin;
+    
+    // Ensure minimum scroll bar height and proper thumb sizing
     float thumbH = std::max(barH * (state.viewportHeight / state.pageHeightSum), 0.05f);
-    float thumbY = barY + (barH - thumbH) * (1.0f - state.scrollOffset / state.maxOffset);
+    
+    // Fix scroll bar position calculation to handle the new maxOffset with padding
+    float scrollRatio = (state.maxOffset > 0.0f) ? (state.scrollOffset / state.maxOffset) : 0.0f;
+    // FIXED: Invert the scroll ratio to fix the opposite movement direction
+    // When scrollOffset = 0 (top of document), thumb should be at top of scroll bar (barY + barH - thumbH)
+    // When scrollOffset = maxOffset (bottom of document), thumb should be at bottom of scroll bar (barY)
+    float thumbY = barY + (barH - thumbH) * (1.0f - scrollRatio);
+    
+    // Draw scroll bar background
     glColor4fv(state.barColor);
     glBegin(GL_QUADS);
     glVertex2f(barX, barY);
@@ -72,6 +88,8 @@ void DrawScrollBar(const PDFScrollState& state) {
     glVertex2f(barX + state.barWidth, barY + barH);
     glVertex2f(barX, barY + barH);
     glEnd();
+    
+    // Draw scroll bar thumb
     glColor4fv(state.barThumbColor);
     glBegin(GL_QUADS);
     glVertex2f(barX, thumbY);
@@ -311,13 +329,17 @@ void HandleZoom(PDFScrollState& state, float zoomDelta, float cursorX, float cur
     }
     float zoomedPageWidthMax = GetVisiblePageMaxWidth(state, pageHeights);
     
+    // Calculate proper max offset with bottom padding
+    float bottomPadding = winHeight * 0.1f; // 10% of viewport height as bottom padding
+    float calculatedMaxOffset = std::max(0.0f, zoomedPageHeightSum - winHeight + bottomPadding);
+    
     // Apply zoom-aware boundary constraints
     if (state.zoomScale <= 1.0f) {
         // ZOOM OUT MODE: Use standard boundary constraints
         // Vertical constraints
         if (zoomedPageHeightSum > winHeight) {
             float minVerticalOffset = 0.0f;
-            float maxVerticalOffset = zoomedPageHeightSum - winHeight;
+            float maxVerticalOffset = calculatedMaxOffset;
             if (newScrollOffset < minVerticalOffset) newScrollOffset = minVerticalOffset;
             if (newScrollOffset > maxVerticalOffset) newScrollOffset = maxVerticalOffset;
         } else {
@@ -341,14 +363,14 @@ void HandleZoom(PDFScrollState& state, float zoomDelta, float cursorX, float cur
     } else {
         // ZOOM IN MODE: Constrained panning within content bounds
         // Vertical constraints - allow viewing the entire zoomed content
-        float verticalContentOverflow = zoomedPageHeightSum - winHeight;
+        float verticalContentOverflow = zoomedPageHeightSum - winHeight + bottomPadding;
         if (verticalContentOverflow > 0.0f) {
             float minVerticalOffset = 0.0f;
             float maxVerticalOffset = verticalContentOverflow;
             if (newScrollOffset < minVerticalOffset) newScrollOffset = minVerticalOffset;
             if (newScrollOffset > maxVerticalOffset) newScrollOffset = maxVerticalOffset;
         } else {
-            // Content fits in viewport - center it
+            // Content fits in viewport - center it with padding consideration
             newScrollOffset = -verticalContentOverflow / 2.0f;
         }
         
@@ -391,8 +413,8 @@ void HandleZoom(PDFScrollState& state, float zoomDelta, float cursorX, float cur
             float pageWidth = pageHeights[i] * state.zoomScale * 0.77f; // Approximate aspect ratio
             if (pageWidth > state.pageWidthMax) state.pageWidthMax = pageWidth;
         }
-    }// Update maximum scroll offsets (for UI elements)
-    state.maxOffset = std::max(0.0f, state.pageHeightSum - winHeight);
+    }// Update maximum scroll offsets (for UI elements) with proper bottom padding
+    state.maxOffset = std::max(0.0f, state.pageHeightSum - winHeight + bottomPadding);
     // FIXED: maxHorizontalOffset calculation for the coordinate system
     // Since horizontalOffset works in reverse (positive = move left), we need proper bounds
     state.maxHorizontalOffset = std::max(0.0f, (state.pageWidthMax - winWidth) / 2.0f);
@@ -478,9 +500,11 @@ void UpdatePanning(PDFScrollState& state, double mouseX, double mouseY, float wi
         
         // Vertical panning: Only allow if content exceeds viewport height
         if (state.pageHeightSum > winHeight) {
-            // Allow vertical panning but constrain to content bounds
+            // Allow vertical panning but constrain to content bounds with proper maxOffset
+            float bottomPadding = winHeight * 0.1f;
+            float correctedMaxOffset = std::max(0.0f, state.pageHeightSum - winHeight + bottomPadding);
             if (newScrollOffset < 0.0f) newScrollOffset = 0.0f;
-            if (newScrollOffset > state.maxOffset) newScrollOffset = state.maxOffset;
+            if (newScrollOffset > correctedMaxOffset) newScrollOffset = correctedMaxOffset;
             state.scrollOffset = newScrollOffset;
         } else {
             // Content fits in viewport - center it vertically, no panning
@@ -514,9 +538,10 @@ void UpdatePanning(PDFScrollState& state, double mouseX, double mouseY, float wi
         float zoomedPageWidthMax = GetVisiblePageMaxWidth(state, pageHeights);
         float zoomedPageHeightSum = state.pageHeightSum;
         
-        // Vertical panning constraints
+        // Vertical panning constraints with proper padding
         // Allow panning only within the bounds of the zoomed content
-        float verticalContentOverflow = zoomedPageHeightSum - winHeight;
+        float bottomPadding = winHeight * 0.1f;
+        float verticalContentOverflow = zoomedPageHeightSum - winHeight + bottomPadding;
         if (verticalContentOverflow > 0.0f) {
             // Content is larger than viewport - constrain within content bounds
             float minVerticalOffset = 0.0f;

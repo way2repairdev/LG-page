@@ -424,7 +424,36 @@ void PDFViewerEmbedder::update()
 
 void PDFViewerEmbedder::resize(int width, int height)
 {
-  
+    m_windowWidth = width;
+    m_windowHeight = height;
+
+    if (m_glfwWindow) {
+        // Resize the GLFW window
+        glfwSetWindowSize(m_glfwWindow, width, height);
+        
+        // Update viewport
+        glfwMakeContextCurrent(m_glfwWindow);
+        glViewport(0, 0, width, height);
+        
+#ifdef _WIN32
+        // Update Windows position for embedded window
+        if (m_childHwnd && m_parentHwnd) {
+            SetWindowPos(static_cast<HWND>(m_childHwnd), nullptr, 
+                        0, 0, width, height, 
+                        SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+#endif
+    }
+
+    // Update scroll state with new viewport dimensions
+    if (m_scrollState && m_pdfLoaded) {
+        UpdateScrollState(*m_scrollState, (float)height, m_pageHeights);
+    }
+
+    // Force texture regeneration for the new size
+    m_needsFullRegeneration = true;
+    
+    std::cout << "PDFViewerEmbedder: Resized to " << width << "x" << height << std::endl;
 }
 
 void PDFViewerEmbedder::shutdown()
