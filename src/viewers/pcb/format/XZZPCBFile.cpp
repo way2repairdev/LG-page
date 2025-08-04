@@ -113,6 +113,29 @@ bool XZZPCBFile::ParseXZZPCBOriginal(std::vector<char>& buf) {
                 buf[i] ^= xor_key; // XOR the buffer with xor_key until the end of the buffer as no v6v6555v6v6
             }
         }
+        
+        // Also try to find JSON data in the entire buffer since there's no PostV6 section
+        std::vector<uint8_t> json_pattern = {0x3D, 0x3D, 0x3D, 0x50, 0x43, 0x42, 0xB8, 0xBD, 0xBC, 0xD3, 0x0A};
+        auto json_pattern_found = std::search(buf.begin(), buf.end(), json_pattern.begin(), json_pattern.end());
+        
+        if (json_pattern_found != buf.end()) {
+            std::cout << "Found JSON pattern in main buffer at position: " << (json_pattern_found - buf.begin()) << std::endl;
+            ParseJsonData(json_pattern_found + json_pattern.size(), buf);
+        } else {
+            // Try to search for JSON-like data by looking for key strings
+            std::string buffer_str(buf.begin(), buf.end());
+            size_t part_pos = buffer_str.find("\"part\":[");
+            
+            if (part_pos != std::string::npos) {
+                std::cout << "Found 'part' array in main buffer at position: " << part_pos << std::endl;
+                // Find the start of the JSON object by looking backwards for '{'
+                size_t json_start = buffer_str.rfind('{', part_pos);
+                if (json_start != std::string::npos) {
+                    std::cout << "Found JSON start in main buffer at position: " << json_start << std::endl;
+                    ParseJsonData(buf.begin() + json_start, buf);
+                }
+            }
+        }
     }
 
     if (buf.size() < 0x30) {
@@ -178,12 +201,29 @@ bool XZZPCBFile::ParseXZZPCBOriginal(std::vector<char>& buf) {
     std::cout << "  Circles: " << circles.size() << std::endl;
     std::cout << "  Rectangles: " << rectangles.size() << std::endl;
     std::cout << "  Ovals: " << ovals.size() << std::endl;
+    std::cout << "  Part aliases found: " << part_alias_dict.size() << std::endl;
+    std::cout << "  JSON diode readings found: " << json_diode_dict.size() << std::endl;
     
     // Debug: Print first few pin coordinates
     if (!pins.empty()) {
         std::cout << "First few pin coordinates:" << std::endl;
         for (size_t i = 0; i < std::min((size_t)5, pins.size()); i++) {
-            std::cout << "  Pin " << i << ": (" << pins[i].pos.x << ", " << pins[i].pos.y << ") " << pins[i].name << std::endl;
+            std::cout << "  Pin " << i << ": (" << pins[i].pos.x << ", " << pins[i].pos.y << ") " << pins[i].name;
+            if (!pins[i].comment.empty()) {
+                std::cout << " [diode: " << pins[i].comment << "]";
+            }
+            std::cout << std::endl;
+        }
+    }
+    
+    // Debug: Print some part aliases if they exist
+    if (!part_alias_dict.empty()) {
+        std::cout << "First few part aliases:" << std::endl;
+        int count = 0;
+        for (const auto& alias : part_alias_dict) {
+            if (count >= 3) break;
+            std::cout << "  " << alias.first << " -> " << alias.second << std::endl;
+            count++;
         }
     }
       // Debug: Print first few outline segments
@@ -419,6 +459,14 @@ void XZZPCBFile::ParsePartBlockOriginal(std::vector<char>& buf) {
     current_pointer += part_name_size;
 
     part.name = part_name;
+    
+    // Check if we have an alias for this part from the JSON data
+    if (part_alias_dict.find(part_name) != part_alias_dict.end()) {
+        std::string alias = part_alias_dict[part_name];
+        std::cout << "Using alias for part " << part_name << " -> " << alias << std::endl;
+        part.name = alias;
+    }
+    
     part.mounting_side = BRDPartMountingSide::Top;
     part.part_type = BRDPartType::SMD;
 
@@ -601,6 +649,11 @@ void XZZPCBFile::ParsePartBlockOriginal(std::vector<char>& buf) {
 
                 if (!diode_reading.empty()) {
                     pin.comment = diode_reading;
+                } else if (json_diode_dict.find(part_name) != json_diode_dict.end() &&
+                          json_diode_dict[part_name].find(pin.name) != json_diode_dict[part_name].end()) {
+                    // Use JSON diode reading (prioritize this over other methods)
+                    pin.comment = json_diode_dict[part_name][pin.name];
+                    std::cout << "Using JSON diode reading for " << part_name << " pin " << pin.name << ": " << pin.comment << std::endl;
                 } else if (diode_readings_type == 1) {
                     if (diode_dict.find(part.name) != diode_dict.end() &&
                         diode_dict[part.name].find(pin.name) != diode_dict[part.name].end()) {
@@ -772,6 +825,47 @@ std::string XZZPCBFile::read_cb2312_string(const std::string& str) {
 // atm some diode readings aren't processed properly
 void XZZPCBFile::ParsePostV6(std::vector<char>::iterator v6_pos, std::vector<char>& buf) {
     unsigned int current_pointer = v6_pos - buf.begin() + 11;
+    
+    // First, look for JSON data after the specific hex pattern: 3D 3D 3D 50 43 42 B8 BD BC D3 0A
+    std::vector<uint8_t> json_pattern = {0x3D, 0x3D, 0x3D, 0x50, 0x43, 0x42, 0xB8, 0xBD, 0xBC, 0xD3, 0x0A};
+    auto json_pattern_found = std::search(buf.begin(), buf.end(), json_pattern.begin(), json_pattern.end());
+    
+    if (json_pattern_found != buf.end()) {
+        std::cout << "Found JSON pattern at position: " << (json_pattern_found - buf.begin()) << std::endl;
+        ParseJsonData(json_pattern_found + json_pattern.size(), buf);
+    } else {
+        std::cout << "JSON pattern not found in buffer" << std::endl;
+        
+        // Try to search for JSON-like data by looking for key strings
+        std::string buffer_str(buf.begin(), buf.end());
+        size_t part_pos = buffer_str.find("\"part\":[");
+        size_t reference_pos = buffer_str.find("\"reference\":");
+        size_t alias_pos = buffer_str.find("\"alias\":");
+        
+        if (part_pos != std::string::npos) {
+            std::cout << "Found 'part' array at position: " << part_pos << std::endl;
+            DumpHexAroundPosition(buf, part_pos, 30);
+            // Find the start of the JSON object by looking backwards for '{'
+            size_t json_start = buffer_str.rfind('{', part_pos);
+            if (json_start != std::string::npos) {
+                std::cout << "Found JSON start at position: " << json_start << std::endl;
+                DumpHexAroundPosition(buf, json_start, 30);
+                ParseJsonData(buf.begin() + json_start, buf);
+            }
+        } else if (reference_pos != std::string::npos || alias_pos != std::string::npos) {
+            std::cout << "Found JSON-like strings but no 'part' array" << std::endl;
+            std::cout << "reference at: " << reference_pos << ", alias at: " << alias_pos << std::endl;
+            if (reference_pos != std::string::npos) {
+                DumpHexAroundPosition(buf, reference_pos, 30);
+            }
+            if (alias_pos != std::string::npos) {
+                DumpHexAroundPosition(buf, alias_pos, 30);
+            }
+        } else {
+            std::cout << "No JSON-like data found in buffer" << std::endl;
+        }
+    }
+    
     current_pointer += 7; // While post v6 isnt handled properly
     if (current_pointer >= buf.size()) return;
     
@@ -869,6 +963,225 @@ void XZZPCBFile::ParsePostV6(std::vector<char>::iterator v6_pos, std::vector<cha
             comment = read_cb2312_string(comment);
             diode_dict[net]["0"] = comment; // Seemingly is there is a second reading the first is replaced
         }
+    }
+}
+
+void XZZPCBFile::ParseJsonData(std::vector<char>::iterator json_start, std::vector<char>& buf) {
+    // Convert to string for easier parsing
+    std::string json_str(json_start, buf.end());
+    
+    // Debug: Print first 200 characters after the pattern
+    std::cout << "First 200 chars after pattern: ";
+    for (size_t i = 0; i < std::min((size_t)200, json_str.length()); i++) {
+        char c = json_str[i];
+        if (c >= 32 && c <= 126) {  // Printable ASCII
+            std::cout << c;
+        } else {
+            std::cout << "[0x" << std::hex << (unsigned char)c << std::dec << "]";
+        }
+    }
+    std::cout << std::endl;
+    
+    // Find the start of the JSON object (first '{')
+    size_t json_begin = json_str.find('{');
+    if (json_begin == std::string::npos) {
+        std::cout << "No JSON object found after pattern" << std::endl;
+        return;
+    }
+    
+    std::cout << "JSON starts at offset " << json_begin << " after pattern" << std::endl;
+    
+    // Find the end of the JSON object by counting braces
+    size_t json_end = json_begin;
+    int brace_count = 0;
+    for (size_t i = json_begin; i < json_str.length(); i++) {
+        if (json_str[i] == '{') {
+            brace_count++;
+        } else if (json_str[i] == '}') {
+            brace_count--;
+            if (brace_count == 0) {
+                json_end = i;
+                break;
+            }
+        }
+    }
+    
+    if (brace_count != 0) {
+        std::cout << "Incomplete JSON object found" << std::endl;
+        return;
+    }
+    
+    // Extract the JSON substring
+    std::string json_data = json_str.substr(json_begin, json_end - json_begin + 1);
+    std::cout << "Found JSON data: " << json_data.substr(0, 100) << "..." << std::endl;
+    
+    // Simple JSON parsing for the specific structure
+    // Looking for: {"part":[{"reference":"N752","alias":"J11100","pad":[...]},...]}
+    
+    size_t part_array_start = json_data.find("\"part\":[");
+    if (part_array_start == std::string::npos) {
+        std::cout << "No 'part' array found in JSON" << std::endl;
+        return;
+    }
+    
+    // Start parsing from the opening bracket of the part array
+    size_t pos = part_array_start + 8; // Skip "\"part\":["
+    
+    while (pos < json_data.length()) {
+        // Find next part object
+        size_t part_start = json_data.find("{", pos);
+        if (part_start == std::string::npos) break;
+        
+        // Find the end of this part object
+        size_t part_end = part_start;
+        int part_brace_count = 0;
+        for (size_t i = part_start; i < json_data.length(); i++) {
+            if (json_data[i] == '{') {
+                part_brace_count++;
+            } else if (json_data[i] == '}') {
+                part_brace_count--;
+                if (part_brace_count == 0) {
+                    part_end = i;
+                    break;
+                }
+            }
+        }
+        
+        if (part_brace_count != 0) break;
+        
+        // Extract part object
+        std::string part_obj = json_data.substr(part_start, part_end - part_start + 1);
+        
+        // Parse reference and alias
+        std::string reference, alias;
+        
+        // Extract reference
+        size_t ref_start = part_obj.find("\"reference\":\"");
+        if (ref_start != std::string::npos) {
+            ref_start += 13; // Skip "\"reference\":\""
+            size_t ref_end = part_obj.find("\"", ref_start);
+            if (ref_end != std::string::npos) {
+                reference = part_obj.substr(ref_start, ref_end - ref_start);
+            }
+        }
+        
+        // Extract alias
+        size_t alias_start = part_obj.find("\"alias\":\"");
+        if (alias_start != std::string::npos) {
+            alias_start += 9; // Skip "\"alias\":\""
+            size_t alias_end = part_obj.find("\"", alias_start);
+            if (alias_end != std::string::npos) {
+                alias = part_obj.substr(alias_start, alias_end - alias_start);
+            }
+        }
+        
+        // Store the alias mapping
+        if (!reference.empty() && !alias.empty()) {
+            part_alias_dict[reference] = alias;
+            std::cout << "Mapping part " << reference << " -> " << alias << std::endl;
+        }
+        
+        // Parse pad array for diode readings
+        size_t pad_array_start = part_obj.find("\"pad\":[");
+        if (pad_array_start != std::string::npos) {
+            pad_array_start += 7; // Skip "\"pad\":["
+            
+            // Find the end of pad array
+            size_t pad_array_end = pad_array_start;
+            int bracket_count = 1; // We already have one opening bracket
+            for (size_t i = pad_array_start; i < part_obj.length(); i++) {
+                if (part_obj[i] == '[') {
+                    bracket_count++;
+                } else if (part_obj[i] == ']') {
+                    bracket_count--;
+                    if (bracket_count == 0) {
+                        pad_array_end = i;
+                        break;
+                    }
+                }
+            }
+            
+            std::string pad_array = part_obj.substr(pad_array_start, pad_array_end - pad_array_start);
+            
+            // Parse individual pads
+            size_t pad_pos = 0;
+            while (pad_pos < pad_array.length()) {
+                size_t pad_start = pad_array.find("{", pad_pos);
+                if (pad_start == std::string::npos) break;
+                
+                size_t pad_end = pad_array.find("}", pad_start);
+                if (pad_end == std::string::npos) break;
+                
+                std::string pad_obj = pad_array.substr(pad_start, pad_end - pad_start + 1);
+                
+                // Extract pin name
+                std::string pin_name;
+                size_t name_start = pad_obj.find("\"name\":\"");
+                if (name_start != std::string::npos) {
+                    name_start += 8; // Skip "\"name\":\""
+                    size_t name_end = pad_obj.find("\"", name_start);
+                    if (name_end != std::string::npos) {
+                        pin_name = pad_obj.substr(name_start, name_end - name_start);
+                    }
+                }
+                
+                // Extract diode reading
+                std::string diode_reading;
+                size_t diode_start = pad_obj.find("\"diode\":\"");
+                if (diode_start != std::string::npos) {
+                    diode_start += 9; // Skip "\"diode\":\""
+                    size_t diode_end = pad_obj.find("\"", diode_start);
+                    if (diode_end != std::string::npos) {
+                        diode_reading = pad_obj.substr(diode_start, diode_end - diode_start);
+                    }
+                }
+                
+                // Store the diode reading for this part and pin
+                if (!reference.empty() && !pin_name.empty() && !diode_reading.empty()) {
+                    json_diode_dict[reference][pin_name] = diode_reading;
+                    std::cout << "Diode reading for " << reference << " pin " << pin_name << ": " << diode_reading << std::endl;
+                }
+                
+                pad_pos = pad_end + 1;
+            }
+        }
+        
+        pos = part_end + 1;
+    }
+    
+    std::cout << "Parsed " << part_alias_dict.size() << " part aliases and diode readings" << std::endl;
+}
+
+void XZZPCBFile::DumpHexAroundPosition(const std::vector<char>& buf, size_t pos, size_t range) {
+    size_t start = (pos > range) ? pos - range : 0;
+    size_t end = std::min(pos + range, buf.size());
+    
+    std::cout << "Hex dump around position " << pos << " (range " << start << "-" << end << "):" << std::endl;
+    
+    for (size_t i = start; i < end; i += 16) {
+        // Print offset
+        std::cout << std::hex << std::setw(8) << std::setfill('0') << i << ": ";
+        
+        // Print hex bytes
+        for (size_t j = 0; j < 16 && i + j < end; j++) {
+            if (i + j == pos) {
+                std::cout << "[" << std::hex << std::setw(2) << std::setfill('0') << (unsigned char)buf[i + j] << "]";
+            } else {
+                std::cout << std::hex << std::setw(2) << std::setfill('0') << (unsigned char)buf[i + j] << " ";
+            }
+        }
+        
+        // Print ASCII representation
+        std::cout << " | ";
+        for (size_t j = 0; j < 16 && i + j < end; j++) {
+            char c = buf[i + j];
+            if (i + j == pos) {
+                std::cout << "[" << (c >= 32 && c <= 126 ? c : '.') << "]";
+            } else {
+                std::cout << (c >= 32 && c <= 126 ? c : '.');
+            }
+        }
+        std::cout << std::dec << std::endl;
     }
 }
 
