@@ -645,7 +645,7 @@ void PDFViewerEmbedder::goToPage(int pageNumber)
         // Add scaled page height (considering current zoom)
         targetOffset += m_pageHeights[i] * m_scrollState->zoomScale;
         
-        // Add spacing between pages (typically 10 pixels in window coordinates)
+        // Add spacing between pages (consistent with getCurrentPage)
         targetOffset += 10.0f; // Page spacing
     }
     
@@ -655,7 +655,10 @@ void PDFViewerEmbedder::goToPage(int pageNumber)
     // Set the scroll offset to show the target page at the top
     m_scrollState->scrollOffset = targetOffset;
     
-    // Ensure we don't scroll beyond the valid range
+    // Update the scroll state first to recalculate max offset
+    UpdateScrollState(*m_scrollState, (float)m_windowHeight, m_pageHeights);
+    
+    // Ensure we don't scroll beyond the valid range (after scroll state update)
     if (m_scrollState->scrollOffset > m_scrollState->maxOffset) {
         m_scrollState->scrollOffset = m_scrollState->maxOffset;
     }
@@ -663,14 +666,12 @@ void PDFViewerEmbedder::goToPage(int pageNumber)
         m_scrollState->scrollOffset = 0.0f;
     }
     
-    // Update the scroll state to reflect the new position
-    UpdateScrollState(*m_scrollState, (float)m_windowHeight, m_pageHeights);
-    
     // Force regeneration of visible textures for the new page range
     m_needsVisibleRegeneration = true;
     
     std::cout << "PDFViewerEmbedder::goToPage() - Successfully navigated to page " << pageNumber 
-              << ", final scroll offset: " << m_scrollState->scrollOffset << std::endl;
+              << ", final scroll offset: " << m_scrollState->scrollOffset 
+              << ", max offset: " << m_scrollState->maxOffset << std::endl;
 }
 
 void PDFViewerEmbedder::nextPage()
@@ -792,6 +793,13 @@ int PDFViewerEmbedder::getCurrentPage() const
     
     for (int i = 0; i < static_cast<int>(m_pageHeights.size()); ++i) {
         float pageHeight = m_pageHeights[i] * m_scrollState->zoomScale;
+        
+        // Add spacing between pages (same as in goToPage)
+        if (i > 0) {
+            accumulatedHeight += 10.0f; // Page spacing
+        }
+        
+        // Check if current offset is within this page
         if (currentOffset <= accumulatedHeight + pageHeight / 2.0f) {
             return i + 1; // 1-based page numbering
         }
