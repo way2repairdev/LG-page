@@ -992,9 +992,8 @@ void MainApplication::onTreeItemClicked(QTreeWidgetItem *item, int column)
     QString folderPath = item->data(0, Qt::UserRole + 1).toString();
     
     if (!filePath.isEmpty()) {
-        // This is a file - open it in a new tab
-        statusBar()->showMessage(QString("Opening file: %1...").arg(itemText));
-        openFileInTab(filePath);
+        // This is a file - just show selection, don't open
+        statusBar()->showMessage(QString("Selected file: %1 (double-click to open)").arg(itemText));
     } else if (!folderPath.isEmpty()) {
         // This is a folder - show folder information in status bar
         statusBar()->showMessage(QString("Selected folder: %1").arg(itemText));
@@ -1014,7 +1013,7 @@ void MainApplication::onTreeItemDoubleClicked(QTreeWidgetItem *item, int column)
     QString filePath = item->data(0, Qt::UserRole).toString();
     
     if (!filePath.isEmpty()) {
-        // This is a file - open it in a new tab (same as single click)
+        // This is a file - open it in a new tab
         statusBar()->showMessage(QString("Opening file: %1...").arg(itemText));
         openFileInTab(filePath);
     } else {
