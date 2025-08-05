@@ -7,6 +7,8 @@
         <file>images/icons/next.svg</file>
         <file>images/icons/zoom_in.svg</file>
         <file>images/icons/zoom_out.svg</file>
+        <file>images/icons/search_previous.svg</file>
+        <file>images/icons/search_next.svg</file>
         <file>images/icons/rotate_right.svg</file>
         <file>images/icons/rotate_left.svg</file>
     </qresource>

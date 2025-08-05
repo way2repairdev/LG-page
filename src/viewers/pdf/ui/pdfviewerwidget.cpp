@@ -50,13 +50,18 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_actionNextPage(nullptr)
     , m_actionZoomIn(nullptr)
     , m_actionZoomOut(nullptr)
+    , m_actionFindPrevious(nullptr)
+    , m_actionFindNext(nullptr)
     , m_pageLabel(nullptr)
     , m_pageInput(nullptr)
     , m_totalPagesLabel(nullptr)
+    , m_searchLabel(nullptr)
+    , m_searchInput(nullptr)
     , m_updateTimer(new QTimer(this))
     , m_viewerInitialized(false)
     , m_pdfLoaded(false)
     , m_usingFallback(false)
+    , m_navigationInProgress(false)
 {
     setupUI();
     
@@ -362,7 +367,7 @@ void PDFViewerWidget::setupToolbar()
     
     // Page input box
     m_pageInput = new QLineEdit(this);
-    m_pageInput->setFixedWidth(20);
+    m_pageInput->setFixedWidth(60);  // Increased from 40 to 60 pixels for better visibility
     m_pageInput->setAlignment(Qt::AlignCenter);
     m_pageInput->setText("1");
     m_pageInput->setToolTip("Enter page number and press Enter");
@@ -371,8 +376,9 @@ void PDFViewerWidget::setupToolbar()
         "    border: 1px solid #cccccc;"
         "    border-radius: 3px;"
         "    padding: 2px 4px;"
-        "    font-size: 10px;"
+        "    font-size: 11px;"  // Increased from 10px to 11px for better readability
         "    background-color: white;"
+        "    font-weight: bold;"  // Make the text bold for better visibility
         "}"
         "QLineEdit:focus {"
         "    border-color: #4285f4;"
@@ -380,6 +386,17 @@ void PDFViewerWidget::setupToolbar()
         "}"
     );
     connect(m_pageInput, &QLineEdit::returnPressed, this, &PDFViewerWidget::onPageInputChanged);
+    
+    // Add focus out event to refresh page display when user finishes editing
+    connect(m_pageInput, &QLineEdit::editingFinished, this, [this]() {
+        // When editing is finished, force an update of the page display
+        if (isPDFLoaded()) {
+            int currentPage = getCurrentPage();
+            m_pageInput->setText(QString::number(currentPage));
+            qDebug() << "PDFViewerWidget: Page input focus lost, updated to current page:" << currentPage;
+        }
+    });
+    
     m_toolbar->addWidget(m_pageInput);
     
     // Total pages label
@@ -410,6 +427,47 @@ void PDFViewerWidget::setupToolbar()
     m_actionZoomOut = m_toolbar->addAction(QIcon(":/icons/images/icons/zoom_out.svg"), "");
     m_actionZoomOut->setToolTip("Zoom Out");
     connect(m_actionZoomOut, &QAction::triggered, this, &PDFViewerWidget::zoomOut);
+    
+    // Add separator
+    m_toolbar->addSeparator();
+    
+    // Search label
+    m_searchLabel = new QLabel("Search:", this);
+    m_searchLabel->setStyleSheet("QLabel { color: #333333; font-weight: bold; margin: 0 5px; }");
+    m_toolbar->addWidget(m_searchLabel);
+    
+    // Search input box
+    m_searchInput = new QLineEdit(this);
+    m_searchInput->setFixedWidth(120);
+    m_searchInput->setPlaceholderText("Search text...");
+    m_searchInput->setToolTip("Enter search term and press Enter");
+    m_searchInput->setStyleSheet(
+        "QLineEdit {"
+        "    border: 1px solid #cccccc;"
+        "    border-radius: 3px;"
+        "    padding: 2px 8px;"
+        "    font-size: 11px;"
+        "    background-color: white;"
+        "}"
+        "QLineEdit:focus {"
+        "    border-color: #4285f4;"
+        "    outline: none;"
+        "}"
+    );
+    connect(m_searchInput, &QLineEdit::returnPressed, this, &PDFViewerWidget::onSearchInputChanged);
+    connect(m_searchInput, &QLineEdit::textChanged, this, &PDFViewerWidget::onSearchInputChanged);
+    m_toolbar->addWidget(m_searchInput);
+    
+    // Add search navigation controls
+    // Previous search result button
+    m_actionFindPrevious = m_toolbar->addAction(QIcon(":/icons/images/icons/search_previous.svg"), "");
+    m_actionFindPrevious->setToolTip("Find Previous");
+    connect(m_actionFindPrevious, &QAction::triggered, this, &PDFViewerWidget::findPrevious);
+    
+    // Next search result button
+    m_actionFindNext = m_toolbar->addAction(QIcon(":/icons/images/icons/search_next.svg"), "");
+    m_actionFindNext->setToolTip("Find Next");
+    connect(m_actionFindNext, &QAction::triggered, this, &PDFViewerWidget::findNext);
 }
 
 
@@ -444,11 +502,29 @@ void PDFViewerWidget::updateViewer()
             
             // Update page display
             if (m_pageInput && m_totalPagesLabel) {
-                // Only update if the input doesn't have focus (to avoid interfering with user typing)
-                if (!m_pageInput->hasFocus()) {
-                    m_pageInput->setText(QString::number(currentPage));
+                QString currentPageText = QString::number(currentPage);
+                QString currentInputText = m_pageInput->text();
+                
+                // Update the input in these cases:
+                // 1. If the input doesn't have focus (user isn't typing)
+                // 2. If navigation is in progress (programmatic navigation via buttons)
+                // 3. If the page has actually changed
+                bool shouldUpdate = !m_pageInput->hasFocus() || m_navigationInProgress || 
+                                  (currentInputText != currentPageText);
+                
+                if (shouldUpdate && currentInputText != currentPageText) {
+                    m_pageInput->setText(currentPageText);
+                    qDebug() << "PDFViewerWidget: Page input updated from" << currentInputText << "to" << currentPageText
+                             << "(focus:" << m_pageInput->hasFocus() << ", navigation:" << m_navigationInProgress << ")";
+                } else if (m_pageInput->hasFocus() && !m_navigationInProgress) {
+                    // Debug when input has focus but no navigation
+                    qDebug() << "PDFViewerWidget: Page input has focus, not updating. Current page:" << currentPage;
                 }
+                
                 m_totalPagesLabel->setText(QString("/ %1").arg(pageCount));
+                
+                // Reset navigation flag after updating
+                m_navigationInProgress = false;
             }
             
             // Update button states
@@ -457,6 +533,13 @@ void PDFViewerWidget::updateViewer()
             }
             if (m_actionNextPage) {
                 m_actionNextPage->setEnabled(currentPage < pageCount);
+            }
+            
+            // Update search button states
+            if (m_actionFindPrevious && m_actionFindNext && m_searchInput) {
+                bool hasSearchTerm = !m_searchInput->text().trimmed().isEmpty();
+                m_actionFindPrevious->setEnabled(hasSearchTerm);
+                m_actionFindNext->setEnabled(hasSearchTerm);
             }
             
             // Emit signals if values changed
@@ -492,6 +575,9 @@ void PDFViewerWidget::goToPage(int pageNumber)
         // Validate page number range
         int totalPages = getPageCount();
         if (pageNumber >= 1 && pageNumber <= totalPages) {
+            // Set flag to indicate programmatic navigation
+            m_navigationInProgress = true;
+            
             m_pdfEmbedder->goToPage(pageNumber);
             
             // Update the page input to reflect the actual page
@@ -517,8 +603,29 @@ void PDFViewerWidget::nextPage()
         int currentPage = getCurrentPage();
         int totalPages = getPageCount();
         
+        qDebug() << "PDFViewerWidget: Next page called - Current:" << currentPage << "Total:" << totalPages;
+        
         if (currentPage < totalPages) {
+            // Set flag to indicate programmatic navigation
+            m_navigationInProgress = true;
+            
             m_pdfEmbedder->nextPage();
+            
+            // Force immediate update of page display
+            QTimer::singleShot(50, this, [this]() {
+                int newPage = getCurrentPage();
+                qDebug() << "PDFViewerWidget: After next page, current page is:" << newPage;
+                
+                // Set navigation flag again to ensure update happens
+                m_navigationInProgress = true;
+                
+                // Force update the page input immediately
+                if (m_pageInput) {
+                    m_pageInput->setText(QString::number(newPage));
+                    qDebug() << "PDFViewerWidget: Page input manually updated to:" << newPage;
+                }
+            });
+            
             qDebug() << "PDFViewerWidget: Next page triggered";
         } else {
             qDebug() << "PDFViewerWidget: Already on last page";
@@ -531,8 +638,29 @@ void PDFViewerWidget::previousPage()
     if (isPDFLoaded() && m_pdfEmbedder) {
         int currentPage = getCurrentPage();
         
+        qDebug() << "PDFViewerWidget: Previous page called - Current:" << currentPage;
+        
         if (currentPage > 1) {
+            // Set flag to indicate programmatic navigation
+            m_navigationInProgress = true;
+            
             m_pdfEmbedder->previousPage();
+            
+            // Force immediate update of page display
+            QTimer::singleShot(50, this, [this]() {
+                int newPage = getCurrentPage();
+                qDebug() << "PDFViewerWidget: After previous page, current page is:" << newPage;
+                
+                // Set navigation flag again to ensure update happens
+                m_navigationInProgress = true;
+                
+                // Force update the page input immediately
+                if (m_pageInput) {
+                    m_pageInput->setText(QString::number(newPage));
+                    qDebug() << "PDFViewerWidget: Page input manually updated to:" << newPage;
+                }
+            });
+            
             qDebug() << "PDFViewerWidget: Previous page triggered";
         } else {
             qDebug() << "PDFViewerWidget: Already on first page";
@@ -571,6 +699,52 @@ void PDFViewerWidget::rotateRight()
     if (isPDFLoaded() && m_pdfEmbedder) {
         m_pdfEmbedder->rotateRight();
         qDebug() << "PDFViewerWidget: Rotate right triggered - all pages rotated clockwise";
+    }
+}
+
+// Search functionality connected to PDF embedder
+void PDFViewerWidget::searchText()
+{
+    if (isPDFLoaded() && m_pdfEmbedder && m_searchInput) {
+        QString searchTerm = m_searchInput->text().trimmed();
+        if (!searchTerm.isEmpty()) {
+            bool found = m_pdfEmbedder->findText(searchTerm.toStdString());
+            qDebug() << "PDFViewerWidget: Search triggered for term:" << searchTerm << "- Found:" << found;
+        }
+    }
+}
+
+void PDFViewerWidget::findNext()
+{
+    if (isPDFLoaded() && m_pdfEmbedder) {
+        m_pdfEmbedder->findNext();
+        qDebug() << "PDFViewerWidget: Find next triggered";
+    }
+}
+
+void PDFViewerWidget::findPrevious()
+{
+    if (isPDFLoaded() && m_pdfEmbedder) {
+        m_pdfEmbedder->findPrevious();
+        qDebug() << "PDFViewerWidget: Find previous triggered";
+    }
+}
+
+void PDFViewerWidget::onSearchInputChanged()
+{
+    if (!m_searchInput)
+        return;
+    
+    QString searchTerm = m_searchInput->text().trimmed();
+    
+    if (searchTerm.isEmpty()) {
+        // Clear search when input is empty
+        if (isPDFLoaded() && m_pdfEmbedder) {
+            m_pdfEmbedder->clearSelection();
+        }
+    } else {
+        // Start new search
+        searchText();
     }
 }
 

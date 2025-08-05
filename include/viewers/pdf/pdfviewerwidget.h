@@ -78,6 +78,11 @@ public slots:
     // Rotation controls
     void rotateLeft();
     void rotateRight();
+    
+    // Search controls
+    void searchText();
+    void findNext();
+    void findPrevious();
 
 signals:
     // Emitted when PDF is successfully loaded
@@ -102,6 +107,7 @@ protected:
 private slots:
     void updateViewer();
     void onPageInputChanged();
+    void onSearchInputChanged();
 
 private:
     void setupUI();
@@ -125,11 +131,17 @@ private:
     QAction* m_actionNextPage;
     QAction* m_actionZoomIn;
     QAction* m_actionZoomOut;
+    QAction* m_actionFindPrevious;
+    QAction* m_actionFindNext;
     
     // Page navigation widgets
     QLabel* m_pageLabel;
     QLineEdit* m_pageInput;
     QLabel* m_totalPagesLabel;
+    
+    // Search widgets
+    QLabel* m_searchLabel;
+    QLineEdit* m_searchInput;
     
     // Update timer for the embedded viewer
     QTimer* m_updateTimer;
@@ -138,6 +150,7 @@ private:
     bool m_viewerInitialized;
     bool m_pdfLoaded;
     bool m_usingFallback;
+    bool m_navigationInProgress;  // Flag to track when programmatic navigation is happening
     QString m_currentFilePath;
     
     // Constants
