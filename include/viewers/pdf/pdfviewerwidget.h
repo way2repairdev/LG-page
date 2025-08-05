@@ -108,6 +108,7 @@ private slots:
     void updateViewer();
     void onPageInputChanged();
     void onSearchInputChanged();
+    void checkForSelectedText();
 
 private:
     void setupUI();
@@ -152,6 +153,7 @@ private:
     bool m_usingFallback;
     bool m_navigationInProgress;  // Flag to track when programmatic navigation is happening
     QString m_currentFilePath;
+    QString m_lastSelectedText;  // Track last selected text to detect changes
     
     // Constants
     static constexpr int UPDATE_INTERVAL_MS = 16; // ~60 FPS

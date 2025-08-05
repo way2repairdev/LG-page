@@ -62,6 +62,7 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_pdfLoaded(false)
     , m_usingFallback(false)
     , m_navigationInProgress(false)
+    , m_lastSelectedText()
 {
     setupUI();
     
@@ -69,6 +70,7 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     m_updateTimer->setInterval(UPDATE_INTERVAL_MS);
     m_updateTimer->setSingleShot(false);
     connect(m_updateTimer, &QTimer::timeout, this, &PDFViewerWidget::updateViewer);
+    connect(m_updateTimer, &QTimer::timeout, this, &PDFViewerWidget::checkForSelectedText);
     
     qDebug() << "PDFViewerWidget: Created with advanced embedded renderer and Qt fallback";
 }
@@ -745,6 +747,35 @@ void PDFViewerWidget::onSearchInputChanged()
     } else {
         // Start new search
         searchText();
+    }
+}
+
+void PDFViewerWidget::checkForSelectedText()
+{
+    if (!isPDFLoaded() || !m_pdfEmbedder || !m_searchInput)
+        return;
+    
+    // Get the currently selected text from the PDF viewer
+    std::string selectedTextStd = m_pdfEmbedder->getSelectedText();
+    QString selectedText = QString::fromStdString(selectedTextStd);
+    
+    // Check if there's new selected text and it's different from the last check
+    if (!selectedText.isEmpty() && selectedText != m_lastSelectedText) {
+        m_lastSelectedText = selectedText;
+        
+        // Update the search input with the selected text (without triggering search yet)
+        bool oldState = m_searchInput->blockSignals(true);  // Prevent triggering onSearchInputChanged
+        m_searchInput->setText(selectedText);
+        m_searchInput->blockSignals(oldState);
+        
+        // Trigger search with the selected text
+        if (m_pdfEmbedder->findText(selectedTextStd)) {
+            qDebug() << "PDFViewerWidget: Auto-searching for selected text:" << selectedText;
+        }
+    }
+    // Reset tracking when no text is selected
+    else if (selectedText.isEmpty()) {
+        m_lastSelectedText.clear();
     }
 }
 
