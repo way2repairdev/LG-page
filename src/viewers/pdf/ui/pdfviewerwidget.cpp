@@ -10,10 +10,11 @@
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QApplication>
-#include <QStyle>
 #include <QSizePolicy>
 #include <QTimer>
 #include <QThread>
+#include <QToolBar>
+#include <QAction>
 #include <fstream>
 
 // Enhanced debug logging to file for PDFViewerWidget
@@ -40,16 +41,17 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     : QWidget(parent)
     , m_pdfEmbedder(std::make_unique<PDFViewerEmbedder>())
     , m_mainLayout(nullptr)
+    , m_toolbar(nullptr)
     , m_viewerContainer(nullptr)
+    , m_actionSlipTab(nullptr)
+    , m_actionRotateLeft(nullptr)
+    , m_actionRotateRight(nullptr)
+    , m_actionZoomIn(nullptr)
+    , m_actionZoomOut(nullptr)
     , m_updateTimer(new QTimer(this))
-    , m_selectionTimer(new QTimer(this))
     , m_viewerInitialized(false)
     , m_pdfLoaded(false)
     , m_usingFallback(false)
-    , m_lastPageCount(0)
-    , m_lastZoomLevel(1.0)
-    , m_lastCurrentPage(1)
-    , m_lastSelectedText("")
 {
     setupUI();
     
@@ -57,13 +59,6 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     m_updateTimer->setInterval(UPDATE_INTERVAL_MS);
     m_updateTimer->setSingleShot(false);
     connect(m_updateTimer, &QTimer::timeout, this, &PDFViewerWidget::updateViewer);
-    
-    // Configure selection timer to check for selected text
-    m_selectionTimer->setInterval(500); // Check every 500ms
-    m_selectionTimer->setSingleShot(false);
-    connect(m_selectionTimer, &QTimer::timeout, this, &PDFViewerWidget::checkForSelectedText);
-    
-
     
     qDebug() << "PDFViewerWidget: Created with advanced embedded renderer and Qt fallback";
 }
@@ -75,11 +70,6 @@ PDFViewerWidget::~PDFViewerWidget()
     // Stop the update timer
     if (m_updateTimer && m_updateTimer->isActive()) {
         m_updateTimer->stop();
-    }
-    
-    // Stop the selection timer
-    if (m_selectionTimer && m_selectionTimer->isActive()) {
-        m_selectionTimer->stop();
     }
     
     // Shutdown the PDF embedder
@@ -95,10 +85,16 @@ void PDFViewerWidget::setupUI()
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
     m_mainLayout->setSpacing(0);
     
-    // Setup viewer area only
+    // Setup toolbar first
+    setupToolbar();
+    
+    // Setup viewer area
     setupViewerArea();
     
-    // Add viewer container to main layout (takes full space)
+    // Add toolbar to main layout (at top, no stretch)
+    m_mainLayout->addWidget(m_toolbar, 0);
+    
+    // Add viewer container to main layout (takes remaining space)
     m_mainLayout->addWidget(m_viewerContainer, 1);
     
     // Apply modern styling
@@ -171,18 +167,9 @@ bool PDFViewerWidget::loadPDF(const QString& filePath)
     m_currentFilePath = filePath;
     m_pdfLoaded = true;
     
-    WriteQtDebugToFile("Step 6: Updating display...");
-    // Update state only (no toolbar)
+    WriteQtDebugToFile("Step 6: PDF loading completed successfully");
     
-    // Start the selection timer to check for selected text
-    if (!m_selectionTimer->isActive()) {
-        m_selectionTimer->start();
-        WriteQtDebugToFile("Started selection timer to monitor selected text");
-    }
-    
-    WriteQtDebugToFile("Step 7: PDF loading completed successfully");
-    
-    WriteQtDebugToFile("Step 8: Emitting signals...");
+    WriteQtDebugToFile("Step 7: Emitting signals...");
     // Emit success signal
     emit pdfLoaded(filePath);
     emit pageChanged(getCurrentPage(), getPageCount());
@@ -283,43 +270,6 @@ bool PDFViewerWidget::isReady() const
 
 
 
-// Search slots
-void PDFViewerWidget::findText(const QString& searchTerm)
-{
-    if (isPDFLoaded()) {
-        m_pdfEmbedder->findText(searchTerm.toStdString());
-    }
-}
-
-void PDFViewerWidget::findNext()
-{
-    if (isPDFLoaded()) {
-        m_pdfEmbedder->findNext();
-    }
-}
-
-void PDFViewerWidget::findPrevious()
-{
-    if (isPDFLoaded()) {
-        m_pdfEmbedder->findPrevious();
-    }
-}
-
-void PDFViewerWidget::clearSelection()
-{
-    if (isPDFLoaded()) {
-        m_pdfEmbedder->clearSelection();
-    }
-}
-
-void PDFViewerWidget::setFullScreen(bool fullScreen)
-{
-    // Fullscreen mode - no toolbar to toggle
-    Q_UNUSED(fullScreen)
-}
-
-
-
 void PDFViewerWidget::paintEvent(QPaintEvent* event)
 {
     QWidget::paintEvent(event);
@@ -343,18 +293,74 @@ void PDFViewerWidget::focusInEvent(QFocusEvent* event)
     }
 }
 
-void PDFViewerWidget::checkForSelectedText()
+void PDFViewerWidget::setupToolbar()
 {
-    if (!isPDFLoaded() || !m_pdfEmbedder) {
-        return;
-    }
+    // Create empty toolbar
+    m_toolbar = new QToolBar(this);
+    m_toolbar->setFixedHeight(30);
+    m_toolbar->setIconSize(QSize(30, 30));  // Adjust icon size for 30px height
+    m_toolbar->setStyleSheet(
+        "QToolBar {"
+        "    background-color: #ffffff;"
+        "    border: none;"
+        "    border-bottom: 1px solid #d0d0d0;"
+        "    spacing: 5px;"
+        "    padding: 4px;"
+        "}"
+        "QToolButton {"
+        "    background-color: transparent;"
+        "    border: 1px solid transparent;"
+        "    border-radius: 2px;"
+        "    padding: 4px;"
+        "    min-width: 30px;"
+        "    min-height: 20px;"
+        "    font-size: 16px;"
+        "}"
+        "QToolButton:hover {"
+        "    background-color: #e6f3ff;"
+        "    border-color: #b3d9ff;"
+        "}"
+        "QToolButton:pressed {"
+        "    background-color: #cce7ff;"
+        "    border-color: #99ccff;"
+        "}"
+    );
     
-    // Get currently selected text from the embedded viewer
-    QString selectedText = QString::fromStdString(m_pdfEmbedder->getSelectedText());
+    // Add slip tab button (using SVG icon from resources)
+    m_actionSlipTab = m_toolbar->addAction(QIcon(":/icons/images/icons/slit-tab.png"), "");
+    m_actionSlipTab->setToolTip("Slip Tab");
+    // Note: Connect to your desired slot when you implement the functionality
+    // connect(m_actionSlipTab, &QAction::triggered, this, &PDFViewerWidget::slipTabAction);
     
-    // Store the current selected text for next comparison
-    m_lastSelectedText = selectedText;
+    // Add separator
+    m_toolbar->addSeparator();
+    
+    // Add rotate left button
+    m_actionRotateLeft = m_toolbar->addAction(QIcon(":/icons/images/icons/rotate_left.svg"), "");
+    m_actionRotateLeft->setToolTip("Rotate Left");
+    connect(m_actionRotateLeft, &QAction::triggered, this, &PDFViewerWidget::rotateLeft);
+    
+    // Add rotate right button
+    m_actionRotateRight = m_toolbar->addAction(QIcon(":/icons/images/icons/rotate_right.svg"), "");
+    m_actionRotateRight->setToolTip("Rotate Right");
+    connect(m_actionRotateRight, &QAction::triggered, this, &PDFViewerWidget::rotateRight);
+    
+    // Add separator
+    m_toolbar->addSeparator();
+    
+    // Add zoom in button (SVG icon from resources)
+    m_actionZoomIn = m_toolbar->addAction(QIcon(":/icons/images/icons/zoom_in.svg"), "");
+    m_actionZoomIn->setToolTip("Zoom In");
+    connect(m_actionZoomIn, &QAction::triggered, this, &PDFViewerWidget::zoomIn);
+    
+    // Add zoom out button (SVG icon from resources)
+    m_actionZoomOut = m_toolbar->addAction(QIcon(":/icons/images/icons/zoom_out.svg"), "");
+    m_actionZoomOut->setToolTip("Zoom Out");
+    connect(m_actionZoomOut, &QAction::triggered, this, &PDFViewerWidget::zoomOut);
 }
+
+
+
 
 void PDFViewerWidget::setupViewerArea()
 {
@@ -370,41 +376,7 @@ void PDFViewerWidget::setupViewerArea()
     );
 }
 
-// Navigation slots
-void PDFViewerWidget::zoomIn()
-{
-    if (isPDFLoaded()) {
-        m_pdfEmbedder->zoomIn();
-    }
-}
 
-void PDFViewerWidget::zoomOut()
-{
-    if (isPDFLoaded()) {
-        m_pdfEmbedder->zoomOut();
-    }
-}
-
-void PDFViewerWidget::goToPage(int pageNumber)
-{
-    if (isPDFLoaded()) {
-        m_pdfEmbedder->goToPage(pageNumber);
-    }
-}
-
-void PDFViewerWidget::nextPage()
-{
-    if (isPDFLoaded()) {
-        m_pdfEmbedder->nextPage();
-    }
-}
-
-void PDFViewerWidget::previousPage()
-{
-    if (isPDFLoaded()) {
-        m_pdfEmbedder->previousPage();
-    }
-}
 
 void PDFViewerWidget::updateViewer()
 {
@@ -418,17 +390,43 @@ void PDFViewerWidget::updateViewer()
             double zoomLevel = getCurrentZoom();
             
             // Emit signals if values changed
-            if (currentPage != m_lastCurrentPage || pageCount != m_lastPageCount) {
-                m_lastCurrentPage = currentPage;
-                m_lastPageCount = pageCount;
-                emit pageChanged(currentPage, pageCount);
-            }
-            
-            if (std::abs(zoomLevel - m_lastZoomLevel) > 0.01) {
-                m_lastZoomLevel = zoomLevel;
-                emit zoomChanged(zoomLevel);
-            }
+            emit pageChanged(currentPage, pageCount);
+            emit zoomChanged(zoomLevel);
         }
+    }
+}
+
+// Zoom functionality connected to PDF embedder
+void PDFViewerWidget::zoomIn()
+{
+    if (isPDFLoaded() && m_pdfEmbedder) {
+        m_pdfEmbedder->zoomIn();
+        qDebug() << "PDFViewerWidget: Zoom in triggered";
+    }
+}
+
+void PDFViewerWidget::zoomOut()
+{
+    if (isPDFLoaded() && m_pdfEmbedder) {
+        m_pdfEmbedder->zoomOut();
+        qDebug() << "PDFViewerWidget: Zoom out triggered";
+    }
+}
+
+// Rotation functionality connected to PDF embedder
+void PDFViewerWidget::rotateLeft()
+{
+    if (isPDFLoaded() && m_pdfEmbedder) {
+        m_pdfEmbedder->rotateLeft();
+        qDebug() << "PDFViewerWidget: Rotate left triggered - all pages rotated counterclockwise";
+    }
+}
+
+void PDFViewerWidget::rotateRight()
+{
+    if (isPDFLoaded() && m_pdfEmbedder) {
+        m_pdfEmbedder->rotateRight();
+        qDebug() << "PDFViewerWidget: Rotate right triggered - all pages rotated clockwise";
     }
 }
 

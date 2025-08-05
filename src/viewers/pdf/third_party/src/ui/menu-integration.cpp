@@ -4,6 +4,7 @@
 #include "rendering/pdf-render.h"
 #include "core/feature.h"
 #include "ui/tab-manager.h"
+#include "fpdf_edit.h"
 #include <iostream>
 #include <fstream>
 #include <commdlg.h>
@@ -603,12 +604,124 @@ void MenuIntegration::OnViewFullScreen() {
 
 void MenuIntegration::OnViewRotateLeft() {
     std::cout << "Rotate Left" << std::endl;
-    // Implement rotation logic
+    
+    // Check if we have a valid document and renderer
+    if (!g_renderer || !g_scrollState) {
+        std::cout << "Error: No renderer or scroll state available for rotation" << std::endl;
+        return;
+    }
+    
+    FPDF_DOCUMENT doc = g_renderer->GetDocument();
+    if (!doc) {
+        std::cout << "Error: No document loaded for rotation" << std::endl;
+        return;
+    }
+    
+    int pageCount = g_renderer->GetPageCount();
+    std::cout << "Rotating " << pageCount << " pages left (counterclockwise)" << std::endl;
+    
+    // Rotate all pages 90 degrees counterclockwise
+    for (int i = 0; i < pageCount; i++) {
+        FPDF_PAGE page = FPDF_LoadPage(doc, i);
+        if (page) {
+            // Get current rotation
+            int currentRotation = FPDFPage_GetRotation(page);
+            
+            // Calculate new rotation (subtract 90 degrees, wrap around)
+            int newRotation = (currentRotation - 1 + 4) % 4;  // 0=0°, 1=90°, 2=180°, 3=270°
+            
+            // Set new rotation
+            FPDFPage_SetRotation(page, newRotation);
+            
+            FPDF_ClosePage(page);
+        }
+    }
+    
+    // CRITICAL: Reload all text pages to get updated coordinates for the rotated content
+    if (g_scrollState && pageCount > 0) {
+        std::cout << "Reloading text pages after left rotation..." << std::endl;
+        
+        // Clear existing text selection as coordinates are now invalid
+        ClearTextSelection(*g_scrollState);
+        
+        // Reload text pages with updated rotation
+        for (int i = 0; i < pageCount; ++i) {
+            // Unload existing text page
+            UnloadTextPage(*g_scrollState, i);
+            
+            // Reload with new rotation
+            FPDF_PAGE page = FPDF_LoadPage(doc, i);
+            if (page) {
+                LoadTextPage(*g_scrollState, i, page);
+                FPDF_ClosePage(page);
+            }
+        }
+        
+        std::cout << "Text pages reloaded with rotated coordinates" << std::endl;
+    }
+    
+    std::cout << "Left rotation completed for all pages" << std::endl;
 }
 
 void MenuIntegration::OnViewRotateRight() {
     std::cout << "Rotate Right" << std::endl;
-    // Implement rotation logic
+    
+    // Check if we have a valid document and renderer
+    if (!g_renderer || !g_scrollState) {
+        std::cout << "Error: No renderer or scroll state available for rotation" << std::endl;
+        return;
+    }
+    
+    FPDF_DOCUMENT doc = g_renderer->GetDocument();
+    if (!doc) {
+        std::cout << "Error: No document loaded for rotation" << std::endl;
+        return;
+    }
+    
+    int pageCount = g_renderer->GetPageCount();
+    std::cout << "Rotating " << pageCount << " pages right (clockwise)" << std::endl;
+    
+    // Rotate all pages 90 degrees clockwise
+    for (int i = 0; i < pageCount; i++) {
+        FPDF_PAGE page = FPDF_LoadPage(doc, i);
+        if (page) {
+            // Get current rotation
+            int currentRotation = FPDFPage_GetRotation(page);
+            
+            // Calculate new rotation (add 90 degrees, wrap around)
+            int newRotation = (currentRotation + 1) % 4;  // 0=0°, 1=90°, 2=180°, 3=270°
+            
+            // Set new rotation
+            FPDFPage_SetRotation(page, newRotation);
+            
+            FPDF_ClosePage(page);
+        }
+    }
+    
+    // CRITICAL: Reload all text pages to get updated coordinates for the rotated content
+    if (g_scrollState && pageCount > 0) {
+        std::cout << "Reloading text pages after right rotation..." << std::endl;
+        
+        // Clear existing text selection as coordinates are now invalid
+        ClearTextSelection(*g_scrollState);
+        
+        // Reload text pages with updated rotation
+        for (int i = 0; i < pageCount; ++i) {
+            // Unload existing text page
+            UnloadTextPage(*g_scrollState, i);
+            
+            // Reload with new rotation
+            FPDF_PAGE page = FPDF_LoadPage(doc, i);
+            if (page) {
+                LoadTextPage(*g_scrollState, i, page);
+                FPDF_ClosePage(page);
+            }
+        }
+        
+        std::cout << "Text pages reloaded with rotated coordinates" << std::endl;
+    }
+    
+    std::cout << "Right rotation completed for all pages" << std::endl;
 }
 
 void MenuIntegration::OnNavFirst() {

@@ -4,13 +4,8 @@
 #include <QWidget>
 #include <QTimer>
 #include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QPushButton>
-#include <QLabel>
-#include <QLineEdit>
-#include <QSlider>
-#include <QSpinBox>
-#include <QProgressBar>
+#include <QToolBar>
+#include <QAction>
 #include <memory>
 
 class PDFViewerEmbedder;
@@ -69,21 +64,13 @@ public:
     bool isReady() const;
 
 public slots:
-    // Navigation
+    // Zoom controls
     void zoomIn();
     void zoomOut();
-    void goToPage(int pageNumber);
-    void nextPage();
-    void previousPage();
     
-    // Search functionality
-    void findText(const QString& searchTerm);
-    void findNext();
-    void findPrevious();
-    void clearSelection();
-    
-    // View controls
-    void setFullScreen(bool fullScreen);
+    // Rotation controls
+    void rotateLeft();
+    void rotateRight();
 
 signals:
     // Emitted when PDF is successfully loaded
@@ -97,12 +84,6 @@ signals:
     
     // Emitted when zoom level changes
     void zoomChanged(double zoomLevel);
-    
-    // Emitted when text is selected
-    void textSelected(const QString& selectedText);
-    
-    // Emitted when loading progress updates
-    void loadingProgress(int percentage);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -113,10 +94,10 @@ protected:
 
 private slots:
     void updateViewer();
-    void checkForSelectedText();  // Checks for text selection changes
 
 private:
     void setupUI();
+    void setupToolbar();
     void setupViewerArea();
     void initializePDFViewer();
     
@@ -125,21 +106,24 @@ private:
     
     // UI Components
     QVBoxLayout* m_mainLayout;
+    QToolBar* m_toolbar;
     QWidget* m_viewerContainer;
+    
+    // Toolbar actions
+    QAction* m_actionSlipTab;
+    QAction* m_actionRotateLeft;
+    QAction* m_actionRotateRight;
+    QAction* m_actionZoomIn;
+    QAction* m_actionZoomOut;
     
     // Update timer for the embedded viewer
     QTimer* m_updateTimer;
-    QTimer* m_selectionTimer;  // Timer to check for selected text changes
     
     // State tracking
     bool m_viewerInitialized;
     bool m_pdfLoaded;
     bool m_usingFallback;
     QString m_currentFilePath;
-    int m_lastPageCount;
-    double m_lastZoomLevel;
-    int m_lastCurrentPage;
-    QString m_lastSelectedText;  // Track last selected text to detect changes
     
     // Constants
     static constexpr int UPDATE_INTERVAL_MS = 16; // ~60 FPS

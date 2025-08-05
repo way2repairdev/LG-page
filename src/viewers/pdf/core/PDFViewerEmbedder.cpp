@@ -7,6 +7,9 @@
 #include "../third_party/include/ui/menu-integration.h"
 #include "../third_party/include/utils/Resource.h"
 
+// PDFium includes for rotation functions
+#include "fpdf_edit.h"
+
 // GLFW includes
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
@@ -377,8 +380,8 @@ void PDFViewerEmbedder::update()
 
     // SAME ZOOM HANDLING LOGIC AS STANDALONE VIEWER'S MAIN LOOP
     // Check if we need to regenerate textures due to window resize or zoom change
-    bool needsFullRegeneration = (currentWidth != m_lastWinWidth || currentHeight != m_lastWinHeight);
-    bool needsVisibleRegeneration = false;
+    bool needsFullRegeneration = (currentWidth != m_lastWinWidth || currentHeight != m_lastWinHeight) || m_needsFullRegeneration;
+    bool needsVisibleRegeneration = m_needsVisibleRegeneration;
     
     if (m_scrollState->zoomChanged) {
         float zoomDifference = std::abs(m_scrollState->zoomScale - m_scrollState->lastRenderedZoom) / m_scrollState->lastRenderedZoom;
@@ -401,8 +404,10 @@ void PDFViewerEmbedder::update()
         regenerateTextures();
         m_lastWinWidth = currentWidth;
         m_lastWinHeight = currentHeight;
+        m_needsFullRegeneration = false; // Reset the flag after regeneration
     } else if (needsVisibleRegeneration) {
         regenerateVisibleTextures();
+        m_needsVisibleRegeneration = false; // Reset the flag after regeneration
     }
 
     // IMPORTANT: Update search state and trigger search if needed
@@ -633,6 +638,91 @@ void PDFViewerEmbedder::previousPage()
 {
     int currentPage = getCurrentPage();
     goToPage(currentPage - 1);
+}
+
+// Rotation methods
+void PDFViewerEmbedder::rotateLeft()
+{
+    if (!m_initialized || !m_pdfLoaded || !m_renderer || !m_scrollState) return;
+    
+    std::cout << "Embedded viewer: Rotating all pages left (counterclockwise)" << std::endl;
+    
+    // Work directly with our local renderer instead of using global MenuIntegration
+    FPDF_DOCUMENT doc = m_renderer->GetDocument();
+    if (!doc) {
+        std::cout << "Error: No document loaded for rotation" << std::endl;
+        return;
+    }
+    
+    int pageCount = m_renderer->GetPageCount();
+    std::cout << "Rotating " << pageCount << " pages left (counterclockwise)" << std::endl;
+    
+    // Rotate all pages 90 degrees counterclockwise
+    for (int i = 0; i < pageCount; i++) {
+        FPDF_PAGE page = FPDF_LoadPage(doc, i);
+        if (page) {
+            // Get current rotation
+            int currentRotation = FPDFPage_GetRotation(page);
+            
+            // Calculate new rotation (subtract 90 degrees, wrap around)
+            int newRotation = (currentRotation - 1 + 4) % 4;  // 0=0°, 1=90°, 2=180°, 3=270°
+            
+            // Set new rotation
+            FPDFPage_SetRotation(page, newRotation);
+            
+            FPDF_ClosePage(page);
+        }
+    }
+    
+    // Force regeneration of all textures after rotation
+    m_needsFullRegeneration = true;
+    
+    // Force immediate update to show rotation effect
+    update();
+    
+    std::cout << "Embedded viewer: Left rotation completed, textures regenerated immediately" << std::endl;
+}
+
+void PDFViewerEmbedder::rotateRight()
+{
+    if (!m_initialized || !m_pdfLoaded || !m_renderer || !m_scrollState) return;
+    
+    std::cout << "Embedded viewer: Rotating all pages right (clockwise)" << std::endl;
+    
+    // Work directly with our local renderer instead of using global MenuIntegration
+    FPDF_DOCUMENT doc = m_renderer->GetDocument();
+    if (!doc) {
+        std::cout << "Error: No document loaded for rotation" << std::endl;
+        return;
+    }
+    
+    int pageCount = m_renderer->GetPageCount();
+    std::cout << "Rotating " << pageCount << " pages right (clockwise)" << std::endl;
+    
+    // Rotate all pages 90 degrees clockwise
+    for (int i = 0; i < pageCount; i++) {
+        FPDF_PAGE page = FPDF_LoadPage(doc, i);
+        if (page) {
+            // Get current rotation
+            int currentRotation = FPDFPage_GetRotation(page);
+            
+            // Calculate new rotation (add 90 degrees, wrap around)
+            int newRotation = (currentRotation + 1) % 4;  // 0=0°, 1=90°, 2=180°, 3=270°
+            
+            // Set new rotation
+            FPDFPage_SetRotation(page, newRotation);
+            
+            FPDF_ClosePage(page);
+        }
+    }
+    
+    // Force regeneration of all textures after rotation
+    m_needsFullRegeneration = true;
+    
+    // Force immediate update to show rotation effect
+    update();
+    
+    std::cout << "Embedded viewer: Right rotation completed, textures regenerated immediately" << std::endl;
 }
 
 int PDFViewerEmbedder::getPageCount() const

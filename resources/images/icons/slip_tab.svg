@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+    <g fill="#333333">
+        <!-- Folder base -->
+        <rect x="2" y="6" width="16" height="10" rx="1" fill="#4a90e2" stroke="#357abd" stroke-width="0.5"/>
+        <!-- Folder tab -->
+        <rect x="2" y="4" width="6" height="3" rx="1" fill="#4a90e2" stroke="#357abd" stroke-width="0.5"/>
+        <!-- Tab divider lines -->
+        <line x1="8" y1="6" x2="8" y2="16" stroke="#357abd" stroke-width="0.5"/>
+        <line x1="12" y1="6" x2="12" y2="16" stroke="#357abd" stroke-width="0.5"/>
+    </g>
+</svg>

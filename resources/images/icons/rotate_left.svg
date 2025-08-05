@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+    <g fill="#333333">
+        <!-- Circular arrow pointing left -->
+        <path d="M10 3 C13.866 3 17 6.134 17 10 C17 13.866 13.866 17 10 17 C6.134 17 3 13.866 3 10" 
+              fill="none" stroke="#333333" stroke-width="1.5" stroke-linecap="round"/>
+        <!-- Arrow head pointing left -->
+        <path d="M6 10 L3 7 L3 13 Z" fill="#333333"/>
+    </g>
+</svg>

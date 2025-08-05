@@ -722,7 +722,7 @@ void MainApplication::debugToolbarStates()
         QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PDF_TAB);
         QString tabName = m_tabWidget->tabText(i, DualTabWidget::PDF_TAB);
         
-        if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(widget)) {
+        if (qobject_cast<PDFViewerWidget*>(widget)) {
             // PDF viewer now has no toolbar - always report as simplified viewer
             qDebug() << "PDF Tab" << i << "(" << tabName << "): toolbar-free viewer";
         }
@@ -992,7 +992,7 @@ void MainApplication::onTreeItemClicked(QTreeWidgetItem *item, int column)
     QString folderPath = item->data(0, Qt::UserRole + 1).toString();
     
     if (!filePath.isEmpty()) {
-        // This is a file - just show selection, don't open
+        // This is a file - just show selection status (don't open on single click)
         statusBar()->showMessage(QString("Selected file: %1 (double-click to open)").arg(itemText));
     } else if (!folderPath.isEmpty()) {
         // This is a folder - show folder information in status bar
@@ -1013,7 +1013,7 @@ void MainApplication::onTreeItemDoubleClicked(QTreeWidgetItem *item, int column)
     QString filePath = item->data(0, Qt::UserRole).toString();
     
     if (!filePath.isEmpty()) {
-        // This is a file - open it in a new tab
+        // This is a file - open it in a new tab (double-click to open)
         statusBar()->showMessage(QString("Opening file: %1...").arg(itemText));
         openFileInTab(filePath);
     } else {

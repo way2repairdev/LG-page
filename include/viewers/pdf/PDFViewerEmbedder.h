@@ -84,6 +84,12 @@ public:
     void goToPage(int pageNumber);
     void nextPage();
     void previousPage();
+    
+    /**
+     * Rotation methods - rotate all pages
+     */
+    void rotateLeft();
+    void rotateRight();
 
     /**
      * Get current viewer state
