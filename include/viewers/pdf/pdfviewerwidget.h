@@ -8,6 +8,7 @@
 #include <QAction>
 #include <QLineEdit>
 #include <QLabel>
+#include <QEvent>
 #include <memory>
 
 class PDFViewerEmbedder;
@@ -110,6 +111,10 @@ private slots:
     void onSearchInputChanged();
     void checkForSelectedText();
 
+protected:
+    // Event handling to clear page input focus when clicking elsewhere
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private:
     void setupUI();
     void setupToolbar();
@@ -146,6 +151,7 @@ private:
     
     // Update timer for the embedded viewer
     QTimer* m_updateTimer;
+    QTimer* m_navigationTimer;  // Timer to reset navigation flag
     
     // State tracking
     bool m_viewerInitialized;

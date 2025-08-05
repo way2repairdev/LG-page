@@ -58,6 +58,7 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_searchLabel(nullptr)
     , m_searchInput(nullptr)
     , m_updateTimer(new QTimer(this))
+    , m_navigationTimer(new QTimer(this))
     , m_viewerInitialized(false)
     , m_pdfLoaded(false)
     , m_usingFallback(false)
@@ -71,6 +72,14 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     m_updateTimer->setSingleShot(false);
     connect(m_updateTimer, &QTimer::timeout, this, &PDFViewerWidget::updateViewer);
     connect(m_updateTimer, &QTimer::timeout, this, &PDFViewerWidget::checkForSelectedText);
+    
+    // Configure navigation timer to reset navigation flag after delay
+    m_navigationTimer->setSingleShot(true);
+    m_navigationTimer->setInterval(100); // 100ms delay
+    connect(m_navigationTimer, &QTimer::timeout, this, [this]() {
+        m_navigationInProgress = false;
+        qDebug() << "PDFViewerWidget: Navigation flag reset";
+    });
     
     qDebug() << "PDFViewerWidget: Created with advanced embedded renderer and Qt fallback";
 }
@@ -373,6 +382,8 @@ void PDFViewerWidget::setupToolbar()
     m_pageInput->setAlignment(Qt::AlignCenter);
     m_pageInput->setText("1");
     m_pageInput->setToolTip("Enter page number and press Enter");
+    m_pageInput->setReadOnly(false);  // Explicitly ensure it's editable
+    m_pageInput->setEnabled(true);    // Explicitly ensure it's enabled
     m_pageInput->setStyleSheet(
         "QLineEdit {"
         "    border: 1px solid #cccccc;"
@@ -391,11 +402,23 @@ void PDFViewerWidget::setupToolbar()
     
     // Add focus out event to refresh page display when user finishes editing
     connect(m_pageInput, &QLineEdit::editingFinished, this, [this]() {
-        // When editing is finished, force an update of the page display
+        // When editing is finished, validate the input
         if (isPDFLoaded()) {
-            int currentPage = getCurrentPage();
-            m_pageInput->setText(QString::number(currentPage));
-            qDebug() << "PDFViewerWidget: Page input focus lost, updated to current page:" << currentPage;
+            QString inputText = m_pageInput->text().trimmed();
+            bool ok;
+            int inputPage = inputText.toInt(&ok);
+            int totalPages = getPageCount();
+            
+            // If user entered a valid page number, navigate to it
+            if (ok && inputPage >= 1 && inputPage <= totalPages) {
+                // User entered a valid page number - don't reset it
+                qDebug() << "PDFViewerWidget: Valid page number entered:" << inputPage;
+            } else {
+                // Invalid input - reset to current page
+                int currentPage = getCurrentPage();
+                m_pageInput->setText(QString::number(currentPage));
+                qDebug() << "PDFViewerWidget: Invalid page input '" << inputText << "' reset to current page:" << currentPage;
+            }
         }
     });
     
@@ -487,6 +510,9 @@ void PDFViewerWidget::setupViewerArea()
         "    border: 1px solid #cccccc;"
         "}"
     );
+    
+    // Install event filter to capture mouse clicks and clear page input focus
+    m_viewerContainer->installEventFilter(this);
 }
 
 
@@ -507,26 +533,25 @@ void PDFViewerWidget::updateViewer()
                 QString currentPageText = QString::number(currentPage);
                 QString currentInputText = m_pageInput->text();
                 
-                // Update the input in these cases:
-                // 1. If the input doesn't have focus (user isn't typing)
-                // 2. If navigation is in progress (programmatic navigation via buttons)
-                // 3. If the page has actually changed
-                bool shouldUpdate = !m_pageInput->hasFocus() || m_navigationInProgress || 
-                                  (currentInputText != currentPageText);
+                // Only update the input if:
+                // 1. Input doesn't have focus (user isn't actively typing)
+                // 2. OR navigation is in progress (programmatic navigation via buttons/goToPage)
+                // But DON'T update if user has focus and is manually typing
+                bool userIsTyping = m_pageInput->hasFocus() && !m_navigationInProgress;
+                bool shouldUpdate = !userIsTyping && (currentInputText != currentPageText);
                 
-                if (shouldUpdate && currentInputText != currentPageText) {
+                if (shouldUpdate) {
                     m_pageInput->setText(currentPageText);
                     qDebug() << "PDFViewerWidget: Page input updated from" << currentInputText << "to" << currentPageText
                              << "(focus:" << m_pageInput->hasFocus() << ", navigation:" << m_navigationInProgress << ")";
-                } else if (m_pageInput->hasFocus() && !m_navigationInProgress) {
-                    // Debug when input has focus but no navigation
-                    qDebug() << "PDFViewerWidget: Page input has focus, not updating. Current page:" << currentPage;
+                } else if (userIsTyping) {
+                    // Debug when user is actively typing - don't update
+                    qDebug() << "PDFViewerWidget: User is typing, not updating page input. Current page:" << currentPage << ", Input:" << currentInputText;
                 }
                 
                 m_totalPagesLabel->setText(QString("/ %1").arg(pageCount));
                 
-                // Reset navigation flag after updating
-                m_navigationInProgress = false;
+                // Don't reset navigation flag here - let the timer handle it
             }
             
             // Update button states
@@ -555,19 +580,31 @@ void PDFViewerWidget::onPageInputChanged()
 {
     if (!m_pageInput) return;
     
+    QString inputText = m_pageInput->text().trimmed();
+    qDebug() << "PDFViewerWidget: onPageInputChanged called with input:" << inputText;
+    
     bool ok;
-    int pageNumber = m_pageInput->text().toInt(&ok);
+    int pageNumber = inputText.toInt(&ok);
     
     if (ok && pageNumber > 0) {
+        qDebug() << "PDFViewerWidget: Valid page number entered:" << pageNumber;
         goToPage(pageNumber);
     } else {
+        qDebug() << "PDFViewerWidget: Invalid page input:" << inputText;
         // Invalid input, reset to current page
         if (isPDFLoaded()) {
-            m_pageInput->setText(QString::number(getCurrentPage()));
+            int currentPage = getCurrentPage();
+            m_pageInput->setText(QString::number(currentPage));
+            qDebug() << "PDFViewerWidget: Reset to current page:" << currentPage;
         } else {
             m_pageInput->setText("1");
+            qDebug() << "PDFViewerWidget: Reset to page 1 (no PDF loaded)";
         }
     }
+    
+    // Clear focus from page input after processing Enter key
+    m_pageInput->clearFocus();
+    qDebug() << "PDFViewerWidget: Page input focus cleared after Enter";
 }
 
 // Page navigation functionality connected to PDF embedder
@@ -579,6 +616,9 @@ void PDFViewerWidget::goToPage(int pageNumber)
         if (pageNumber >= 1 && pageNumber <= totalPages) {
             // Set flag to indicate programmatic navigation
             m_navigationInProgress = true;
+            
+            // Start timer to reset navigation flag after delay
+            m_navigationTimer->start();
             
             m_pdfEmbedder->goToPage(pageNumber);
             
@@ -607,26 +647,20 @@ void PDFViewerWidget::nextPage()
         
         qDebug() << "PDFViewerWidget: Next page called - Current:" << currentPage << "Total:" << totalPages;
         
+        // Clear focus from page input when navigation button is clicked
+        if (m_pageInput && m_pageInput->hasFocus()) {
+            m_pageInput->clearFocus();
+            qDebug() << "PDFViewerWidget: Page input focus cleared on Next button click";
+        }
+        
         if (currentPage < totalPages) {
             // Set flag to indicate programmatic navigation
             m_navigationInProgress = true;
             
-            m_pdfEmbedder->nextPage();
+            // Start timer to reset navigation flag after delay
+            m_navigationTimer->start();
             
-            // Force immediate update of page display
-            QTimer::singleShot(50, this, [this]() {
-                int newPage = getCurrentPage();
-                qDebug() << "PDFViewerWidget: After next page, current page is:" << newPage;
-                
-                // Set navigation flag again to ensure update happens
-                m_navigationInProgress = true;
-                
-                // Force update the page input immediately
-                if (m_pageInput) {
-                    m_pageInput->setText(QString::number(newPage));
-                    qDebug() << "PDFViewerWidget: Page input manually updated to:" << newPage;
-                }
-            });
+            m_pdfEmbedder->nextPage();
             
             qDebug() << "PDFViewerWidget: Next page triggered";
         } else {
@@ -642,26 +676,20 @@ void PDFViewerWidget::previousPage()
         
         qDebug() << "PDFViewerWidget: Previous page called - Current:" << currentPage;
         
+        // Clear focus from page input when navigation button is clicked
+        if (m_pageInput && m_pageInput->hasFocus()) {
+            m_pageInput->clearFocus();
+            qDebug() << "PDFViewerWidget: Page input focus cleared on Previous button click";
+        }
+        
         if (currentPage > 1) {
             // Set flag to indicate programmatic navigation
             m_navigationInProgress = true;
             
-            m_pdfEmbedder->previousPage();
+            // Start timer to reset navigation flag after delay
+            m_navigationTimer->start();
             
-            // Force immediate update of page display
-            QTimer::singleShot(50, this, [this]() {
-                int newPage = getCurrentPage();
-                qDebug() << "PDFViewerWidget: After previous page, current page is:" << newPage;
-                
-                // Set navigation flag again to ensure update happens
-                m_navigationInProgress = true;
-                
-                // Force update the page input immediately
-                if (m_pageInput) {
-                    m_pageInput->setText(QString::number(newPage));
-                    qDebug() << "PDFViewerWidget: Page input manually updated to:" << newPage;
-                }
-            });
+            m_pdfEmbedder->previousPage();
             
             qDebug() << "PDFViewerWidget: Previous page triggered";
         } else {
@@ -674,6 +702,12 @@ void PDFViewerWidget::previousPage()
 void PDFViewerWidget::zoomIn()
 {
     if (isPDFLoaded() && m_pdfEmbedder) {
+        // Clear focus from page input when zoom button is clicked
+        if (m_pageInput && m_pageInput->hasFocus()) {
+            m_pageInput->clearFocus();
+            qDebug() << "PDFViewerWidget: Page input focus cleared on Zoom In button click";
+        }
+        
         m_pdfEmbedder->zoomIn();
         qDebug() << "PDFViewerWidget: Zoom in triggered";
     }
@@ -682,6 +716,12 @@ void PDFViewerWidget::zoomIn()
 void PDFViewerWidget::zoomOut()
 {
     if (isPDFLoaded() && m_pdfEmbedder) {
+        // Clear focus from page input when zoom button is clicked
+        if (m_pageInput && m_pageInput->hasFocus()) {
+            m_pageInput->clearFocus();
+            qDebug() << "PDFViewerWidget: Page input focus cleared on Zoom Out button click";
+        }
+        
         m_pdfEmbedder->zoomOut();
         qDebug() << "PDFViewerWidget: Zoom out triggered";
     }
@@ -811,4 +851,23 @@ void PDFViewerWidget::showEvent(QShowEvent* event)
             }
         });
     }
+}
+
+bool PDFViewerWidget::eventFilter(QObject *watched, QEvent *event)
+{
+    // Clear page input focus when clicking in the viewer area
+    if (watched == m_viewerContainer && event->type() == QEvent::MouseButtonPress) {
+        if (m_pageInput && m_pageInput->hasFocus()) {
+            m_pageInput->clearFocus();
+            qDebug() << "PDFViewerWidget: Page input focus cleared on viewer area click";
+        }
+        // Also clear search input focus
+        if (m_searchInput && m_searchInput->hasFocus()) {
+            m_searchInput->clearFocus();
+            qDebug() << "PDFViewerWidget: Search input focus cleared on viewer area click";
+        }
+    }
+    
+    // Continue with default event processing
+    return QWidget::eventFilter(watched, event);
 }
