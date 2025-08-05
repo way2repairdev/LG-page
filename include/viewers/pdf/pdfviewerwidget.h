@@ -6,6 +6,8 @@
 #include <QVBoxLayout>
 #include <QToolBar>
 #include <QAction>
+#include <QLineEdit>
+#include <QLabel>
 #include <memory>
 
 class PDFViewerEmbedder;
@@ -64,6 +66,11 @@ public:
     bool isReady() const;
 
 public slots:
+    // Navigation controls
+    void goToPage(int pageNumber);
+    void nextPage();
+    void previousPage();
+    
     // Zoom controls
     void zoomIn();
     void zoomOut();
@@ -94,6 +101,7 @@ protected:
 
 private slots:
     void updateViewer();
+    void onPageInputChanged();
 
 private:
     void setupUI();
@@ -113,8 +121,15 @@ private:
     QAction* m_actionSlipTab;
     QAction* m_actionRotateLeft;
     QAction* m_actionRotateRight;
+    QAction* m_actionPreviousPage;
+    QAction* m_actionNextPage;
     QAction* m_actionZoomIn;
     QAction* m_actionZoomOut;
+    
+    // Page navigation widgets
+    QLabel* m_pageLabel;
+    QLineEdit* m_pageInput;
+    QLabel* m_totalPagesLabel;
     
     // Update timer for the embedded viewer
     QTimer* m_updateTimer;

@@ -46,8 +46,13 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_actionSlipTab(nullptr)
     , m_actionRotateLeft(nullptr)
     , m_actionRotateRight(nullptr)
+    , m_actionPreviousPage(nullptr)
+    , m_actionNextPage(nullptr)
     , m_actionZoomIn(nullptr)
     , m_actionZoomOut(nullptr)
+    , m_pageLabel(nullptr)
+    , m_pageInput(nullptr)
+    , m_totalPagesLabel(nullptr)
     , m_updateTimer(new QTimer(this))
     , m_viewerInitialized(false)
     , m_pdfLoaded(false)
@@ -348,6 +353,54 @@ void PDFViewerWidget::setupToolbar()
     // Add separator
     m_toolbar->addSeparator();
     
+    
+    
+    // Page label
+    m_pageLabel = new QLabel("Page:", this);
+    m_pageLabel->setStyleSheet("QLabel { color: #333333; font-weight: bold; margin: 0 5px; }");
+    m_toolbar->addWidget(m_pageLabel);
+    
+    // Page input box
+    m_pageInput = new QLineEdit(this);
+    m_pageInput->setFixedWidth(20);
+    m_pageInput->setAlignment(Qt::AlignCenter);
+    m_pageInput->setText("1");
+    m_pageInput->setToolTip("Enter page number and press Enter");
+    m_pageInput->setStyleSheet(
+        "QLineEdit {"
+        "    border: 1px solid #cccccc;"
+        "    border-radius: 3px;"
+        "    padding: 2px 4px;"
+        "    font-size: 10px;"
+        "    background-color: white;"
+        "}"
+        "QLineEdit:focus {"
+        "    border-color: #4285f4;"
+        "    outline: none;"
+        "}"
+    );
+    connect(m_pageInput, &QLineEdit::returnPressed, this, &PDFViewerWidget::onPageInputChanged);
+    m_toolbar->addWidget(m_pageInput);
+    
+    // Total pages label
+    m_totalPagesLabel = new QLabel("/ 0", this);
+    m_totalPagesLabel->setStyleSheet("QLabel { color: #666666; margin: 0 5px; }");
+    m_toolbar->addWidget(m_totalPagesLabel);
+
+    // Add page navigation controls
+    // Previous page button
+    m_actionPreviousPage = m_toolbar->addAction(QIcon(":/icons/images/icons/previous.svg"), "");
+    m_actionPreviousPage->setToolTip("Previous Page");
+    connect(m_actionPreviousPage, &QAction::triggered, this, &PDFViewerWidget::previousPage);
+    
+    // Next page button
+    m_actionNextPage = m_toolbar->addAction(QIcon(":/icons/images/icons/next.svg"), "");
+    m_actionNextPage->setToolTip("Next Page");
+    connect(m_actionNextPage, &QAction::triggered, this, &PDFViewerWidget::nextPage);
+    
+    // Add separator
+    m_toolbar->addSeparator();
+    
     // Add zoom in button (SVG icon from resources)
     m_actionZoomIn = m_toolbar->addAction(QIcon(":/icons/images/icons/zoom_in.svg"), "");
     m_actionZoomIn->setToolTip("Zoom In");
@@ -389,9 +442,100 @@ void PDFViewerWidget::updateViewer()
             int pageCount = getPageCount();
             double zoomLevel = getCurrentZoom();
             
+            // Update page display
+            if (m_pageInput && m_totalPagesLabel) {
+                // Only update if the input doesn't have focus (to avoid interfering with user typing)
+                if (!m_pageInput->hasFocus()) {
+                    m_pageInput->setText(QString::number(currentPage));
+                }
+                m_totalPagesLabel->setText(QString("/ %1").arg(pageCount));
+            }
+            
+            // Update button states
+            if (m_actionPreviousPage) {
+                m_actionPreviousPage->setEnabled(currentPage > 1);
+            }
+            if (m_actionNextPage) {
+                m_actionNextPage->setEnabled(currentPage < pageCount);
+            }
+            
             // Emit signals if values changed
             emit pageChanged(currentPage, pageCount);
             emit zoomChanged(zoomLevel);
+        }
+    }
+}
+
+void PDFViewerWidget::onPageInputChanged()
+{
+    if (!m_pageInput) return;
+    
+    bool ok;
+    int pageNumber = m_pageInput->text().toInt(&ok);
+    
+    if (ok && pageNumber > 0) {
+        goToPage(pageNumber);
+    } else {
+        // Invalid input, reset to current page
+        if (isPDFLoaded()) {
+            m_pageInput->setText(QString::number(getCurrentPage()));
+        } else {
+            m_pageInput->setText("1");
+        }
+    }
+}
+
+// Page navigation functionality connected to PDF embedder
+void PDFViewerWidget::goToPage(int pageNumber)
+{
+    if (isPDFLoaded() && m_pdfEmbedder) {
+        // Validate page number range
+        int totalPages = getPageCount();
+        if (pageNumber >= 1 && pageNumber <= totalPages) {
+            m_pdfEmbedder->goToPage(pageNumber);
+            
+            // Update the page input to reflect the actual page
+            if (m_pageInput) {
+                m_pageInput->setText(QString::number(pageNumber));
+            }
+            
+            qDebug() << "PDFViewerWidget: Go to page" << pageNumber;
+        } else {
+            qWarning() << "PDFViewerWidget: Invalid page number" << pageNumber << "- must be between 1 and" << totalPages;
+            
+            // Reset the input to current page
+            if (m_pageInput) {
+                m_pageInput->setText(QString::number(getCurrentPage()));
+            }
+        }
+    }
+}
+
+void PDFViewerWidget::nextPage()
+{
+    if (isPDFLoaded() && m_pdfEmbedder) {
+        int currentPage = getCurrentPage();
+        int totalPages = getPageCount();
+        
+        if (currentPage < totalPages) {
+            m_pdfEmbedder->nextPage();
+            qDebug() << "PDFViewerWidget: Next page triggered";
+        } else {
+            qDebug() << "PDFViewerWidget: Already on last page";
+        }
+    }
+}
+
+void PDFViewerWidget::previousPage()
+{
+    if (isPDFLoaded() && m_pdfEmbedder) {
+        int currentPage = getCurrentPage();
+        
+        if (currentPage > 1) {
+            m_pdfEmbedder->previousPage();
+            qDebug() << "PDFViewerWidget: Previous page triggered";
+        } else {
+            qDebug() << "PDFViewerWidget: Already on first page";
         }
     }
 }

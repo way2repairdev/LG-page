@@ -623,9 +623,54 @@ void PDFViewerEmbedder::setZoom(float zoomLevel)
 
 void PDFViewerEmbedder::goToPage(int pageNumber)
 {
+    if (!m_initialized || !m_pdfLoaded || !m_scrollState || !m_renderer) {
+        std::cout << "PDFViewerEmbedder::goToPage() - Not initialized or PDF not loaded" << std::endl;
+        return;
+    }
     
+    int pageCount = m_renderer->GetPageCount();
+    if (pageNumber < 1 || pageNumber > pageCount) {
+        std::cout << "PDFViewerEmbedder::goToPage() - Invalid page number: " << pageNumber << " (valid range: 1-" << pageCount << ")" << std::endl;
+        return;
+    }
     
+    // Convert to 0-based index
+    int pageIndex = pageNumber - 1;
     
+    // Calculate the Y offset to scroll to the target page
+    float targetOffset = 0.0f;
+    
+    // Sum up heights of all pages before the target page
+    for (int i = 0; i < pageIndex && i < (int)m_pageHeights.size(); ++i) {
+        // Add scaled page height (considering current zoom)
+        targetOffset += m_pageHeights[i] * m_scrollState->zoomScale;
+        
+        // Add spacing between pages (typically 10 pixels in window coordinates)
+        targetOffset += 10.0f; // Page spacing
+    }
+    
+    std::cout << "PDFViewerEmbedder::goToPage() - Navigating to page " << pageNumber 
+              << " (index " << pageIndex << "), target offset: " << targetOffset << std::endl;
+    
+    // Set the scroll offset to show the target page at the top
+    m_scrollState->scrollOffset = targetOffset;
+    
+    // Ensure we don't scroll beyond the valid range
+    if (m_scrollState->scrollOffset > m_scrollState->maxOffset) {
+        m_scrollState->scrollOffset = m_scrollState->maxOffset;
+    }
+    if (m_scrollState->scrollOffset < 0.0f) {
+        m_scrollState->scrollOffset = 0.0f;
+    }
+    
+    // Update the scroll state to reflect the new position
+    UpdateScrollState(*m_scrollState, (float)m_windowHeight, m_pageHeights);
+    
+    // Force regeneration of visible textures for the new page range
+    m_needsVisibleRegeneration = true;
+    
+    std::cout << "PDFViewerEmbedder::goToPage() - Successfully navigated to page " << pageNumber 
+              << ", final scroll offset: " << m_scrollState->scrollOffset << std::endl;
 }
 
 void PDFViewerEmbedder::nextPage()
@@ -727,12 +772,14 @@ void PDFViewerEmbedder::rotateRight()
 
 int PDFViewerEmbedder::getPageCount() const
 {
- 
+    if (!m_initialized || !m_pdfLoaded || !m_renderer) return 0;
+    return m_renderer->GetPageCount();
 }
 
 float PDFViewerEmbedder::getCurrentZoom() const
 {
-
+    if (!m_initialized || !m_pdfLoaded || !m_scrollState) return 1.0f;
+    return m_scrollState->zoomScale;
 }
 
 int PDFViewerEmbedder::getCurrentPage() const

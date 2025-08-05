@@ -3,7 +3,11 @@
         <file>images/icons/slit-tab.png</file>
         <file>images/icons/rotate_left.svg</file>
         <file>images/icons/rotate_right.svg</file>
+        <file>images/icons/previous.svg</file>
+        <file>images/icons/next.svg</file>
         <file>images/icons/zoom_in.svg</file>
         <file>images/icons/zoom_out.svg</file>
+        <file>images/icons/rotate_right.svg</file>
+        <file>images/icons/rotate_left.svg</file>
     </qresource>
 </RCC>
