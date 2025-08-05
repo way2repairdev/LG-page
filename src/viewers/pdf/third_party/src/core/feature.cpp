@@ -1735,7 +1735,7 @@ void NavigateToNextSearchResult(PDFScrollState& state, const std::vector<int>& p
     }
     logFile3.close();
     
-    // Use the precise navigation function
+    // Use the precise navigation function with proper window height
     NavigateToSearchResultPrecise(state, pageHeights, state.textSearch.currentResultIndex);
 }
 
@@ -1768,7 +1768,7 @@ void NavigateToPreviousSearchResult(PDFScrollState& state, const std::vector<int
         logFile3 << "  Calling NavigateToSearchResultPrecise with index=" << state.textSearch.currentResultIndex << std::endl;
     }    logFile3.close();
     
-    // Use the precise navigation function
+    // Use the precise navigation function with proper window height
     NavigateToSearchResultPrecise(state, pageHeights, state.textSearch.currentResultIndex);
 }
 
@@ -2036,196 +2036,160 @@ void NavigateToSearchResultPrecise(PDFScrollState& state, const std::vector<int>
     if (logFile.is_open()) {
         logFile << "NavigateToSearchResultPrecise: CALLED for result " << resultIndex << std::endl;
         logFile << "  result.pageIndex=" << result.pageIndex << ", result.charIndex=" << result.charIndex << std::endl;
-        logFile << "  CRITICAL: state.viewportHeight=" << state.viewportHeight << std::endl;
+        logFile << "  Current viewport height=" << state.viewportHeight << std::endl;
+        logFile << "  Current zoom scale=" << state.zoomScale << std::endl;
     }
     logFile.close();
+    
+    // SIMPLIFIED AND ROBUST NAVIGATION ALGORITHM
+    // This uses the SAME coordinate system as your goToPage() function for consistency
+    
+    // Step 1: Calculate page offset (same as goToPage function)
+    float targetPageOffset = 0.0f;
+    for (int i = 0; i < result.pageIndex && i < (int)pageHeights.size(); ++i) {
+        targetPageOffset += pageHeights[i] * state.zoomScale;
+        targetPageOffset += 10.0f; // Page spacing (same as goToPage)
+    }
+    
+    // Step 2: Get text position within the page
+    float textOffsetInPage = 0.0f;
     
     // Get the text page for this result
     if (result.pageIndex < (int)state.textPages.size() && state.textPages[result.pageIndex].isLoaded) {
         FPDF_TEXTPAGE textPage = state.textPages[result.pageIndex].textPage;
         if (textPage) {
-            // Use EXACT same coordinate retrieval as highlighting system
-            // Get text rectangles for this search result (same as highlighting)
+            // Get text rectangles for this search result
             int rectCount = FPDFText_CountRects(textPage, result.charIndex, result.charCount);
             
             if (rectCount > 0) {
-                // Get the first rectangle (for navigation, we just need one position)
+                // Get the first rectangle for navigation positioning
                 double left, top, right, bottom;
-                if (FPDFText_GetRect(textPage, 0, &left, &top, &right, &bottom)) {                    // MATCH RENDERING SYSTEM EXACTLY:
-                    // In the rendering system: yOffset starts at -scrollOffset, then for each page
-                    // yCenter = yOffset + pageH/2, then yOffset += pageH
-                    // This means: pageTopY = -scrollOffset + sum_of_previous_page_heights
-                    // We want the text to appear in the CENTER of viewport for better visibility
-                    float desiredViewportPosition = state.viewportHeight * 0.5f;
-                    
-                    // CRITICAL FIX: Use the EXACT same coordinate system as the highlighting system
-                    // The highlighting system pattern: pageTopY = -scrollOffset, then ADD previous pages
-                    
-                    // Calculate page TOP position using EXACT same logic as highlighting system
-                    // This calculates where the page would be positioned at CURRENT scroll offset
-                    float pageTopY = -state.scrollOffset;
-                    for (int j = 0; j < result.pageIndex; j++) {
-                        pageTopY += (float)pageHeights[j] * state.zoomScale;
-                    }
-                    // Now pageTopY contains the actual screen position of the page top
-                    
-                    // Calculate current page height using RENDERED dimensions (same as rendering)
-                    float pageHeightInScreen = (float)pageHeights[result.pageIndex] * state.zoomScale;
-                    
-                    // Convert PDF coordinate to page-relative coordinate (0.0 to 1.0)
-                    // Use original PDF dimensions for this conversion (PDFium coordinates are in original space)
-                    float originalPageHeight = (float)(*state.originalPageHeights)[result.pageIndex];
-                    float textRelativeTop = (float)(1.0 - top / originalPageHeight); // Flip Y for PDF coordinate system
-                    
-                    // Apply the page height scaling to get position within the rendered page
-                    float textOffsetInPage = textRelativeTop * pageHeightInScreen;
-                    
-                    // Now solve for the required scrollOffset to center the text in viewport:
-                    // Current calculation: textScreenY = pageTopY + textOffsetInPage
-                    // We want: textScreenY = desiredViewportPosition  
-                    // 
-                    // Since pageTopY = -scrollOffset + sum_of_previous_pages
-                    // And textScreenY = pageTopY + textOffsetInPage = (-scrollOffset + sum_of_previous_pages) + textOffsetInPage
-                    // We want: (-scrollOffset + sum_of_previous_pages) + textOffsetInPage = desiredViewportPosition
-                    // 
-                    // We already calculated pageTopY at current scroll offset, so we need to adjust it
-                    // Let sum_of_previous_pages = pageTopY + current_scrollOffset (extract the sum part)
-                    float sumOfPreviousPages = pageTopY + state.scrollOffset;
-                    
-                    // Now solve: (-new_scrollOffset + sumOfPreviousPages) + textOffsetInPage = desiredViewportPosition
-                    // Rearranging: new_scrollOffset = sumOfPreviousPages + textOffsetInPage - desiredViewportPosition
-                    float targetScrollOffset = sumOfPreviousPages + textOffsetInPage - desiredViewportPosition;
-                      // DISABLED: SAME-PAGE NAVIGATION FIX that was causing positioning issues
-                    // The original fix tried to ensure minimum movement but was interfering with precise positioning
-                    // at different zoom levels, causing text to appear "near" but not "at" the correct location.
-                    // 
-                    // Instead, we trust the mathematical calculation to position text correctly.
-                    // If users need more obvious navigation feedback, it should be handled in the UI layer
-                    // (e.g., highlighting animation, scroll indicators) rather than by moving text away from center.
-                    
-                    /*
-                    SAME-PAGE NAVIGATION FIX: Ensure minimum scroll change for same-page results
-                    If the scroll change is too small, the user won't notice the navigation
-                    float currentScrollOffset = state.scrollOffset;
-                    float scrollChange = abs(targetScrollOffset - currentScrollOffset);
-                    
-                    ZOOM-AWARE MINIMUM MOVEMENT: Scale the minimum movement threshold based on zoom level
-                    At high zoom (e.g., 4x), document units are smaller relative to screen pixels
-                    At low zoom (e.g., 0.5x), document units are larger relative to screen pixels
-                    float zoomAwareMinMovement = 100.0f / state.zoomScale; // Inversely proportional to zoom
-                    if (zoomAwareMinMovement < 20.0f) zoomAwareMinMovement = 20.0f; // Minimum 20 pixels
-                    if (zoomAwareMinMovement > 200.0f) zoomAwareMinMovement = 200.0f; // Maximum 200 pixels
-                    
-                    Also make the detection threshold zoom-aware
-                    float zoomAwareThreshold = 100.0f / state.zoomScale;
-                    if (zoomAwareThreshold < 10.0f) zoomAwareThreshold = 10.0f;
-                    if (zoomAwareThreshold > 150.0f) zoomAwareThreshold = 150.0f;
-                    
-                    Check if we're navigating within the same page with small changes
-                    if (scrollChange < zoomAwareThreshold && scrollChange > 1.0f) { // Small but non-zero change
-                        For same-page navigation, ensure the movement is always noticeable
+                if (FPDFText_GetRect(textPage, 0, &left, &top, &right, &bottom)) {
+                    // Convert PDF coordinates to page-relative position
+                    // PDF Y coordinates go from bottom to top, we need top to bottom
+                    if (state.originalPageHeights && result.pageIndex < (int)state.originalPageHeights->size()) {
+                        double originalPageHeight = (*state.originalPageHeights)[result.pageIndex];
                         
-                        if (targetScrollOffset > currentScrollOffset) {
-                            Moving down - ensure we move at least zoomAwareMinMovement pixels
-                            targetScrollOffset = currentScrollOffset + zoomAwareMinMovement;
-                        } else {
-                            Moving up - ensure we move at least zoomAwareMinMovement pixels  
-                            targetScrollOffset = currentScrollOffset - zoomAwareMinMovement;
+                        // Convert PDF Y coordinate (bottom-up) to relative position (top-down)
+                        // top is the Y coordinate from bottom of page
+                        // We want position from top of page
+                        double relativeY = (originalPageHeight - top) / originalPageHeight;
+                        
+                        // Apply to rendered page height
+                        float renderedPageHeight = pageHeights[result.pageIndex] * state.zoomScale;
+                        textOffsetInPage = relativeY * renderedPageHeight;
+                        
+                        std::ofstream logFile2("build/debug.log", std::ios::app);
+                        if (logFile2.is_open()) {
+                            logFile2 << "NavigateToSearchResultPrecise: TEXT POSITIONING" << std::endl;
+                            logFile2 << "  PDF coordinates: left=" << left << ", top=" << top << ", right=" << right << ", bottom=" << bottom << std::endl;
+                            logFile2 << "  Original page height=" << originalPageHeight << " PDF units" << std::endl;
+                            logFile2 << "  Rendered page height=" << renderedPageHeight << " screen pixels" << std::endl;
+                            logFile2 << "  Relative Y position=" << relativeY << " (0=top, 1=bottom)" << std::endl;
+                            logFile2 << "  Text offset in page=" << textOffsetInPage << " pixels from page top" << std::endl;
                         }
-                        
-                        But make sure we don't move the text too far from center
-                        Recalculate to ensure text is still reasonably centered
-                        CRITICAL FIX: Use correct coordinate system formula
-                        textScreenY = (-scrollOffset + sumOfPreviousPages) + textOffsetInPage
-                        float newTextPosition = (-targetScrollOffset + sumOfPreviousPages) + textOffsetInPage;
-                        if (abs(newTextPosition - desiredViewportPosition) > state.viewportHeight * 0.3f) {
-                            If adjustment moved text too far from center, use original calculation
-                            targetScrollOffset = sumOfPreviousPages + textOffsetInPage - desiredViewportPosition;
-                        }
+                        logFile2.close();
                     }
-                    */
-                    
-                    // Clamp to valid scroll range using rendered dimensions (same as highlighting)
-                    float totalDocumentHeight = 0.0f;
-                    for (int h : pageHeights) {
-                        totalDocumentHeight += (float)h * state.zoomScale;
-                    }
-                    float maxPossibleOffset = std::max(0.0f, totalDocumentHeight - state.viewportHeight);
-                    
-                    if (targetScrollOffset < 0.0f) targetScrollOffset = 0.0f;
-                    if (targetScrollOffset > maxPossibleOffset) targetScrollOffset = maxPossibleOffset;
-                    
-                    // Apply the navigation
-                    state.scrollOffset = targetScrollOffset;
-                    state.maxOffset = maxPossibleOffset;
-                    state.preventScrollOffsetOverride = true;
-                    state.forceRedraw = true;
-                    
-                    // Force immediate redraw
-                    glfwPostEmptyEvent();                    // ENHANCED DEBUG LOGGING WITH COORDINATE SYSTEM ANALYSIS
-                    std::ofstream logFile2("build/debug.log", std::ios::app);
-                    if (logFile2.is_open()) {
-                        logFile2 << "NavigateToSearchResultPrecise: CENTERING TEXT IN VIEWPORT" << std::endl;
-                        logFile2 << "  PDF coordinates: left=" << left << ", top=" << top << ", right=" << right << ", bottom=" << bottom << std::endl;
-                        logFile2 << "  Original page height=" << originalPageHeight << std::endl;
-                        logFile2 << "  Rendered page height=" << pageHeights[result.pageIndex] << " (used for positioning)" << std::endl;
-                        logFile2 << "  Page index=" << result.pageIndex << std::endl;
-                        logFile2 << "  Page height in screen=" << pageHeightInScreen << std::endl;
-                        logFile2 << "  Page top at current scroll (pageTopY)=" << pageTopY << std::endl;
-                        logFile2 << "  Sum of previous pages (extracted)=" << sumOfPreviousPages << std::endl;
-                        logFile2 << "  Text relative top (flipped)=" << textRelativeTop << std::endl;
-                        logFile2 << "  Text offset in page=" << textOffsetInPage << std::endl;
-                        logFile2 << "  Desired viewport position (CENTER)=" << desiredViewportPosition << std::endl;
-                        logFile2 << "  Target scroll offset=" << targetScrollOffset << std::endl;
-                        logFile2 << "  Final scroll offset=" << state.scrollOffset << std::endl;
-                        logFile2 << "  Zoom scale=" << state.zoomScale << std::endl;
-                        logFile2 << "  Viewport height=" << state.viewportHeight << std::endl;
-                        logFile2 << "  Max possible offset=" << maxPossibleOffset << std::endl;
-                        logFile2 << "  Total document height=" << totalDocumentHeight << std::endl;
-                        logFile2 << "  Rendered/Original height ratio=" << ((float)pageHeights[result.pageIndex] / originalPageHeight) << std::endl;
-                        
-                        // COORDINATE SYSTEM VERIFICATION
-                        logFile2 << "  COORDINATE SYSTEM VERIFICATION:" << std::endl;
-                        logFile2 << "    PDF Y coordinate (top)=" << top << " (in original PDF space)" << std::endl;
-                        logFile2 << "    Flipped Y coordinate=" << (originalPageHeight - top) << " (bottom-up to top-down)" << std::endl;
-                        logFile2 << "    Text relative position=" << textRelativeTop << " (0=top, 1=bottom of page)" << std::endl;
-                        logFile2 << "    Text position in rendered page=" << textOffsetInPage << " pixels from page top" << std::endl;
-                        logFile2 << "    Expected screen position=" << (pageTopY + textOffsetInPage) << " pixels from document top" << std::endl;
-                        logFile2 << "    After applying scroll offset=" << (-targetScrollOffset + pageTopY + textOffsetInPage) << " pixels from viewport top" << std::endl;
-                        
-                        // NAVIGATION ANALYSIS (using corrected coordinate system)
-                        logFile2 << "  NAVIGATION ANALYSIS:" << std::endl;
-                        logFile2 << "    Mathematical target scroll offset=" << (sumOfPreviousPages + textOffsetInPage - desiredViewportPosition) << std::endl;
-                        logFile2 << "    Final applied scroll offset=" << targetScrollOffset << std::endl;
-                        logFile2 << "    COORDINATE SYSTEM: Now matches highlighting system exactly" << std::endl;
-                        
-                        // VERIFICATION: what will the highlighting system calculate after this navigation?
-                        float verifySumOfPreviousPages = sumOfPreviousPages; // This is the sum we extracted
-                        float verifyPageTopY = -targetScrollOffset + verifySumOfPreviousPages;
-                        float verifyTextScreenTop = verifyPageTopY + textOffsetInPage;
-                        logFile2 << "  VERIFICATION: After navigation, highlighting will calculate:" << std::endl;
-                        logFile2 << "    pageTopY = " << verifyPageTopY << std::endl;
-                        logFile2 << "    textScreenTop = " << verifyTextScreenTop << std::endl;
-                        logFile2 << "    Should equal desired position (CENTER) = " << desiredViewportPosition << std::endl;
-                        logFile2 << "    Difference = " << (verifyTextScreenTop - desiredViewportPosition) << std::endl;
-                        logFile2 << "    Distance from viewport center = " << (verifyTextScreenTop - (state.viewportHeight * 0.5f)) << std::endl;
-                    }
-                    logFile2.close();
-                } else {
-                    std::ofstream logFile3("build/debug.log", std::ios::app);
-                    if (logFile3.is_open()) {
-                        logFile3 << "NavigateToSearchResultPrecise: FAILED to get text rect for charIndex=" << result.charIndex << std::endl;
-                    }
-                    logFile3.close();
                 }
-            } else {
-                std::ofstream logFile4("build/debug.log", std::ios::app);
-                if (logFile4.is_open()) {
-                    logFile4 << "NavigateToSearchResultPrecise: No text rectangles found for charIndex=" << result.charIndex << ", charCount=" << result.charCount << std::endl;
-                }
-                logFile4.close();
             }
         }
     }
+    
+    // Step 3: Calculate final scroll offset to center text in viewport
+    // We want the text to appear in the center of the viewport
+    float centerY = state.viewportHeight * 0.4f; // Adjusted to 40% from top rather than center
+                                               // This positions text in the upper portion of viewport for better readability
+    
+    // Total offset to the text = page offset + text offset within page
+    float totalTextOffset = targetPageOffset + textOffsetInPage;
+    
+    // To center the text: scrollOffset should position text at centerY
+    // scrollOffset makes content move up, so: 
+    // textScreenPosition = totalTextOffset - scrollOffset
+    // We want: textScreenPosition = centerY
+    // Therefore: scrollOffset = totalTextOffset - centerY
+    float targetScrollOffset = totalTextOffset - centerY;
+    
+    // For high zoom levels, add a small offset to ensure text is fully visible
+    if (state.zoomScale > 2.0f) {
+        // At higher zoom, we need to provide more context above the found text
+        // This adjusts the text position further down in the viewport
+        float zoomAdjustment = std::min(50.0f, 25.0f * (state.zoomScale - 2.0f));
+        targetScrollOffset -= zoomAdjustment;
+    }
+    
+    // Step 4: Clamp to valid scroll range
+    // Calculate max scroll offset
+    float totalDocumentHeight = 0.0f;
+    for (int h : pageHeights) {
+        totalDocumentHeight += h * state.zoomScale;
+        totalDocumentHeight += 10.0f; // Page spacing
+    }
+    totalDocumentHeight -= 10.0f; // Remove last spacing
+    
+    float maxScrollOffset = std::max(0.0f, totalDocumentHeight - state.viewportHeight);
+    
+    // Clamp the target scroll offset
+    if (targetScrollOffset < 0.0f) targetScrollOffset = 0.0f;
+    if (targetScrollOffset > maxScrollOffset) targetScrollOffset = maxScrollOffset;
+    
+    // Step 5: Apply the navigation
+    state.scrollOffset = targetScrollOffset;
+    state.maxOffset = maxScrollOffset;
+    state.preventScrollOffsetOverride = true;
+    state.forceRedraw = true;
+    
+    // Force immediate redraw
+    glfwPostEmptyEvent();
+    
+    // Final debug output
+    std::ofstream logFile3("build/debug.log", std::ios::app);
+    if (logFile3.is_open()) {
+        logFile3 << "NavigateToSearchResultPrecise: NAVIGATION COMPLETED" << std::endl;
+        logFile3 << "  Target page offset=" << targetPageOffset << std::endl;
+        logFile3 << "  Text offset in page=" << textOffsetInPage << std::endl;
+        logFile3 << "  Total text offset=" << totalTextOffset << std::endl;
+        logFile3 << "  Viewport center Y=" << centerY << std::endl;
+        logFile3 << "  Target scroll offset=" << targetScrollOffset << std::endl;
+        logFile3 << "  Max scroll offset=" << maxScrollOffset << std::endl;
+        logFile3 << "  Final scroll offset=" << state.scrollOffset << std::endl;
+        logFile3 << "  Expected text screen position=" << (totalTextOffset - state.scrollOffset) << std::endl;
+        logFile3 << "  Distance from center=" << std::abs((totalTextOffset - state.scrollOffset) - centerY) << std::endl;
+        
+        // Enhanced debug info for visual positioning analysis
+        logFile3 << std::endl << "VIEWPORT POSITIONING ANALYSIS:" << std::endl;
+        logFile3 << "  Viewport height=" << state.viewportHeight << std::endl;
+        logFile3 << "  Current zoom scale=" << state.zoomScale << std::endl;
+        logFile3 << "  Page=" << result.pageIndex + 1 << " of " << pageHeights.size() << std::endl;
+        
+        // Calculate viewport regions for debugging where text will appear
+        float viewportTop = 0.0f;
+        float viewportBottom = state.viewportHeight;
+        float viewportQuarter = state.viewportHeight * 0.25f;
+        float viewportMiddle = state.viewportHeight * 0.5f;
+        float viewportThreeQuarters = state.viewportHeight * 0.75f;
+        
+        float finalTextPosition = totalTextOffset - state.scrollOffset;
+        std::string textPosition;
+        
+        if (finalTextPosition < viewportQuarter) {
+            textPosition = "TOP QUARTER";
+        } else if (finalTextPosition < viewportMiddle) {
+            textPosition = "UPPER HALF";
+        } else if (finalTextPosition < viewportThreeQuarters) {
+            textPosition = "LOWER HALF";
+        } else {
+            textPosition = "BOTTOM QUARTER";
+        }
+        
+        logFile3 << "  Text will appear in: " << textPosition << " of viewport" << std::endl;
+        logFile3 << "  Distance from top of viewport: " << finalTextPosition << " pixels" << std::endl;
+        logFile3 << "  % of viewport height: " << (finalTextPosition / state.viewportHeight) * 100.0f << "%" << std::endl;
+        
+        if (state.zoomScale > 2.0f) {
+            logFile3 << "  High zoom adjustment applied: " << std::min(50.0f, 25.0f * (state.zoomScale - 2.0f)) << " pixels" << std::endl;
+        }
+    }
+    logFile3.close();
 }
 
