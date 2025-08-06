@@ -544,18 +544,6 @@ void MainApplication::openPCBInTab(const QString &filePath)
         QMessageBox::warning(this, "PCB Error", error);
     });
     
-    connect(pcbViewer, &PCBViewerWidget::statusMessage, this, [this](const QString &message) {
-        statusBar()->showMessage("PCB: " + message);
-    });
-    
-    connect(pcbViewer, &PCBViewerWidget::zoomChanged, this, [this](double zoomLevel) {
-        statusBar()->showMessage(QString("PCB Zoom: %1%").arg(static_cast<int>(zoomLevel * 100)));
-    });
-    
-    connect(pcbViewer, &PCBViewerWidget::pinSelected, this, [this](const QString &pinName, const QString &netName) {
-        statusBar()->showMessage(QString("PCB: Selected pin %1 on net %2").arg(pinName, netName));
-    });
-    
     // Add PCB viewer to PCB tab row
     QString tabName = fileInfo.fileName();
     QIcon tabIcon = getFileIcon(filePath);

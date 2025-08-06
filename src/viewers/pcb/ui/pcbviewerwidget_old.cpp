@@ -13,6 +13,10 @@
 #include <QApplication>
 #include <QStyle>
 #include <QSizePolicy>
+#include <QGroupBox>
+#include <QCheckBox>
+#include <QSpinBox>
+#include <QSplitter>
 
 // Enhanced debug logging for PCBViewerWidget
 void WritePCBDebugToFile(const QString& message) {
@@ -130,12 +134,6 @@ void PCBViewerWidget::closePCB()
 {
     WritePCBDebugToFile("Closing PCB");
     
-    // Stop update timer
-    if (m_updateTimer->isActive()) {
-        m_updateTimer->stop();
-    }
-    
-    // Close PCB in embedder
     if (m_pcbEmbedder) {
         m_pcbEmbedder->closePCB();
     }
@@ -158,17 +156,138 @@ QString PCBViewerWidget::getCurrentFilePath() const
     return m_currentFilePath;
 }
 
+void PCBViewerWidget::zoomIn()
+{
+    WritePCBDebugToFile("Zoom in requested");
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->zoomIn();
+    }
+}
+
+void PCBViewerWidget::zoomOut()
+{
+    WritePCBDebugToFile("Zoom out requested");
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->zoomOut();
+    }
+}
+
+void PCBViewerWidget::zoomToFit()
+{
+    WritePCBDebugToFile("Zoom to fit requested");
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->zoomToFit();
+    }
+}
+
+void PCBViewerWidget::resetView()
+{
+    WritePCBDebugToFile("Reset view requested");
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->resetView();
+    }
+}
+
+void PCBViewerWidget::setZoomLevel(double zoom)
+{
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->setZoomLevel(zoom);
+    }
+}
+
+double PCBViewerWidget::getZoomLevel() const
+{
+    if (m_pcbEmbedder) {
+        return m_pcbEmbedder->getZoomLevel();
+    }
+    return 1.0;
+}
+
+void PCBViewerWidget::clearSelection()
+{
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->clearSelection();
+    }
+}
+
+QString PCBViewerWidget::getSelectedPinInfo() const
+{
+    if (m_pcbEmbedder) {
+        return QString::fromStdString(m_pcbEmbedder->getSelectedPinInfo());
+    }
+    return QString();
+}
+
+QStringList PCBViewerWidget::getComponentList() const
+{
+    QStringList components;
+    if (m_pcbEmbedder) {
+        auto componentList = m_pcbEmbedder->getComponentList();
+        for (const auto& component : componentList) {
+            components.append(QString::fromStdString(component));
+        }
+    }
+    return components;
+}
+
+QStringList PCBViewerWidget::getLayerNames() const
+{
+    QStringList layers;
+    if (m_pcbEmbedder) {
+        auto layerList = m_pcbEmbedder->getLayerNames();
+        for (const auto& layer : layerList) {
+            layers.append(QString::fromStdString(layer));
+        }
+    }
+    return layers;
+}
+
 void PCBViewerWidget::setToolbarVisible(bool visible)
 {
     WritePCBDebugToFile("Setting PCB toolbar visible: " + QString(visible ? "true" : "false"));
+    qDebug() << "PCB setToolbarVisible called with visible:" << visible;
     
     m_toolbarVisible = visible;
     if (m_toolbar) {
-        m_toolbar->setVisible(visible);
-        m_toolbar->setEnabled(visible);
+        // Aggressive toolbar management
+        if (visible) {
+            WritePCBDebugToFile("Showing PCB toolbar");
+            qDebug() << "Showing PCB toolbar";
+            
+            m_toolbar->setVisible(true);
+            m_toolbar->raise(); // Bring toolbar to front when showing
+            m_toolbar->setEnabled(true);
+            m_toolbar->activateWindow();
+            m_toolbar->update(); // Force repaint
+            
+            // Ensure parent widget is also visible and raised
+            this->setVisible(true);
+            this->raise();
+            
+        } else {
+            WritePCBDebugToFile("Hiding PCB toolbar");
+            qDebug() << "Hiding PCB toolbar";
+            
+            m_toolbar->setVisible(false);
+            m_toolbar->lower(); // Send toolbar to back when hiding
+            m_toolbar->setEnabled(false);
+            m_toolbar->clearFocus();
+        }
         
+        // Force layout recalculation with multiple update cycles
         updateGeometry();
         update();
+        repaint(); // Force immediate repaint
+        
+        // Process events to ensure UI update
+        QApplication::processEvents();
+        
+        qDebug() << "PCB toolbar visibility set to:" << m_toolbar->isVisible();
+        WritePCBDebugToFile("PCB toolbar visibility: " + QString(m_toolbar->isVisible() ? "true" : "false"));
+        
+    } else {
+        WritePCBDebugToFile("PCB toolbar is null!");
+        qDebug() << "PCB toolbar is null!";
     }
 }
 
@@ -177,9 +296,20 @@ bool PCBViewerWidget::isToolbarVisible() const
     return m_toolbarVisible;
 }
 
-QToolBar* PCBViewerWidget::getToolbar() const
+void PCBViewerWidget::setImGuiUIEnabled(bool enabled)
 {
-    return m_toolbar;
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->setImGuiUIEnabled(enabled);
+        WritePCBDebugToFile("ImGui UI " + QString(enabled ? "enabled" : "disabled"));
+    }
+}
+
+bool PCBViewerWidget::isImGuiUIEnabled() const
+{
+    if (m_pcbEmbedder) {
+        return m_pcbEmbedder->isImGuiUIEnabled();
+    }
+    return false;
 }
 
 // Public slots
@@ -218,27 +348,35 @@ void PCBViewerWidget::resizeEvent(QResizeEvent *event)
 
 void PCBViewerWidget::showEvent(QShowEvent *event)
 {
-    WritePCBDebugToFile("PCB widget show event");
+    WritePCBDebugToFile("PCB widget shown");
+    
     QWidget::showEvent(event);
     
-    if (m_pcbEmbedder) {
-        m_pcbEmbedder->show();
+    if (!m_viewerInitialized) {
+        initializePCBViewer();
     }
     
-    if (!m_updateTimer->isActive() && m_pcbLoaded) {
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->setVisible(true);
+    }
+    
+    // Start update timer
+    if (!m_updateTimer->isActive()) {
         m_updateTimer->start();
     }
 }
 
 void PCBViewerWidget::hideEvent(QHideEvent *event)
 {
-    WritePCBDebugToFile("PCB widget hide event");
+    WritePCBDebugToFile("PCB widget hidden");
+    
     QWidget::hideEvent(event);
     
     if (m_pcbEmbedder) {
-        m_pcbEmbedder->hide();
+        m_pcbEmbedder->setVisible(false);
     }
     
+    // Stop update timer to save resources
     if (m_updateTimer->isActive()) {
         m_updateTimer->stop();
     }
@@ -246,20 +384,28 @@ void PCBViewerWidget::hideEvent(QHideEvent *event)
 
 void PCBViewerWidget::paintEvent(QPaintEvent *event)
 {
-    QPainter painter(this);
-    painter.fillRect(rect(), Qt::white);
+    // For embedded GLFW window, we don't need to paint anything
+    // The GLFW window handles its own rendering
+    if (m_usingFallback) {
+        // In fallback mode, we might want to draw something
+        QPainter painter(this);
+        painter.fillRect(rect(), QColor(64, 64, 64));
+        painter.setPen(QColor(200, 200, 200));
+        painter.drawText(rect(), Qt::AlignCenter, "PCB Viewer\n(Fallback Mode)");
+    }
+    
     QWidget::paintEvent(event);
 }
 
 void PCBViewerWidget::focusInEvent(QFocusEvent *event)
 {
-    WritePCBDebugToFile("PCB widget focus in");
+    WritePCBDebugToFile("PCB widget gained focus");
     QWidget::focusInEvent(event);
 }
 
 void PCBViewerWidget::focusOutEvent(QFocusEvent *event)
 {
-    WritePCBDebugToFile("PCB widget focus out");
+    WritePCBDebugToFile("PCB widget lost focus");
     QWidget::focusOutEvent(event);
 }
 
@@ -275,6 +421,11 @@ void PCBViewerWidget::onPCBViewerError(const QString &error)
 
 void PCBViewerWidget::initializePCBViewer()
 {
+    if (m_viewerInitialized) {
+        WritePCBDebugToFile("PCB viewer already initialized");
+        return;
+    }
+    
     WritePCBDebugToFile("Initializing PCB viewer");
     
     if (!m_pcbEmbedder) {
@@ -282,23 +433,32 @@ void PCBViewerWidget::initializePCBViewer()
         return;
     }
     
-    // Get window handle for embedding
-    WId windowHandle = m_viewerContainer ? m_viewerContainer->winId() : winId();
+    // Get the window handle for embedding
+    void* windowHandle = nullptr;
+    if (m_viewerContainer) {
+        windowHandle = reinterpret_cast<void*>(m_viewerContainer->winId());
+    } else {
+        windowHandle = reinterpret_cast<void*>(winId());
+    }
+    
+    // Get the size for initialization
     QSize containerSize = m_viewerContainer ? m_viewerContainer->size() : size();
     
-    // Setup callbacks
+    // Set up callbacks before initialization
     m_pcbEmbedder->setErrorCallback([this](const std::string& error) {
         QMetaObject::invokeMethod(this, [this, error]() {
             onPCBViewerError(QString::fromStdString(error));
         }, Qt::QueuedConnection);
     });
     
-    // Disable ImGui UI - use external Qt toolbar only
+    // Other callbacks removed for blank toolbar
+    
+    // Disable ImGui UI - use Qt toolbar instead
     m_pcbEmbedder->setImGuiUIEnabled(false);
-    WritePCBDebugToFile("ImGui UI disabled - using external Qt toolbar only");
+    WritePCBDebugToFile("ImGui UI disabled - using Qt toolbar only");
     
     // Initialize the embedder
-    bool success = m_pcbEmbedder->initialize(reinterpret_cast<void*>(windowHandle), containerSize.width(), containerSize.height());
+    bool success = m_pcbEmbedder->initialize(windowHandle, containerSize.width(), containerSize.height());
     
     if (success) {
         m_viewerInitialized = true;
@@ -320,7 +480,7 @@ void PCBViewerWidget::setupUI()
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
     m_mainLayout->setSpacing(0);
     
-    // Setup toolbar (hidden - external toolbar only)
+    // Setup toolbar
     setupToolbar();
     
     // Create viewer container
@@ -329,57 +489,33 @@ void PCBViewerWidget::setupUI()
     m_viewerContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_viewerContainer->setFocusPolicy(Qt::StrongFocus);
     
-    // Add toolbar and viewer container to main layout
+    // Add widgets to main layout
     if (m_toolbar) {
         m_mainLayout->addWidget(m_toolbar);
     }
     m_mainLayout->addWidget(m_viewerContainer, 1);
     
-    WritePCBDebugToFile("PCB viewer UI setup completed - blank Qt toolbar added");
+    WritePCBDebugToFile("PCB viewer UI setup completed");
 }
 
 void PCBViewerWidget::setupToolbar()
 {
-    WritePCBDebugToFile("Setting up PCB viewer Qt toolbar with PDF viewer styling");
+    WritePCBDebugToFile("Setting up blank PCB viewer toolbar");
     
-    // Create toolbar with same specifications as PDF viewer
     m_toolbar = new QToolBar(this);
-    m_toolbar->setFixedHeight(30);
-    m_toolbar->setIconSize(QSize(30, 30));  // Adjust icon size for 30px height
+    m_toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    m_toolbar->setFloatable(false);
+    m_toolbar->setMovable(false);
+    m_toolbar->setFixedHeight(42); // Fixed height to prevent layout issues
+    
+    // Set toolbar-wide stylesheet for blank appearance
     m_toolbar->setStyleSheet(
-        "QToolBar {"
-        "    background-color: #ffffff;"
-        "    border: none;"
-        "    border-bottom: 1px solid #d0d0d0;"
-        "    spacing: 5px;"
-        "    padding: 4px;"
-        "}"
-        "QToolButton {"
-        "    background-color: transparent;"
-        "    border: 1px solid transparent;"
-        "    border-radius: 2px;"
-        "    padding: 4px;"
-        "    min-width: 30px;"
-        "    min-height: 20px;"
-        "    font-size: 16px;"
-        "}"
-        "QToolButton:hover {"
-        "    background-color: #e6f3ff;"
-        "    border-color: #b3d9ff;"
-        "}"
-        "QToolButton:pressed {"
-        "    background-color: #cce7ff;"
-        "    border-color: #99ccff;"
-        "}"
+        "QToolBar { spacing: 0px; padding: 0px; background-color: #f0f0f0; }"
     );
     
-    // Add split window icon (same as PDF viewer)
-    QAction* splitWindowAction = m_toolbar->addAction(QIcon(":/icons/images/icons/slit-tab.png"), "");
-    splitWindowAction->setToolTip("Split Window");
-    splitWindowAction->setObjectName("splitWindowAction");
+    // No controls added - blank toolbar
     
-    WritePCBDebugToFile("Split window icon added to PCB toolbar");
-    WritePCBDebugToFile("PCB Qt toolbar setup completed with PDF viewer styling");
+    WritePCBDebugToFile("Blank PCB viewer toolbar setup completed");
 }
 
 void PCBViewerWidget::connectSignals()
@@ -389,4 +525,78 @@ void PCBViewerWidget::connectSignals()
     // No toolbar actions to connect - blank toolbar
     
     WritePCBDebugToFile("PCB viewer signals connected - blank toolbar");
+}
+
+void PCBViewerWidget::updateToolbarState()
+{
+    WritePCBDebugToFile("Updating toolbar state");
+    
+    // No toolbar controls to update - blank toolbar
+}
+
+void PCBViewerWidget::updateZoomSlider()
+{
+    // Method now empty since zoom slider was removed
+    // This method is kept for compatibility but does nothing
+}
+
+void PCBViewerWidget::handleViewerError(const QString &error)
+{
+    WritePCBDebugToFile("Handling viewer error: " + error);
+    emit errorOccurred(error);
+}
+
+void PCBViewerWidget::handleViewerStatus(const QString &status)
+{
+    WritePCBDebugToFile("Handling viewer status: " + status);
+}
+
+// Placeholder implementations for future features
+
+void PCBViewerWidget::showLayer(const QString &layerName, bool visible)
+{
+    WritePCBDebugToFile(QString("Show layer %1: %2").arg(layerName).arg(visible));
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->showLayer(layerName.toStdString(), visible);
+    }
+}
+
+void PCBViewerWidget::showAllLayers()
+{
+    WritePCBDebugToFile("Show all layers");
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->showAllLayers();
+    }
+}
+
+void PCBViewerWidget::hideAllLayers()
+{
+    WritePCBDebugToFile("Hide all layers");
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->hideAllLayers();
+    }
+}
+
+void PCBViewerWidget::highlightComponent(const QString &reference)
+{
+    WritePCBDebugToFile("Highlight component: " + reference);
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->highlightComponent(reference.toStdString());
+    }
+}
+
+void PCBViewerWidget::highlightNet(const QString &netName)
+{
+    WritePCBDebugToFile("Highlight net: " + netName);
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->highlightNet(netName.toStdString());
+    }
+}
+
+void PCBViewerWidget::clearHighlights()
+{
+    WritePCBDebugToFile("Clear highlights");
+    if (m_pcbEmbedder) {
+        m_pcbEmbedder->clearHighlights();
+    }
 }

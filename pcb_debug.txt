@@ -888,3 +888,564 @@
 [PCB-DEBUG] Setting PCB toolbar visible: true
 [PCB-DEBUG] Showing PCB toolbar
 [PCB-DEBUG] PCB toolbar visibility: false
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI
+[PCB-DEBUG] Setting up blank PCB viewer toolbar
+[PCB-DEBUG] Blank PCB viewer toolbar setup completed
+[PCB-DEBUG] PCB viewer UI setup completed
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected - blank toolbar
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget resized to 1503x865
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/demo.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 382x817
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget resized to 733x817
+[PCB-DEBUG] PCB widget resized to 933x847
+[PCB-DEBUG] PCB widget resized to 930x847
+[PCB-DEBUG] PCB widget resized to 933x847
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI
+[PCB-DEBUG] Setting up blank PCB viewer toolbar
+[PCB-DEBUG] Blank PCB viewer toolbar setup completed
+[PCB-DEBUG] PCB viewer UI setup completed
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected - blank toolbar
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1503x947
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/demo.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI
+[PCB-DEBUG] Setting up blank PCB viewer toolbar
+[PCB-DEBUG] Blank PCB viewer toolbar setup completed
+[PCB-DEBUG] PCB viewer UI setup completed
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected - blank toolbar
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/iPhone15Pro_ProMax AP+BB Boardview.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 382x817
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget resized to 733x817
+[PCB-DEBUG] PCB widget resized to 933x847
+[PCB-DEBUG] PCB widget resized to 930x847
+[PCB-DEBUG] PCB widget resized to 933x847
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1908x865
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget resized to 382x817
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget resized to 733x817
+[PCB-DEBUG] PCB widget resized to 933x847
+[PCB-DEBUG] PCB widget resized to 930x847
+[PCB-DEBUG] PCB widget resized to 933x847
+[PCB-DEBUG] PCB widget resized to 733x847
+[PCB-DEBUG] PCB widget resized to 730x847
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI
+[PCB-DEBUG] Setting up blank PCB viewer Qt toolbar
+[PCB-DEBUG] Blank PCB Qt toolbar setup completed
+[PCB-DEBUG] PCB viewer UI setup completed - blank Qt toolbar added
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected - blank toolbar
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1503x947
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/demo.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] PCB widget resized to 1506x906
+[PCB-DEBUG] PCB widget resized to 1510x906
+[PCB-DEBUG] PCB widget resized to 1513x906
+[PCB-DEBUG] PCB widget resized to 1526x906
+[PCB-DEBUG] PCB widget resized to 1535x906
+[PCB-DEBUG] PCB widget resized to 1541x906
+[PCB-DEBUG] PCB widget resized to 1542x906
+[PCB-DEBUG] PCB widget resized to 1545x906
+[PCB-DEBUG] PCB widget resized to 1546x906
+[PCB-DEBUG] PCB widget resized to 1552x906
+[PCB-DEBUG] PCB widget resized to 1557x906
+[PCB-DEBUG] PCB widget resized to 1560x906
+[PCB-DEBUG] PCB widget resized to 1570x906
+[PCB-DEBUG] PCB widget resized to 1572x906
+[PCB-DEBUG] PCB widget resized to 1579x906
+[PCB-DEBUG] PCB widget resized to 1583x906
+[PCB-DEBUG] PCB widget resized to 1588x906
+[PCB-DEBUG] PCB widget resized to 1592x906
+[PCB-DEBUG] PCB widget resized to 1600x906
+[PCB-DEBUG] PCB widget resized to 1604x906
+[PCB-DEBUG] PCB widget resized to 1611x906
+[PCB-DEBUG] PCB widget resized to 1616x906
+[PCB-DEBUG] PCB widget resized to 1623x906
+[PCB-DEBUG] PCB widget resized to 1627x906
+[PCB-DEBUG] PCB widget resized to 1631x906
+[PCB-DEBUG] PCB widget resized to 1633x906
+[PCB-DEBUG] PCB widget resized to 1643x906
+[PCB-DEBUG] PCB widget resized to 1648x906
+[PCB-DEBUG] PCB widget resized to 1651x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1903x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1903x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1648x906
+[PCB-DEBUG] PCB widget resized to 1635x906
+[PCB-DEBUG] PCB widget resized to 1620x906
+[PCB-DEBUG] PCB widget resized to 1612x906
+[PCB-DEBUG] PCB widget resized to 1610x906
+[PCB-DEBUG] PCB widget resized to 1608x906
+[PCB-DEBUG] PCB widget resized to 1595x906
+[PCB-DEBUG] PCB widget resized to 1590x906
+[PCB-DEBUG] PCB widget resized to 1554x906
+[PCB-DEBUG] PCB widget resized to 1511x906
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget resized to 1505x906
+[PCB-DEBUG] PCB widget resized to 1529x906
+[PCB-DEBUG] PCB widget resized to 1547x906
+[PCB-DEBUG] PCB widget resized to 1626x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1903x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1650x906
+[PCB-DEBUG] PCB widget resized to 1644x906
+[PCB-DEBUG] PCB widget resized to 1641x906
+[PCB-DEBUG] PCB widget resized to 1635x906
+[PCB-DEBUG] PCB widget resized to 1634x906
+[PCB-DEBUG] PCB widget resized to 1633x906
+[PCB-DEBUG] PCB widget resized to 1630x906
+[PCB-DEBUG] PCB widget resized to 1628x906
+[PCB-DEBUG] PCB widget resized to 1610x906
+[PCB-DEBUG] PCB widget resized to 1597x906
+[PCB-DEBUG] PCB widget resized to 1589x906
+[PCB-DEBUG] PCB widget resized to 1583x906
+[PCB-DEBUG] PCB widget resized to 1581x906
+[PCB-DEBUG] PCB widget resized to 1580x906
+[PCB-DEBUG] PCB widget resized to 1577x906
+[PCB-DEBUG] PCB widget resized to 1571x906
+[PCB-DEBUG] PCB widget resized to 1559x906
+[PCB-DEBUG] PCB widget resized to 1541x906
+[PCB-DEBUG] PCB widget resized to 1513x906
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget resized to 1513x906
+[PCB-DEBUG] PCB widget resized to 1541x906
+[PCB-DEBUG] PCB widget resized to 1566x906
+[PCB-DEBUG] PCB widget resized to 1580x906
+[PCB-DEBUG] PCB widget resized to 1585x906
+[PCB-DEBUG] PCB widget resized to 1596x906
+[PCB-DEBUG] PCB widget resized to 1597x906
+[PCB-DEBUG] PCB widget resized to 1598x906
+[PCB-DEBUG] PCB widget resized to 1600x906
+[PCB-DEBUG] PCB widget resized to 1603x906
+[PCB-DEBUG] PCB widget resized to 1604x906
+[PCB-DEBUG] PCB widget resized to 1605x906
+[PCB-DEBUG] PCB widget resized to 1609x906
+[PCB-DEBUG] PCB widget resized to 1614x906
+[PCB-DEBUG] PCB widget resized to 1622x906
+[PCB-DEBUG] PCB widget resized to 1630x906
+[PCB-DEBUG] PCB widget resized to 1634x906
+[PCB-DEBUG] PCB widget resized to 1650x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1903x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1650x906
+[PCB-DEBUG] PCB widget resized to 1599x906
+[PCB-DEBUG] PCB widget resized to 1563x906
+[PCB-DEBUG] PCB widget resized to 1538x906
+[PCB-DEBUG] PCB widget resized to 1525x906
+[PCB-DEBUG] PCB widget resized to 1523x906
+[PCB-DEBUG] PCB widget resized to 1522x906
+[PCB-DEBUG] PCB widget resized to 1524x906
+[PCB-DEBUG] PCB widget resized to 1529x906
+[PCB-DEBUG] PCB widget resized to 1543x906
+[PCB-DEBUG] PCB widget resized to 1567x906
+[PCB-DEBUG] PCB widget resized to 1575x906
+[PCB-DEBUG] PCB widget resized to 1599x906
+[PCB-DEBUG] PCB widget resized to 1611x906
+[PCB-DEBUG] PCB widget resized to 1646x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1643x906
+[PCB-DEBUG] PCB widget resized to 1604x906
+[PCB-DEBUG] PCB widget resized to 1571x906
+[PCB-DEBUG] PCB widget resized to 1543x906
+[PCB-DEBUG] PCB widget resized to 1521x906
+[PCB-DEBUG] PCB widget resized to 1511x906
+[PCB-DEBUG] PCB widget resized to 1509x906
+[PCB-DEBUG] PCB widget resized to 1513x906
+[PCB-DEBUG] PCB widget resized to 1526x906
+[PCB-DEBUG] PCB widget resized to 1531x906
+[PCB-DEBUG] PCB widget resized to 1553x906
+[PCB-DEBUG] PCB widget resized to 1561x906
+[PCB-DEBUG] PCB widget resized to 1586x906
+[PCB-DEBUG] PCB widget resized to 1594x906
+[PCB-DEBUG] PCB widget resized to 1614x906
+[PCB-DEBUG] PCB widget resized to 1628x906
+[PCB-DEBUG] PCB widget resized to 1637x906
+[PCB-DEBUG] PCB widget resized to 1639x906
+[PCB-DEBUG] PCB widget resized to 1637x906
+[PCB-DEBUG] PCB widget resized to 1629x906
+[PCB-DEBUG] PCB widget resized to 1616x906
+[PCB-DEBUG] PCB widget resized to 1599x906
+[PCB-DEBUG] PCB widget resized to 1592x906
+[PCB-DEBUG] PCB widget resized to 1573x906
+[PCB-DEBUG] PCB widget resized to 1567x906
+[PCB-DEBUG] PCB widget resized to 1550x906
+[PCB-DEBUG] PCB widget resized to 1544x906
+[PCB-DEBUG] PCB widget resized to 1535x906
+[PCB-DEBUG] PCB widget resized to 1532x906
+[PCB-DEBUG] PCB widget resized to 1535x906
+[PCB-DEBUG] PCB widget resized to 1549x906
+[PCB-DEBUG] PCB widget resized to 1554x906
+[PCB-DEBUG] PCB widget resized to 1585x906
+[PCB-DEBUG] PCB widget resized to 1610x906
+[PCB-DEBUG] PCB widget resized to 1633x906
+[PCB-DEBUG] PCB widget resized to 1646x906
+[PCB-DEBUG] PCB widget resized to 1649x906
+[PCB-DEBUG] PCB widget resized to 1651x906
+[PCB-DEBUG] PCB widget resized to 1648x906
+[PCB-DEBUG] PCB widget resized to 1639x906
+[PCB-DEBUG] PCB widget resized to 1633x906
+[PCB-DEBUG] PCB widget resized to 1603x906
+[PCB-DEBUG] PCB widget resized to 1594x906
+[PCB-DEBUG] PCB widget resized to 1562x906
+[PCB-DEBUG] PCB widget resized to 1553x906
+[PCB-DEBUG] PCB widget resized to 1529x906
+[PCB-DEBUG] PCB widget resized to 1519x906
+[PCB-DEBUG] PCB widget resized to 1516x906
+[PCB-DEBUG] PCB widget resized to 1514x906
+[PCB-DEBUG] PCB widget resized to 1513x906
+[PCB-DEBUG] PCB widget resized to 1514x906
+[PCB-DEBUG] PCB widget resized to 1530x906
+[PCB-DEBUG] PCB widget resized to 1555x906
+[PCB-DEBUG] PCB widget resized to 1597x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1645x906
+[PCB-DEBUG] PCB widget resized to 1614x906
+[PCB-DEBUG] PCB widget resized to 1565x906
+[PCB-DEBUG] PCB widget resized to 1514x906
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget resized to 1519x906
+[PCB-DEBUG] PCB widget resized to 1578x906
+[PCB-DEBUG] PCB widget resized to 1597x906
+[PCB-DEBUG] PCB widget resized to 1650x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1642x906
+[PCB-DEBUG] PCB widget resized to 1590x906
+[PCB-DEBUG] PCB widget resized to 1546x906
+[PCB-DEBUG] PCB widget resized to 1509x906
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget resized to 1527x906
+[PCB-DEBUG] PCB widget resized to 1555x906
+[PCB-DEBUG] PCB widget resized to 1568x906
+[PCB-DEBUG] PCB widget resized to 1616x906
+[PCB-DEBUG] PCB widget resized to 1650x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1644x906
+[PCB-DEBUG] PCB widget resized to 1612x906
+[PCB-DEBUG] PCB widget resized to 1601x906
+[PCB-DEBUG] PCB widget resized to 1561x906
+[PCB-DEBUG] PCB widget resized to 1535x906
+[PCB-DEBUG] PCB widget resized to 1527x906
+[PCB-DEBUG] PCB widget resized to 1528x906
+[PCB-DEBUG] PCB widget resized to 1532x906
+[PCB-DEBUG] PCB widget resized to 1550x906
+[PCB-DEBUG] PCB widget resized to 1574x906
+[PCB-DEBUG] PCB widget resized to 1593x906
+[PCB-DEBUG] PCB widget resized to 1602x906
+[PCB-DEBUG] PCB widget resized to 1613x906
+[PCB-DEBUG] PCB widget resized to 1617x906
+[PCB-DEBUG] PCB widget resized to 1620x906
+[PCB-DEBUG] PCB widget resized to 1619x906
+[PCB-DEBUG] PCB widget resized to 1614x906
+[PCB-DEBUG] PCB widget resized to 1610x906
+[PCB-DEBUG] PCB widget resized to 1582x906
+[PCB-DEBUG] PCB widget resized to 1566x906
+[PCB-DEBUG] PCB widget resized to 1558x906
+[PCB-DEBUG] PCB widget resized to 1526x906
+[PCB-DEBUG] PCB widget resized to 1514x906
+[PCB-DEBUG] PCB widget resized to 1516x906
+[PCB-DEBUG] PCB widget resized to 1521x906
+[PCB-DEBUG] PCB widget resized to 1544x906
+[PCB-DEBUG] PCB widget resized to 1563x906
+[PCB-DEBUG] PCB widget resized to 1572x906
+[PCB-DEBUG] PCB widget resized to 1596x906
+[PCB-DEBUG] PCB widget resized to 1606x906
+[PCB-DEBUG] PCB widget resized to 1631x906
+[PCB-DEBUG] PCB widget resized to 1638x906
+[PCB-DEBUG] PCB widget resized to 1639x906
+[PCB-DEBUG] PCB widget resized to 1633x906
+[PCB-DEBUG] PCB widget resized to 1616x906
+[PCB-DEBUG] PCB widget resized to 1594x906
+[PCB-DEBUG] PCB widget resized to 1575x906
+[PCB-DEBUG] PCB widget resized to 1560x906
+[PCB-DEBUG] PCB widget resized to 1553x906
+[PCB-DEBUG] PCB widget resized to 1552x906
+[PCB-DEBUG] PCB widget resized to 1553x906
+[PCB-DEBUG] PCB widget resized to 1555x906
+[PCB-DEBUG] PCB widget resized to 1556x906
+[PCB-DEBUG] PCB widget resized to 1557x906
+[PCB-DEBUG] PCB widget resized to 1562x906
+[PCB-DEBUG] PCB widget resized to 1570x906
+[PCB-DEBUG] PCB widget resized to 1577x906
+[PCB-DEBUG] PCB widget resized to 1631x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1903x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1650x906
+[PCB-DEBUG] PCB widget resized to 1626x906
+[PCB-DEBUG] PCB widget resized to 1588x906
+[PCB-DEBUG] PCB widget resized to 1568x906
+[PCB-DEBUG] PCB widget resized to 1559x906
+[PCB-DEBUG] PCB widget resized to 1560x906
+[PCB-DEBUG] PCB widget resized to 1573x906
+[PCB-DEBUG] PCB widget resized to 1585x906
+[PCB-DEBUG] PCB widget resized to 1625x906
+[PCB-DEBUG] PCB widget resized to 1639x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1647x906
+[PCB-DEBUG] PCB widget resized to 1636x906
+[PCB-DEBUG] PCB widget resized to 1635x906
+[PCB-DEBUG] PCB widget resized to 1636x906
+[PCB-DEBUG] PCB widget resized to 1640x906
+[PCB-DEBUG] PCB widget resized to 1646x906
+[PCB-DEBUG] PCB widget resized to 1652x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1650x906
+[PCB-DEBUG] PCB widget resized to 1634x906
+[PCB-DEBUG] PCB widget resized to 1600x906
+[PCB-DEBUG] PCB widget resized to 1558x906
+[PCB-DEBUG] PCB widget resized to 1544x906
+[PCB-DEBUG] PCB widget resized to 1519x906
+[PCB-DEBUG] PCB widget resized to 1516x906
+[PCB-DEBUG] PCB widget resized to 1520x906
+[PCB-DEBUG] PCB widget resized to 1526x906
+[PCB-DEBUG] PCB widget resized to 1532x906
+[PCB-DEBUG] PCB widget resized to 1566x906
+[PCB-DEBUG] PCB widget resized to 1593x906
+[PCB-DEBUG] PCB widget resized to 1608x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1645x906
+[PCB-DEBUG] PCB widget resized to 1585x906
+[PCB-DEBUG] PCB widget resized to 1547x906
+[PCB-DEBUG] PCB widget resized to 1529x906
+[PCB-DEBUG] PCB widget resized to 1525x906
+[PCB-DEBUG] PCB widget resized to 1526x906
+[PCB-DEBUG] PCB widget resized to 1528x906
+[PCB-DEBUG] PCB widget resized to 1532x906
+[PCB-DEBUG] PCB widget resized to 1537x906
+[PCB-DEBUG] PCB widget resized to 1540x906
+[PCB-DEBUG] PCB widget resized to 1550x906
+[PCB-DEBUG] PCB widget resized to 1554x906
+[PCB-DEBUG] PCB widget resized to 1566x906
+[PCB-DEBUG] PCB widget resized to 1570x906
+[PCB-DEBUG] PCB widget resized to 1588x906
+[PCB-DEBUG] PCB widget resized to 1590x906
+[PCB-DEBUG] PCB widget resized to 1589x906
+[PCB-DEBUG] PCB widget resized to 1588x906
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI
+[PCB-DEBUG] Setting up blank PCB viewer Qt toolbar
+[PCB-DEBUG] Split window icon added to PCB toolbar
+[PCB-DEBUG] Blank PCB Qt toolbar setup completed
+[PCB-DEBUG] PCB viewer UI setup completed - blank Qt toolbar added
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected - blank toolbar
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1503x947
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/demo.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
