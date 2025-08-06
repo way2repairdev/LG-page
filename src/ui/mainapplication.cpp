@@ -444,6 +444,19 @@ void MainApplication::openPDFInTab(const QString &filePath)
         // and returned to its original tab location
     });
     
+    // Connect split view state change signals for tree view management
+    connect(pdfViewer, &PDFViewerWidget::splitViewActivated, this, [this]() {
+        qDebug() << "MainApplication: Split view activated - hiding tree view";
+        setTreeViewVisible(false);
+        statusBar()->showMessage("Split view mode - Tree view hidden");
+    });
+    
+    connect(pdfViewer, &PDFViewerWidget::splitViewDeactivated, this, [this]() {
+        qDebug() << "MainApplication: Split view deactivated - showing tree view";
+        setTreeViewVisible(true);
+        statusBar()->showMessage("Normal view mode - Tree view restored");
+    });
+    
     // Add PDF viewer to PDF tab row
     QString tabName = fileInfo.fileName();
     QIcon tabIcon = getFileIcon(filePath);

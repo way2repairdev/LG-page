@@ -672,3 +672,219 @@
 [PCB-DEBUG] Zoom level changed to 0.132025
 [PCB-DEBUG] PCB widget hidden
 [PCB-DEBUG] PCB widget hidden
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI
+[PCB-DEBUG] Setting up PCB viewer toolbar
+[PCB-DEBUG] PCB viewer toolbar setup completed - simplified to buttons only
+[PCB-DEBUG] PCB viewer UI setup completed
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected - simplified toolbar
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] Updating toolbar state
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Hiding PCB toolbar
+[PCB-DEBUG] PCB viewer status: Initializing PCB viewer embedder...
+[PCB-DEBUG] PCB viewer status: GLFW initialized globally (first PCB instance)
+[PCB-DEBUG] PCB viewer status: PCB renderer initialized successfully with ImGui overlay disabled
+[PCB-DEBUG] PCB viewer status: PCB viewer embedder initialized successfully
+[PCB-DEBUG] PCB toolbar visibility: false
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget shown
+[PCB-DEBUG] PCB widget hidden
+[PCB-DEBUG] PCB viewer status: PCB viewer resized to 1503x906
+[PCB-DEBUG] PCB viewer status: PCB viewer resized to 1503x906
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Hiding PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: false
+[PCB-DEBUG] PCB widget shown
+[PCB-DEBUG] PCB widget gained focus
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Showing PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: true
+[PCB-DEBUG] PCB widget hidden
+[PCB-DEBUG] PCB widget lost focus
+[PCB-DEBUG] PCB widget shown
+[PCB-DEBUG] PCB widget hidden
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Hiding PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: false
+[PCB-DEBUG] PCB widget shown
+[PCB-DEBUG] PCB widget gained focus
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Showing PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: true
+[PCB-DEBUG] PCB widget resized to 1503x865
+[PCB-DEBUG] PCB widget hidden
+[PCB-DEBUG] PCB widget lost focus
+[PCB-DEBUG] PCB widget shown
+[PCB-DEBUG] PCB widget hidden
+[PCB-DEBUG] PCB viewer status: PCB viewer resized to 1503x838
+[PCB-DEBUG] PCB viewer status: PCB viewer resized to 1503x838
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Hiding PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: false
+[PCB-DEBUG] PCB widget shown
+[PCB-DEBUG] PCB widget gained focus
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Showing PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: true
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/demo.pcb
+[PCB-DEBUG] Updating toolbar state
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] PCB viewer status: Loading PCB file: C:/W2R_Schematics/demo.pcb
+[PCB-DEBUG] PCB viewer status: PCB file loaded successfully: C:/W2R_Schematics/demo.pcb
+[PCB-DEBUG] PCB widget hidden
+[PCB-DEBUG] PCB widget lost focus
+[PCB-DEBUG] PCB widget hidden
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Hiding PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: false
+[PCB-DEBUG] PCB widget resized to 382x817
+[PCB-DEBUG] PCB widget shown
+[PCB-DEBUG] PCB widget resized to 733x817
+[PCB-DEBUG] PCB widget resized to 933x847
+[PCB-DEBUG] PCB widget resized to 930x847
+[PCB-DEBUG] PCB viewer status: PCB viewer resized to 400x817
+[PCB-DEBUG] PCB viewer status: PCB viewer resized to 400x817
+[PCB-DEBUG] PCB viewer status: PCB viewer resized to 733x817
+[PCB-DEBUG] PCB viewer status: PCB viewer resized to 733x817
+[PCB-DEBUG] PCB widget resized to 933x847
+[PCB-DEBUG] PCB viewer status: PCB viewer resized to 933x847
+[PCB-DEBUG] PCB viewer status: PCB viewer resized to 933x847
+[PCB-DEBUG] PCB viewer status: PCB viewer resized to 930x847
+[PCB-DEBUG] PCB viewer status: PCB viewer resized to 930x847
+[PCB-DEBUG] PCB viewer status: PCB viewer resized to 933x847
+[PCB-DEBUG] PCB viewer status: PCB viewer resized to 933x847
+[PCB-DEBUG] Zoom level changed to 0.195364
+[PCB-DEBUG] Zoom level changed to 0.175828
+[PCB-DEBUG] Zoom level changed to 0.158245
+[PCB-DEBUG] Zoom level changed to 0.14242
+[PCB-DEBUG] Zoom level changed to 0.128178
+[PCB-DEBUG] Zoom level changed to 0.11536
+[PCB-DEBUG] Zoom level changed to 0.103824
+[PCB-DEBUG] Zoom level changed to 0.0934419
+[PCB-DEBUG] Zoom level changed to 0.0840977
+[PCB-DEBUG] Zoom level changed to 0.075688
+[PCB-DEBUG] Zoom level changed to 0.0681192
+[PCB-DEBUG] Zoom level changed to 0.0613072
+[PCB-DEBUG] Zoom level changed to 0.067438
+[PCB-DEBUG] Zoom level changed to 0.0741818
+[PCB-DEBUG] Zoom level changed to 0.0815999
+[PCB-DEBUG] Zoom level changed to 0.0897599
+[PCB-DEBUG] Zoom level changed to 0.0987359
+[PCB-DEBUG] Zoom level changed to 0.10861
+[PCB-DEBUG] Zoom level changed to 0.11947
+[PCB-DEBUG] Zoom level changed to 0.131418
+[PCB-DEBUG] Zoom level changed to 0.144559
+[PCB-DEBUG] Zoom level changed to 0.159015
+[PCB-DEBUG] Zoom level changed to 0.174917
+[PCB-DEBUG] Zoom level changed to 0.192408
+[PCB-DEBUG] Zoom level changed to 0.211649
+[PCB-DEBUG] Zoom level changed to 0.232814
+[PCB-DEBUG] Zoom level changed to 0.256096
+[PCB-DEBUG] Zoom level changed to 0.281705
+[PCB-DEBUG] Zoom level changed to 0.309876
+[PCB-DEBUG] Zoom level changed to 0.340863
+[PCB-DEBUG] Zoom level changed to 0.409036
+[PCB-DEBUG] Zoom level changed to 0.44994
+[PCB-DEBUG] Zoom level changed to 0.494934
+[PCB-DEBUG] Zoom level changed to 0.544427
+[PCB-DEBUG] Zoom level changed to 0.59887
+[PCB-DEBUG] Zoom level changed to 0.658757
+[PCB-DEBUG] Zoom level changed to 0.724632
+[PCB-DEBUG] Zoom level changed to 0.797096
+[PCB-DEBUG] Zoom level changed to 0.876805
+[PCB-DEBUG] Zoom level changed to 0.964486
+[PCB-DEBUG] Zoom level changed to 1.06093
+[PCB-DEBUG] Zoom level changed to 1.16703
+[PCB-DEBUG] Zoom level changed to 1.28373
+[PCB-DEBUG] Zoom level changed to 1.4121
+[PCB-DEBUG] Zoom level changed to 1.55331
+[PCB-DEBUG] Zoom level changed to 1.86398
+[PCB-DEBUG] Zoom level changed to 2.05038
+[PCB-DEBUG] Zoom level changed to 2.25541
+[PCB-DEBUG] Zoom level changed to 2.48095
+[PCB-DEBUG] Zoom level changed to 2.72905
+[PCB-DEBUG] Zoom level changed to 3.00195
+[PCB-DEBUG] Zoom level changed to 3.30215
+[PCB-DEBUG] Zoom level changed to 3.63237
+[PCB-DEBUG] Zoom level changed to 4.35884
+[PCB-DEBUG] Zoom level changed to 4.79472
+[PCB-DEBUG] Zoom level changed to 5.27419
+[PCB-DEBUG] Zoom level changed to 5.80161
+[PCB-DEBUG] Zoom level changed to 6.38178
+[PCB-DEBUG] Zoom level changed to 7.01995
+[PCB-DEBUG] Zoom level changed to 7.72195
+[PCB-DEBUG] Zoom level changed to 8.49414
+[PCB-DEBUG] Zoom level changed to 9.34356
+[PCB-DEBUG] Zoom level changed to 10.2779
+[PCB-DEBUG] Pin selected: 1 (Net: NET1263)
+[PCB-DEBUG] Zoom level changed to 9.25012
+[PCB-DEBUG] Zoom level changed to 8.32511
+[PCB-DEBUG] Zoom level changed to 7.4926
+[PCB-DEBUG] Zoom level changed to 6.74334
+[PCB-DEBUG] Zoom level changed to 6.06901
+[PCB-DEBUG] Zoom level changed to 5.4621
+[PCB-DEBUG] Zoom level changed to 4.91589
+[PCB-DEBUG] Zoom level changed to 4.4243
+[PCB-DEBUG] Zoom level changed to 3.98187
+[PCB-DEBUG] Zoom level changed to 3.58369
+[PCB-DEBUG] Zoom level changed to 3.22532
+[PCB-DEBUG] Zoom level changed to 2.58025
+[PCB-DEBUG] Zoom level changed to 2.32223
+[PCB-DEBUG] Zoom level changed to 2.09001
+[PCB-DEBUG] Zoom level changed to 1.88101
+[PCB-DEBUG] Zoom level changed to 1.6929
+[PCB-DEBUG] Zoom level changed to 1.52361
+[PCB-DEBUG] Zoom level changed to 1.37125
+[PCB-DEBUG] Zoom level changed to 1.23413
+[PCB-DEBUG] Zoom level changed to 1.11071
+[PCB-DEBUG] Zoom level changed to 0.999643
+[PCB-DEBUG] Zoom level changed to 0.899679
+[PCB-DEBUG] Zoom level changed to 0.809711
+[PCB-DEBUG] Zoom level changed to 0.72874
+[PCB-DEBUG] Zoom level changed to 0.655866
+[PCB-DEBUG] Zoom level changed to 0.590279
+[PCB-DEBUG] Zoom level changed to 0.531251
+[PCB-DEBUG] Zoom level changed to 0.478126
+[PCB-DEBUG] Zoom level changed to 0.382501
+[PCB-DEBUG] Zoom level changed to 0.306001
+[PCB-DEBUG] Zoom level changed to 0.275401
+[PCB-DEBUG] Zoom level changed to 0.247861
+[PCB-DEBUG] Zoom level changed to 0.223075
+[PCB-DEBUG] Zoom level changed to 0.200767
+[PCB-DEBUG] Zoom level changed to 0.18069
+[PCB-DEBUG] Zoom level changed to 0.162621
+[PCB-DEBUG] Zoom level changed to 0.146359
+[PCB-DEBUG] Zoom level changed to 0.131723
+[PCB-DEBUG] PCB widget hidden
+[PCB-DEBUG] PCB widget hidden
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Hiding PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: false
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Showing PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: false
+[PCB-DEBUG] PCB widget hidden
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Hiding PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Hiding PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: false
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Showing PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: false
+[PCB-DEBUG] PCB widget hidden
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Hiding PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Hiding PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: false
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Showing PCB toolbar
+[PCB-DEBUG] PCB toolbar visibility: false

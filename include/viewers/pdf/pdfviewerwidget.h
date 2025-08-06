@@ -132,6 +132,12 @@ signals:
     
     // Emitted when split view is deactivated and PCB viewer should be returned
     void releasePCBViewer();
+    
+    // Emitted when split view is activated (tree view should be hidden)
+    void splitViewActivated();
+    
+    // Emitted when split view is deactivated (tree view should be shown)
+    void splitViewDeactivated();
 
 protected:
     void resizeEvent(QResizeEvent* event) override;

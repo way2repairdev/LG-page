@@ -1063,6 +1063,9 @@ void PDFViewerWidget::onSlipTabClicked()
             m_actionSlipTab->setToolTip("Split View");
         }
         
+        // Emit signal to show tree view when exiting split view
+        emit splitViewDeactivated();
+        
         qDebug() << "PDFViewerWidget: Switched to single view mode";
     } else {
         // Switch to split view
@@ -1096,6 +1099,9 @@ void PDFViewerWidget::onSlipTabClicked()
         
         // Sync the page information to both toolbars
         syncToolbarStates();
+        
+        // Emit signal to hide tree view when entering split view
+        emit splitViewActivated();
         
         qDebug() << "PDFViewerWidget: Switched to split view mode";
     }
