@@ -6,6 +6,7 @@
 #include <QShowEvent>
 #include <QHideEvent>
 #include <QFocusEvent>
+#include <QSplitter>
 #include <QDebug>
 #include <QFileInfo>
 #include <QMessageBox>
@@ -43,6 +44,15 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_mainLayout(nullptr)
     , m_toolbar(nullptr)
     , m_viewerContainer(nullptr)
+    , m_splitter(nullptr)
+    , m_leftViewerContainer(nullptr)
+    , m_rightViewerContainer(nullptr)
+    , m_rightPlaceholderLabel(nullptr)
+    , m_isSplitView(false)
+    , m_leftToolbar(nullptr)
+    , m_rightToolbar(nullptr)
+    , m_leftPanel(nullptr)
+    , m_rightPanel(nullptr)
     , m_actionSlipTab(nullptr)
     , m_actionRotateLeft(nullptr)
     , m_actionRotateRight(nullptr)
@@ -52,15 +62,42 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_actionZoomOut(nullptr)
     , m_actionFindPrevious(nullptr)
     , m_actionFindNext(nullptr)
+    , m_leftActionRotateLeft(nullptr)
+    , m_leftActionRotateRight(nullptr)
+    , m_leftActionPreviousPage(nullptr)
+    , m_leftActionNextPage(nullptr)
+    , m_leftActionZoomIn(nullptr)
+    , m_leftActionZoomOut(nullptr)
+    , m_leftActionFindPrevious(nullptr)
+    , m_leftActionFindNext(nullptr)
+    , m_rightActionRotateLeft(nullptr)
+    , m_rightActionRotateRight(nullptr)
+    , m_rightActionPreviousPage(nullptr)
+    , m_rightActionNextPage(nullptr)
+    , m_rightActionZoomIn(nullptr)
+    , m_rightActionZoomOut(nullptr)
+    , m_rightActionFindPrevious(nullptr)
+    , m_rightActionFindNext(nullptr)
     , m_pageLabel(nullptr)
     , m_pageInput(nullptr)
     , m_totalPagesLabel(nullptr)
     , m_searchLabel(nullptr)
     , m_searchInput(nullptr)
+    , m_leftPageLabel(nullptr)
+    , m_leftPageInput(nullptr)
+    , m_leftTotalPagesLabel(nullptr)
+    , m_leftSearchLabel(nullptr)
+    , m_leftSearchInput(nullptr)
+    , m_rightPageLabel(nullptr)
+    , m_rightPageInput(nullptr)
+    , m_rightTotalPagesLabel(nullptr)
+    , m_rightSearchLabel(nullptr)
+    , m_rightSearchInput(nullptr)
     , m_updateTimer(new QTimer(this))
     , m_navigationTimer(new QTimer(this))
     , m_viewerInitialized(false)
     , m_pdfLoaded(false)
+    , m_rightPdfLoaded(false)
     , m_usingFallback(false)
     , m_navigationInProgress(false)
     , m_lastSelectedText()
@@ -115,8 +152,16 @@ void PDFViewerWidget::setupUI()
     // Add toolbar to main layout (at top, no stretch)
     m_mainLayout->addWidget(m_toolbar, 0);
     
-    // Add viewer container to main layout (takes remaining space)
-    m_mainLayout->addWidget(m_viewerContainer, 1);
+    // Add splitter to main layout (takes remaining space)
+    m_mainLayout->addWidget(m_splitter, 1);
+    
+    // Initially hide individual toolbars (they're shown only in split view)
+    if (m_leftToolbar) {
+        m_leftToolbar->hide();
+    }
+    if (m_rightToolbar) {
+        m_rightToolbar->hide();
+    }
     
     // Apply modern styling
     setStyleSheet(
@@ -201,6 +246,58 @@ bool PDFViewerWidget::loadPDF(const QString& filePath)
     return true;
 }
 
+bool PDFViewerWidget::loadRightPanelPDF(const QString& filePath)
+{
+    qDebug() << "PDFViewerWidget: Loading PDF into right panel:" << filePath;
+    
+    // Validate file
+    if (!QFileInfo::exists(filePath)) {
+        QString error = QString("File does not exist: %1").arg(filePath);
+        qWarning() << error;
+        emit errorOccurred(error);
+        return false;
+    }
+    
+    // For now, we'll just mark the right panel as having a PDF loaded
+    // In the future, this could be extended to support a separate PDF embedder for the right panel
+    m_rightPdfLoaded = true;
+    
+    // If we're currently in split view, show the right toolbar
+    if (m_isSplitView && m_rightToolbar) {
+        m_rightToolbar->show();
+        qDebug() << "PDFViewerWidget: Right toolbar shown (PDF loaded into right panel)";
+    }
+    
+    // Update the right panel's placeholder to show that a PDF is "loaded"
+    if (m_rightPlaceholderLabel) {
+        m_rightPlaceholderLabel->setText(QString("PDF Loaded: %1\n\n(Full implementation coming soon)").arg(QFileInfo(filePath).fileName()));
+    }
+    
+    qDebug() << "PDFViewerWidget: Right panel PDF loaded successfully";
+    return true;
+}
+
+void PDFViewerWidget::clearRightPanelPDF()
+{
+    qDebug() << "PDFViewerWidget: Clearing right panel PDF";
+    
+    // Mark right panel as not having PDF loaded
+    m_rightPdfLoaded = false;
+    
+    // Hide the right toolbar since no PDF is loaded
+    if (m_rightToolbar) {
+        m_rightToolbar->hide();
+        qDebug() << "PDFViewerWidget: Right toolbar hidden (PDF cleared from right panel)";
+    }
+    
+    // Reset the right panel's placeholder
+    if (m_rightPlaceholderLabel) {
+        m_rightPlaceholderLabel->setText("Second viewer not implemented yet.\n\nPlease load a PDF file to enable toolbar controls.");
+    }
+    
+    qDebug() << "PDFViewerWidget: Right panel PDF cleared successfully";
+}
+
 void PDFViewerWidget::initializePDFViewer()
 {
     static bool globalInitializationInProgress = false;
@@ -224,16 +321,18 @@ void PDFViewerWidget::initializePDFViewer()
     globalInitializationInProgress = true;
     qDebug() << "PDFViewerWidget: Starting PDF viewer initialization";
     
-    // Get the native Windows handle of the viewer container
-    HWND containerHwnd = reinterpret_cast<HWND>(m_viewerContainer->winId());
+    // Get the native Windows handle of the left viewer container (where PDF will be embedded)
+    QWidget* activeContainer = m_leftViewerContainer ? m_leftViewerContainer : m_viewerContainer;
+    HWND containerHwnd = reinterpret_cast<HWND>(activeContainer->winId());
     
     // Verify the container has a valid size
-    if (m_viewerContainer->width() <= 0 || m_viewerContainer->height() <= 0) {
+    if (activeContainer->width() <= 0 || activeContainer->height() <= 0) {
         qDebug() << "PDFViewerWidget: Container has invalid size, deferring initialization";
         globalInitializationInProgress = false;
         // Defer initialization until we have proper size
         QTimer::singleShot(100, this, [this]() {
-            if (!m_viewerInitialized && m_viewerContainer->width() > 0 && m_viewerContainer->height() > 0) {
+            QWidget* retryContainer = m_leftViewerContainer ? m_leftViewerContainer : m_viewerContainer;
+            if (!m_viewerInitialized && retryContainer->width() > 0 && retryContainer->height() > 0) {
                 initializePDFViewer();
             }
         });
@@ -241,7 +340,7 @@ void PDFViewerWidget::initializePDFViewer()
     }
     
     // Initialize the embedded PDF viewer
-    bool initSuccess = m_pdfEmbedder->initialize(containerHwnd, m_viewerContainer->width(), m_viewerContainer->height());
+    bool initSuccess = m_pdfEmbedder->initialize(containerHwnd, activeContainer->width(), activeContainer->height());
     
     globalInitializationInProgress = false;
     
@@ -263,6 +362,11 @@ void PDFViewerWidget::initializePDFViewer()
 bool PDFViewerWidget::isPDFLoaded() const
 {
     return m_pdfLoaded && m_pdfEmbedder && m_pdfEmbedder->isPDFLoaded();
+}
+
+bool PDFViewerWidget::isRightPanelPDFLoaded() const
+{
+    return m_rightPdfLoaded;
 }
 
 int PDFViewerWidget::getPageCount() const
@@ -350,8 +454,7 @@ void PDFViewerWidget::setupToolbar()
     // Add slip tab button (using SVG icon from resources)
     m_actionSlipTab = m_toolbar->addAction(QIcon(":/icons/images/icons/slit-tab.png"), "");
     m_actionSlipTab->setToolTip("Slip Tab");
-    // Note: Connect to your desired slot when you implement the functionality
-    // connect(m_actionSlipTab, &QAction::triggered, this, &PDFViewerWidget::slipTabAction);
+    connect(m_actionSlipTab, &QAction::triggered, this, &PDFViewerWidget::onSlipTabClicked);
     
     // Add separator
     m_toolbar->addSeparator();
@@ -500,19 +603,264 @@ void PDFViewerWidget::setupToolbar()
 
 void PDFViewerWidget::setupViewerArea()
 {
-    // Create viewer container widget
-    m_viewerContainer = new QWidget(this);
-    m_viewerContainer->setMinimumSize(400, 300);
-    m_viewerContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    m_viewerContainer->setStyleSheet(
+    // Create splitter for split view support
+    m_splitter = new QSplitter(Qt::Horizontal, this);
+    m_splitter->setChildrenCollapsible(false);
+    
+    // Create left panel (contains toolbar + viewer)
+    m_leftPanel = new QWidget(this);
+    QVBoxLayout* leftPanelLayout = new QVBoxLayout(m_leftPanel);
+    leftPanelLayout->setContentsMargins(0, 0, 0, 0);
+    leftPanelLayout->setSpacing(0);
+    
+    // Create left toolbar
+    m_leftToolbar = new QToolBar(m_leftPanel);
+    setupIndividualToolbar(m_leftToolbar, true); // true = left panel
+    
+    // Create left viewer container
+    m_leftViewerContainer = new QWidget(m_leftPanel);
+    m_leftViewerContainer->setMinimumSize(400, 300);
+    m_leftViewerContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_leftViewerContainer->setStyleSheet(
         "QWidget {"
         "    background-color: #ffffff;"
         "    border: 1px solid #cccccc;"
         "}"
     );
     
+    // Add to left panel layout
+    leftPanelLayout->addWidget(m_leftToolbar);
+    leftPanelLayout->addWidget(m_leftViewerContainer);
+    
+    // Create right panel (contains toolbar + viewer)
+    m_rightPanel = new QWidget(this);
+    QVBoxLayout* rightPanelLayout = new QVBoxLayout(m_rightPanel);
+    rightPanelLayout->setContentsMargins(0, 0, 0, 0);
+    rightPanelLayout->setSpacing(0);
+    
+    // Create right toolbar
+    m_rightToolbar = new QToolBar(m_rightPanel);
+    setupIndividualToolbar(m_rightToolbar, false); // false = right panel
+    
+    // Create right viewer container
+    m_rightViewerContainer = new QWidget(m_rightPanel);
+    m_rightViewerContainer->setMinimumSize(400, 300);
+    m_rightViewerContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_rightViewerContainer->setStyleSheet(
+        "QWidget {"
+        "    background-color: #f0f0f0;"
+        "    border: 1px solid #cccccc;"
+        "}"
+    );
+    
+    // Create placeholder label for right viewer
+    m_rightPlaceholderLabel = new QLabel("Second viewer not implemented yet.\n\nPlease load a PDF file to enable toolbar controls.", m_rightViewerContainer);
+    m_rightPlaceholderLabel->setAlignment(Qt::AlignCenter);
+    m_rightPlaceholderLabel->setStyleSheet(
+        "QLabel {"
+        "    color: #666666;"
+        "    font-size: 14px;"
+        "    font-style: italic;"
+        "    background-color: transparent;"
+        "}"
+    );
+    
+    // Layout for right container
+    QVBoxLayout* rightContainerLayout = new QVBoxLayout(m_rightViewerContainer);
+    rightContainerLayout->addWidget(m_rightPlaceholderLabel);
+    
+    // Add to right panel layout
+    rightPanelLayout->addWidget(m_rightToolbar);
+    rightPanelLayout->addWidget(m_rightViewerContainer);
+    
+    // Add panels to splitter
+    m_splitter->addWidget(m_leftPanel);
+    m_splitter->addWidget(m_rightPanel);
+    
+    // Set equal sizes initially
+    m_splitter->setSizes({400, 400});
+    
+    // Initially, set to single view mode
+    m_viewerContainer = m_leftViewerContainer;  // Main viewer container points to left container
+    m_rightPanel->hide();  // Hide right panel initially
+    m_isSplitView = false;
+    
     // Install event filter to capture mouse clicks and clear page input focus
     m_viewerContainer->installEventFilter(this);
+}
+
+void PDFViewerWidget::setupIndividualToolbar(QToolBar* toolbar, bool isLeftPanel)
+{
+    toolbar->setFixedHeight(30);
+    toolbar->setIconSize(QSize(30, 30));
+    toolbar->setStyleSheet(
+        "QToolBar {"
+        "    background-color: #ffffff;"
+        "    border: none;"
+        "    border-bottom: 1px solid #d0d0d0;"
+        "    spacing: 5px;"
+        "    padding: 4px;"
+        "}"
+        "QToolButton {"
+        "    background-color: transparent;"
+        "    border: 1px solid transparent;"
+        "    border-radius: 2px;"
+        "    padding: 4px;"
+        "    min-width: 30px;"
+        "    min-height: 20px;"
+        "    font-size: 16px;"
+        "}"
+        "QToolButton:hover {"
+        "    background-color: #e6f3ff;"
+        "    border-color: #b3d9ff;"
+        "}"
+        "QToolButton:pressed {"
+        "    background-color: #cce7ff;"
+        "    border-color: #99ccff;"
+        "}"
+    );
+    
+    QAction** rotateLeftAction = isLeftPanel ? &m_leftActionRotateLeft : &m_rightActionRotateLeft;
+    QAction** rotateRightAction = isLeftPanel ? &m_leftActionRotateRight : &m_rightActionRotateRight;
+    QAction** previousPageAction = isLeftPanel ? &m_leftActionPreviousPage : &m_rightActionPreviousPage;
+    QAction** nextPageAction = isLeftPanel ? &m_leftActionNextPage : &m_rightActionNextPage;
+    QAction** zoomInAction = isLeftPanel ? &m_leftActionZoomIn : &m_rightActionZoomIn;
+    QAction** zoomOutAction = isLeftPanel ? &m_leftActionZoomOut : &m_rightActionZoomOut;
+    
+    QLabel** pageLabel = isLeftPanel ? &m_leftPageLabel : &m_rightPageLabel;
+    QLineEdit** pageInput = isLeftPanel ? &m_leftPageInput : &m_rightPageInput;
+    QLabel** totalPagesLabel = isLeftPanel ? &m_leftTotalPagesLabel : &m_rightTotalPagesLabel;
+    QLabel** searchLabel = isLeftPanel ? &m_leftSearchLabel : &m_rightSearchLabel;
+    QLineEdit** searchInput = isLeftPanel ? &m_leftSearchInput : &m_rightSearchInput;
+    
+    QString panelName = isLeftPanel ? "Left" : "Right";
+    
+    // Add rotate left button
+    *rotateLeftAction = toolbar->addAction(QIcon(":/icons/images/icons/rotate_left.svg"), "");
+    (*rotateLeftAction)->setToolTip("Rotate Left (" + panelName + ")");
+    connect(*rotateLeftAction, &QAction::triggered, this, &PDFViewerWidget::rotateLeft);
+    
+    // Add rotate right button
+    *rotateRightAction = toolbar->addAction(QIcon(":/icons/images/icons/rotate_right.svg"), "");
+    (*rotateRightAction)->setToolTip("Rotate Right (" + panelName + ")");
+    connect(*rotateRightAction, &QAction::triggered, this, &PDFViewerWidget::rotateRight);
+    
+    // Add separator
+    toolbar->addSeparator();
+    
+    // Page label
+    *pageLabel = new QLabel("Page:", toolbar);
+    (*pageLabel)->setStyleSheet("QLabel { color: #333333; font-weight: bold; margin: 0 5px; }");
+    toolbar->addWidget(*pageLabel);
+    
+    // Page input box
+    *pageInput = new QLineEdit(toolbar);
+    (*pageInput)->setFixedWidth(60);
+    (*pageInput)->setAlignment(Qt::AlignCenter);
+    (*pageInput)->setText("1");
+    (*pageInput)->setToolTip("Enter page number and press Enter (" + panelName + ")");
+    (*pageInput)->setStyleSheet(
+        "QLineEdit {"
+        "    border: 1px solid #cccccc;"
+        "    border-radius: 3px;"
+        "    padding: 2px 4px;"
+        "    font-size: 11px;"
+        "    background-color: white;"
+        "    font-weight: bold;"
+        "}"
+        "QLineEdit:focus {"
+        "    border-color: #4285f4;"
+        "    outline: none;"
+        "}"
+    );
+    connect(*pageInput, &QLineEdit::returnPressed, this, &PDFViewerWidget::onPageInputChanged);
+    toolbar->addWidget(*pageInput);
+    
+    // Total pages label
+    *totalPagesLabel = new QLabel("/ 0", toolbar);
+    (*totalPagesLabel)->setStyleSheet("QLabel { color: #666666; margin: 0 5px; }");
+    toolbar->addWidget(*totalPagesLabel);
+    
+    // Previous page button
+    *previousPageAction = toolbar->addAction(QIcon(":/icons/images/icons/previous.svg"), "");
+    (*previousPageAction)->setToolTip("Previous Page (" + panelName + ")");
+    connect(*previousPageAction, &QAction::triggered, this, &PDFViewerWidget::previousPage);
+    
+    // Next page button
+    *nextPageAction = toolbar->addAction(QIcon(":/icons/images/icons/next.svg"), "");
+    (*nextPageAction)->setToolTip("Next Page (" + panelName + ")");
+    connect(*nextPageAction, &QAction::triggered, this, &PDFViewerWidget::nextPage);
+    
+    // Add separator
+    toolbar->addSeparator();
+    
+    // Add zoom in button
+    *zoomInAction = toolbar->addAction(QIcon(":/icons/images/icons/zoom_in.svg"), "");
+    (*zoomInAction)->setToolTip("Zoom In (" + panelName + ")");
+    connect(*zoomInAction, &QAction::triggered, this, &PDFViewerWidget::zoomIn);
+    
+    // Add zoom out button
+    *zoomOutAction = toolbar->addAction(QIcon(":/icons/images/icons/zoom_out.svg"), "");
+    (*zoomOutAction)->setToolTip("Zoom Out (" + panelName + ")");
+    connect(*zoomOutAction, &QAction::triggered, this, &PDFViewerWidget::zoomOut);
+    
+    // Add separator
+    toolbar->addSeparator();
+    
+    // Search label
+    *searchLabel = new QLabel("Search:", toolbar);
+    (*searchLabel)->setStyleSheet("QLabel { color: #333333; font-weight: bold; margin: 0 5px; }");
+    toolbar->addWidget(*searchLabel);
+    
+    // Search input box
+    *searchInput = new QLineEdit(toolbar);
+    (*searchInput)->setFixedWidth(120);
+    (*searchInput)->setPlaceholderText("Search text...");
+    (*searchInput)->setToolTip("Enter search term and press Enter (" + panelName + ")");
+    toolbar->addWidget(*searchInput);
+}
+
+void PDFViewerWidget::syncToolbarStates()
+{
+    if (!isPDFLoaded()) {
+        return;
+    }
+    
+    int currentPage = getCurrentPage();
+    int totalPages = getPageCount();
+    
+    // Update page information in both toolbars
+    if (m_leftPageInput) {
+        m_leftPageInput->setText(QString::number(currentPage));
+    }
+    if (m_leftTotalPagesLabel) {
+        m_leftTotalPagesLabel->setText(QString("/ %1").arg(totalPages));
+    }
+    
+    if (m_rightPageInput) {
+        m_rightPageInput->setText(QString::number(currentPage));
+    }
+    if (m_rightTotalPagesLabel) {
+        m_rightTotalPagesLabel->setText(QString("/ %1").arg(totalPages));
+    }
+    
+    // Update button states
+    bool canGoPrevious = currentPage > 1;
+    bool canGoNext = currentPage < totalPages;
+    
+    if (m_leftActionPreviousPage) {
+        m_leftActionPreviousPage->setEnabled(canGoPrevious);
+    }
+    if (m_leftActionNextPage) {
+        m_leftActionNextPage->setEnabled(canGoNext);
+    }
+    
+    if (m_rightActionPreviousPage) {
+        m_rightActionPreviousPage->setEnabled(canGoPrevious);
+    }
+    if (m_rightActionNextPage) {
+        m_rightActionNextPage->setEnabled(canGoNext);
+    }
 }
 
 
@@ -605,6 +953,65 @@ void PDFViewerWidget::onPageInputChanged()
     // Clear focus from page input after processing Enter key
     m_pageInput->clearFocus();
     qDebug() << "PDFViewerWidget: Page input focus cleared after Enter";
+}
+
+void PDFViewerWidget::onSlipTabClicked()
+{
+    // Toggle between single view and split view
+    if (m_isSplitView) {
+        // Switch to single view
+        m_rightPanel->hide();
+        m_isSplitView = false;
+        
+        // Show main toolbar and hide individual toolbars
+        m_toolbar->show();
+        m_leftToolbar->hide();
+        m_rightToolbar->hide();
+        
+        // Update tooltip
+        if (m_actionSlipTab) {
+            m_actionSlipTab->setToolTip("Split View");
+        }
+        
+        qDebug() << "PDFViewerWidget: Switched to single view mode";
+    } else {
+        // Switch to split view
+        m_rightPanel->show();
+        m_isSplitView = true;
+        
+        // Hide main toolbar and show left toolbar (always visible in split mode)
+        m_toolbar->hide();
+        m_leftToolbar->show();
+        
+        // Only show right toolbar if a PDF is loaded in the right panel
+        if (m_rightPdfLoaded) {
+            m_rightToolbar->show();
+            qDebug() << "PDFViewerWidget: Right toolbar shown (PDF loaded in right panel)";
+        } else {
+            m_rightToolbar->hide();
+            qDebug() << "PDFViewerWidget: Right toolbar hidden (no PDF in right panel)";
+        }
+        
+        // Set equal sizes for both panels
+        m_splitter->setSizes({400, 400});
+        
+        // Update tooltip
+        if (m_actionSlipTab) {
+            m_actionSlipTab->setToolTip("Single View");
+        }
+        
+        // Sync the page information to both toolbars
+        syncToolbarStates();
+        
+        qDebug() << "PDFViewerWidget: Switched to split view mode";
+    }
+    
+    // Force resize if PDF viewer is initialized
+    if (m_viewerInitialized && m_pdfEmbedder) {
+        // Get the current size of the left container and notify the PDF embedder
+        QSize leftSize = m_leftViewerContainer->size();
+        m_pdfEmbedder->resize(leftSize.width(), leftSize.height());
+    }
 }
 
 // Page navigation functionality connected to PDF embedder
@@ -824,15 +1231,19 @@ void PDFViewerWidget::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
     
-    if (m_pdfEmbedder && m_viewerInitialized && m_viewerContainer) {
-        // Resize the embedded viewer to match the container size
-        // Use the container's actual size, not the event size, to account for layout margins
-        int containerWidth = m_viewerContainer->width();
-        int containerHeight = m_viewerContainer->height();
+    if (m_pdfEmbedder && m_viewerInitialized) {
+        // Use the left viewer container for PDF embedder sizing (it contains the actual PDF viewer)
+        QWidget* activeContainer = m_leftViewerContainer ? m_leftViewerContainer : m_viewerContainer;
         
-        // Only resize if container has valid dimensions
-        if (containerWidth > 0 && containerHeight > 0) {
-            m_pdfEmbedder->resize(containerWidth, containerHeight);
+        if (activeContainer) {
+            // Resize the embedded viewer to match the active container size
+            int containerWidth = activeContainer->width();
+            int containerHeight = activeContainer->height();
+            
+            // Only resize if container has valid dimensions
+            if (containerWidth > 0 && containerHeight > 0) {
+                m_pdfEmbedder->resize(containerWidth, containerHeight);
+            }
         }
     }
 }

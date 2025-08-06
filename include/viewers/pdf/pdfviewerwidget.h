@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QSplitter>
 #include <QToolBar>
 #include <QAction>
 #include <QLineEdit>
@@ -42,9 +43,26 @@ public:
     bool loadPDF(const QString& filePath);
 
     /**
+     * Load a PDF file into the right panel (for split view)
+     * @param filePath Path to the PDF file
+     * @return true if loaded successfully
+     */
+    bool loadRightPanelPDF(const QString& filePath);
+
+    /**
+     * Clear/unload the PDF from the right panel
+     */
+    void clearRightPanelPDF();
+
+    /**
      * Check if a PDF is currently loaded
      */
     bool isPDFLoaded() const;
+
+    /**
+     * Check if a PDF is currently loaded in the right panel
+     */
+    bool isRightPanelPDFLoaded() const;
 
     /**
      * Get the current page count
@@ -110,6 +128,7 @@ private slots:
     void onPageInputChanged();
     void onSearchInputChanged();
     void checkForSelectedText();
+    void onSlipTabClicked();
 
 protected:
     // Event handling to clear page input focus when clicking elsewhere
@@ -119,6 +138,8 @@ private:
     void setupUI();
     void setupToolbar();
     void setupViewerArea();
+    void setupIndividualToolbar(QToolBar* toolbar, bool isLeftPanel);
+    void syncToolbarStates();
     void initializePDFViewer();
     
     // Core PDF viewer component (your existing renderer)
@@ -129,7 +150,20 @@ private:
     QToolBar* m_toolbar;
     QWidget* m_viewerContainer;
     
-    // Toolbar actions
+    // Split view components
+    QSplitter* m_splitter;
+    QWidget* m_leftViewerContainer;
+    QWidget* m_rightViewerContainer;
+    QLabel* m_rightPlaceholderLabel;
+    bool m_isSplitView;
+    
+    // Dual toolbar support
+    QToolBar* m_leftToolbar;
+    QToolBar* m_rightToolbar;
+    QWidget* m_leftPanel;    // Contains left toolbar + left viewer
+    QWidget* m_rightPanel;   // Contains right toolbar + right viewer
+    
+    // Toolbar actions (shared/main toolbar)
     QAction* m_actionSlipTab;
     QAction* m_actionRotateLeft;
     QAction* m_actionRotateRight;
@@ -140,14 +174,48 @@ private:
     QAction* m_actionFindPrevious;
     QAction* m_actionFindNext;
     
-    // Page navigation widgets
+    // Left panel toolbar actions (for split view)
+    QAction* m_leftActionRotateLeft;
+    QAction* m_leftActionRotateRight;
+    QAction* m_leftActionPreviousPage;
+    QAction* m_leftActionNextPage;
+    QAction* m_leftActionZoomIn;
+    QAction* m_leftActionZoomOut;
+    QAction* m_leftActionFindPrevious;
+    QAction* m_leftActionFindNext;
+    
+    // Right panel toolbar actions (for split view)
+    QAction* m_rightActionRotateLeft;
+    QAction* m_rightActionRotateRight;
+    QAction* m_rightActionPreviousPage;
+    QAction* m_rightActionNextPage;
+    QAction* m_rightActionZoomIn;
+    QAction* m_rightActionZoomOut;
+    QAction* m_rightActionFindPrevious;
+    QAction* m_rightActionFindNext;
+    
+    // Page navigation widgets (shared/main toolbar)
     QLabel* m_pageLabel;
     QLineEdit* m_pageInput;
     QLabel* m_totalPagesLabel;
     
-    // Search widgets
+    // Search widgets (shared/main toolbar)
     QLabel* m_searchLabel;
     QLineEdit* m_searchInput;
+    
+    // Left panel navigation widgets
+    QLabel* m_leftPageLabel;
+    QLineEdit* m_leftPageInput;
+    QLabel* m_leftTotalPagesLabel;
+    QLabel* m_leftSearchLabel;
+    QLineEdit* m_leftSearchInput;
+    
+    // Right panel navigation widgets  
+    QLabel* m_rightPageLabel;
+    QLineEdit* m_rightPageInput;
+    QLabel* m_rightTotalPagesLabel;
+    QLabel* m_rightSearchLabel;
+    QLineEdit* m_rightSearchInput;
     
     // Update timer for the embedded viewer
     QTimer* m_updateTimer;
@@ -155,7 +223,8 @@ private:
     
     // State tracking
     bool m_viewerInitialized;
-    bool m_pdfLoaded;
+    bool m_pdfLoaded;              // Left panel PDF loaded state
+    bool m_rightPdfLoaded;         // Right panel PDF loaded state
     bool m_usingFallback;
     bool m_navigationInProgress;  // Flag to track when programmatic navigation is happening
     QString m_currentFilePath;
