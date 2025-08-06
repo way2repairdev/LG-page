@@ -544,6 +544,60 @@ void MainApplication::openPCBInTab(const QString &filePath)
         QMessageBox::warning(this, "PCB Error", error);
     });
     
+    // Connect PCB viewer split view signals (same as PDF viewer)
+    connect(pcbViewer, &PCBViewerWidget::requestCurrentPDFViewer, this, [this, pcbViewer]() {
+        qDebug() << "MainApplication: PCB viewer requesting PDF viewer for split view";
+        
+        // First, check if there's an active PDF viewer
+        QWidget* activeWidget = m_tabWidget->getActiveWidget();
+        DualTabWidget::TabType activeTabType = m_tabWidget->getCurrentTabType();
+        
+        qDebug() << "MainApplication: Active tab type:" << (int)activeTabType 
+                 << "(PDF=0, PCB=1), Active widget:" << activeWidget;
+        
+        if (activeWidget && activeTabType == DualTabWidget::PDF_TAB) {
+            qDebug() << "MainApplication: Using currently active PDF viewer";
+            pcbViewer->embedPDFViewerInRightPanel(activeWidget);
+            return;
+        }
+        
+        // If no active PDF viewer, look for any available PDF viewer
+        // Check if there are any PDF tabs available
+        int pdfTabCount = m_tabWidget->count(DualTabWidget::PDF_TAB);
+        qDebug() << "MainApplication: Found" << pdfTabCount << "PDF tabs available";
+        
+        if (pdfTabCount > 0) {
+            // Get the first PDF viewer (or the most recently used one)
+            QWidget* pdfWidget = m_tabWidget->widget(0, DualTabWidget::PDF_TAB);
+            if (pdfWidget) {
+                qDebug() << "MainApplication: Using first available PDF viewer";
+                pcbViewer->embedPDFViewerInRightPanel(pdfWidget);
+                return;
+            }
+        }
+        
+        qDebug() << "MainApplication: No PDF viewer available to embed";
+    });
+    
+    connect(pcbViewer, &PCBViewerWidget::releasePDFViewer, this, [this, pcbViewer]() {
+        qDebug() << "MainApplication: Releasing PDF viewer from PCB viewer";
+        // The PDF viewer will be removed from the right panel
+        // and returned to its original tab location
+    });
+    
+    // Connect split view state change signals for tree view management
+    connect(pcbViewer, &PCBViewerWidget::splitViewActivated, this, [this]() {
+        qDebug() << "MainApplication: PCB split view activated - hiding tree view";
+        setTreeViewVisible(false);
+        statusBar()->showMessage("PCB Split view mode - Tree view hidden");
+    });
+    
+    connect(pcbViewer, &PCBViewerWidget::splitViewDeactivated, this, [this]() {
+        qDebug() << "MainApplication: PCB split view deactivated - showing tree view";
+        setTreeViewVisible(true);
+        statusBar()->showMessage("Normal view mode - Tree view restored");
+    });
+    
     // Add PCB viewer to PCB tab row
     QString tabName = fileInfo.fileName();
     QIcon tabIcon = getFileIcon(filePath);

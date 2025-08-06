@@ -5,6 +5,7 @@
 #include <QVBoxLayout>
 #include <QToolBar>
 #include <QTimer>
+#include <QSplitter>
 #include <memory>
 
 // Forward declarations
@@ -40,16 +41,30 @@ public:
     void setToolbarVisible(bool visible);
     bool isToolbarVisible() const;
     QToolBar* getToolbar() const;
+    
+    // Split view functionality (same as PDF viewer)
+    void embedPDFViewerInRightPanel(QWidget* pdfViewer);
+    void removePDFViewerFromRightPanel();
+    bool isSplitViewActive() const;
 
 signals:
     // File events
     void pcbLoaded(const QString &filePath);
     void pcbClosed();
     void errorOccurred(const QString &error);
+    
+    // Split view signals (same as PDF viewer)
+    void requestCurrentPDFViewer();
+    void releasePDFViewer();
+    void splitViewActivated();
+    void splitViewDeactivated();
 
 public slots:
     // Update functions
     void updateViewer();
+    
+    // Split view slot
+    void onSplitWindowClicked();
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -76,12 +91,21 @@ private:
     QToolBar *m_toolbar;
     QWidget *m_viewerContainer;
     QTimer *m_updateTimer;
+    
+    // Split view components (same structure as PDF viewer)
+    QSplitter *m_splitter;
+    QWidget *m_leftPanel;
+    QWidget *m_rightPanel;
+    QToolBar *m_leftToolbar;
+    QToolBar *m_rightToolbar;
+    QWidget *m_embeddedPDFViewer;
 
     // State variables
     bool m_viewerInitialized;
     bool m_pcbLoaded;
     bool m_usingFallback;
     bool m_toolbarVisible;
+    bool m_isSplitView;
     QString m_currentFilePath;
     
     // Update management
