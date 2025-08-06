@@ -2,20 +2,80 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "Build and Run LoginPage",
+			"label": "Configure CMake",
 			"type": "shell",
 			"command": "cmake",
 			"args": [
-				"--build",
-				"build/Desktop_Qt_6_9_1_MinGW_64_bit-Debug",
-				"--target",
-				"LoginPage"
+				"-S",
+				".",
+				"-B",
+				"build",
+				"-G",
+				"MinGW Makefiles"
 			],
 			"group": "build",
 			"isBackground": false,
 			"problemMatcher": [
 				"$gcc"
-			]
+			],
+			"detail": "Configure the CMake project for MinGW"
+		},
+		{
+			"label": "Build Project",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build",
+				"--target",
+				"Way2RepairLoginSystem"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"isBackground": false,
+			"problemMatcher": [
+				"$gcc"
+			],
+			"dependsOn": "Configure CMake",
+			"detail": "Build the Way2RepairLoginSystem executable"
+		},
+		{
+			"label": "Clean Build",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build",
+				"--target",
+				"clean"
+			],
+			"group": "build",
+			"isBackground": false,
+			"problemMatcher": [
+				"$gcc"
+			],
+			"detail": "Clean the build directory"
+		},
+		{
+			"label": "Run Application",
+			"type": "shell",
+			"command": ".\\build\\Way2RepairLoginSystem.exe",
+			"group": "test",
+			"isBackground": false,
+			"dependsOn": "Build Project",
+			"detail": "Run the Way2RepairLoginSystem application"
+		},
+		{
+			"label": "Build and Run",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"Build Project",
+				"Run Application"
+			],
+			"group": "test",
+			"detail": "Build and run the application"
 		}
 	]
 }
