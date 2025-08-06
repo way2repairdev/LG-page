@@ -403,6 +403,47 @@ void MainApplication::openPDFInTab(const QString &filePath)
         statusBar()->showMessage(QString("PDF Zoom: %1%").arg(static_cast<int>(zoomLevel * 100)));
     });
     
+    // Connect PCB viewer embedding signals
+    connect(pdfViewer, &PDFViewerWidget::requestCurrentPCBViewer, this, [this, pdfViewer]() {
+        qDebug() << "MainApplication: PDF viewer requesting PCB viewer for split view";
+        
+        // First, check if there's an active PCB viewer
+        QWidget* activeWidget = m_tabWidget->getActiveWidget();
+        DualTabWidget::TabType activeTabType = m_tabWidget->getCurrentTabType();
+        
+        qDebug() << "MainApplication: Active tab type:" << (int)activeTabType 
+                 << "(PDF=0, PCB=1), Active widget:" << activeWidget;
+        
+        if (activeWidget && activeTabType == DualTabWidget::PCB_TAB) {
+            qDebug() << "MainApplication: Using currently active PCB viewer";
+            pdfViewer->embedPCBViewerInRightPanel(activeWidget);
+            return;
+        }
+        
+        // If no active PCB viewer, look for any available PCB viewer
+        // Check if there are any PCB tabs available
+        int pcbTabCount = m_tabWidget->count(DualTabWidget::PCB_TAB);
+        qDebug() << "MainApplication: Found" << pcbTabCount << "PCB tabs available";
+        
+        if (pcbTabCount > 0) {
+            // Get the first PCB viewer (or the most recently used one)
+            QWidget* pcbWidget = m_tabWidget->widget(0, DualTabWidget::PCB_TAB);
+            if (pcbWidget) {
+                qDebug() << "MainApplication: Using first available PCB viewer";
+                pdfViewer->embedPCBViewerInRightPanel(pcbWidget);
+                return;
+            }
+        }
+        
+        qDebug() << "MainApplication: No PCB viewer available to embed";
+    });
+    
+    connect(pdfViewer, &PDFViewerWidget::releasePCBViewer, this, [this, pdfViewer]() {
+        qDebug() << "MainApplication: Releasing PCB viewer from PDF viewer";
+        // The PCB viewer will be removed from the right panel
+        // and returned to its original tab location
+    });
+    
     // Add PDF viewer to PDF tab row
     QString tabName = fileInfo.fileName();
     QIcon tabIcon = getFileIcon(filePath);

@@ -55,6 +55,17 @@ public:
     void clearRightPanelPDF();
 
     /**
+     * Embed a PCB viewer widget in the right panel (for split view)
+     * @param pcbWidget The PCB viewer widget to embed
+     */
+    void embedPCBViewerInRightPanel(QWidget* pcbWidget);
+    
+    /**
+     * Remove the embedded PCB viewer from the right panel
+     */
+    void removePCBViewerFromRightPanel();
+
+    /**
      * Check if a PDF is currently loaded
      */
     bool isPDFLoaded() const;
@@ -116,6 +127,12 @@ signals:
     // Emitted when zoom level changes
     void zoomChanged(double zoomLevel);
 
+    // Emitted when split view is activated and needs the current PCB viewer
+    void requestCurrentPCBViewer();
+    
+    // Emitted when split view is deactivated and PCB viewer should be returned
+    void releasePCBViewer();
+
 protected:
     void resizeEvent(QResizeEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
@@ -155,6 +172,7 @@ private:
     QWidget* m_leftViewerContainer;
     QWidget* m_rightViewerContainer;
     QLabel* m_rightPlaceholderLabel;
+    QWidget* m_embeddedPCBViewer;  // The PCB viewer widget embedded in right panel
     bool m_isSplitView;
     
     // Dual toolbar support

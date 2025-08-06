@@ -48,6 +48,7 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_leftViewerContainer(nullptr)
     , m_rightViewerContainer(nullptr)
     , m_rightPlaceholderLabel(nullptr)
+    , m_embeddedPCBViewer(nullptr)
     , m_isSplitView(false)
     , m_leftToolbar(nullptr)
     , m_rightToolbar(nullptr)
@@ -296,6 +297,79 @@ void PDFViewerWidget::clearRightPanelPDF()
     }
     
     qDebug() << "PDFViewerWidget: Right panel PDF cleared successfully";
+}
+
+void PDFViewerWidget::embedPCBViewerInRightPanel(QWidget* pcbWidget)
+{
+    if (!pcbWidget) {
+        qDebug() << "PDFViewerWidget: Cannot embed null PCB widget";
+        return;
+    }
+
+    qDebug() << "PDFViewerWidget: Embedding PCB viewer in right panel";
+    
+    // Store reference to the embedded PCB viewer
+    m_embeddedPCBViewer = pcbWidget;
+    
+    // Hide the placeholder label
+    if (m_rightPlaceholderLabel) {
+        m_rightPlaceholderLabel->hide();
+    }
+    
+    // Get the right container's layout
+    QVBoxLayout* rightContainerLayout = qobject_cast<QVBoxLayout*>(m_rightViewerContainer->layout());
+    if (rightContainerLayout) {
+        // Add the PCB viewer to the right container
+        rightContainerLayout->addWidget(pcbWidget);
+        pcbWidget->show();
+        
+        // IMPORTANT: Let the PCB viewer manage its own toolbar
+        // Don't show the PDF's right toolbar - the PCB viewer has its own toolbar
+        if (m_rightToolbar) {
+            m_rightToolbar->hide();
+            qDebug() << "PDFViewerWidget: PDF right toolbar hidden (PCB viewer manages its own toolbar)";
+        }
+        
+        qDebug() << "PDFViewerWidget: PCB viewer embedded successfully";
+    } else {
+        qDebug() << "PDFViewerWidget: Failed to get right container layout";
+    }
+}
+
+void PDFViewerWidget::removePCBViewerFromRightPanel()
+{
+    if (!m_embeddedPCBViewer) {
+        qDebug() << "PDFViewerWidget: No PCB viewer to remove";
+        return;
+    }
+
+    qDebug() << "PDFViewerWidget: Removing PCB viewer from right panel";
+    
+    // Get the right container's layout
+    QVBoxLayout* rightContainerLayout = qobject_cast<QVBoxLayout*>(m_rightViewerContainer->layout());
+    if (rightContainerLayout) {
+        // Remove the PCB viewer from the layout
+        rightContainerLayout->removeWidget(m_embeddedPCBViewer);
+        m_embeddedPCBViewer->hide();
+        
+        // Clear the reference
+        m_embeddedPCBViewer = nullptr;
+        
+        // Show the placeholder label again
+        if (m_rightPlaceholderLabel) {
+            m_rightPlaceholderLabel->show();
+        }
+        
+        // Hide the right toolbar since no content is loaded
+        if (m_rightToolbar) {
+            m_rightToolbar->hide();
+            qDebug() << "PDFViewerWidget: Right toolbar hidden (PCB viewer removed)";
+        }
+        
+        qDebug() << "PDFViewerWidget: PCB viewer removed successfully";
+    } else {
+        qDebug() << "PDFViewerWidget: Failed to get right container layout";
+    }
 }
 
 void PDFViewerWidget::initializePDFViewer()
@@ -735,6 +809,16 @@ void PDFViewerWidget::setupIndividualToolbar(QToolBar* toolbar, bool isLeftPanel
     
     QString panelName = isLeftPanel ? "Left" : "Right";
     
+    // Add split button to left toolbar only (so users can exit split view)
+    if (isLeftPanel) {
+        QAction* leftSlipTabAction = toolbar->addAction(QIcon(":/icons/images/icons/slit-tab.png"), "");
+        leftSlipTabAction->setToolTip("Exit Split View");
+        connect(leftSlipTabAction, &QAction::triggered, this, &PDFViewerWidget::onSlipTabClicked);
+        
+        // Add separator after split button
+        toolbar->addSeparator();
+    }
+    
     // Add rotate left button
     *rotateLeftAction = toolbar->addAction(QIcon(":/icons/images/icons/rotate_left.svg"), "");
     (*rotateLeftAction)->setToolTip("Rotate Left (" + panelName + ")");
@@ -963,6 +1047,12 @@ void PDFViewerWidget::onSlipTabClicked()
         m_rightPanel->hide();
         m_isSplitView = false;
         
+        // Release PCB viewer from right panel
+        if (m_embeddedPCBViewer) {
+            emit releasePCBViewer();
+            removePCBViewerFromRightPanel();
+        }
+        
         // Show main toolbar and hide individual toolbars
         m_toolbar->show();
         m_leftToolbar->hide();
@@ -983,13 +1073,17 @@ void PDFViewerWidget::onSlipTabClicked()
         m_toolbar->hide();
         m_leftToolbar->show();
         
-        // Only show right toolbar if a PDF is loaded in the right panel
-        if (m_rightPdfLoaded) {
+        // Request PCB viewer for the right panel if available
+        emit requestCurrentPCBViewer();
+        
+        // Don't show PDF's right toolbar - PCB viewer manages its own toolbar
+        // Only show right toolbar if there's a PDF loaded in the right panel (not PCB)
+        if (m_rightPdfLoaded && !m_embeddedPCBViewer) {
             m_rightToolbar->show();
-            qDebug() << "PDFViewerWidget: Right toolbar shown (PDF loaded in right panel)";
+            qDebug() << "PDFViewerWidget: PDF right toolbar shown (PDF loaded in right panel)";
         } else {
             m_rightToolbar->hide();
-            qDebug() << "PDFViewerWidget: Right toolbar hidden (no PDF in right panel)";
+            qDebug() << "PDFViewerWidget: PDF right toolbar hidden (PCB viewer manages its own toolbar)";
         }
         
         // Set equal sizes for both panels
