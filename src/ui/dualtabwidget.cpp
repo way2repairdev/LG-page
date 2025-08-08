@@ -459,6 +459,50 @@ QWidget* DualTabWidget::getActiveWidget() const
     return nullptr;
 }
 
+void DualTabWidget::ensureContentWidgetPresent(QWidget* widget, TabType type)
+{
+    if (!widget) return;
+    if (type == PDF_TAB) {
+        // If widget is not in our list, nothing to do
+        int idx = m_pdfWidgets.indexOf(widget);
+        if (idx == -1) return;
+        // If it's not currently parented under the PDF content area, re-add
+    if (widget->parentWidget() != m_pdfContentArea) {
+            // Remove from any layout it's currently in
+            if (widget->parentWidget() && widget->parentWidget()->layout()) {
+                widget->parentWidget()->layout()->removeWidget(widget);
+            }
+            widget->setParent(m_pdfContentArea);
+            if (m_pdfContentArea->indexOf(widget) == -1) {
+                m_pdfContentArea->addWidget(widget);
+            }
+    } else if (m_pdfContentArea->indexOf(widget) == -1) {
+            m_pdfContentArea->addWidget(widget);
+        }
+    // Ensure it fills available space and is current
+    widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_pdfContentArea->setCurrentWidget(widget);
+    widget->show();
+    } else {
+        int idx = m_pcbWidgets.indexOf(widget);
+        if (idx == -1) return;
+    if (widget->parentWidget() != m_pcbContentArea) {
+            if (widget->parentWidget() && widget->parentWidget()->layout()) {
+                widget->parentWidget()->layout()->removeWidget(widget);
+            }
+            widget->setParent(m_pcbContentArea);
+            if (m_pcbContentArea->indexOf(widget) == -1) {
+                m_pcbContentArea->addWidget(widget);
+            }
+    } else if (m_pcbContentArea->indexOf(widget) == -1) {
+            m_pcbContentArea->addWidget(widget);
+        }
+    widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_pcbContentArea->setCurrentWidget(widget);
+    widget->show();
+    }
+}
+
 void DualTabWidget::setActiveTabType(TabType type)
 {
     logDebug(QString("setActiveTabType() called - current type: %1, new type: %2").arg((int)m_activeTabType).arg((int)type));

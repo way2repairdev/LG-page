@@ -76,6 +76,77 @@
 			],
 			"group": "test",
 			"detail": "Build and run the application"
+		},
+		{
+			"label": "Local CMake Build",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build",
+				"--target",
+				"Way2RepairLoginSystem"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Local CMake Build",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build",
+				"--target",
+				"Way2RepairLoginSystem"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build Project",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build",
+				"--target",
+				"Way2RepairLoginSystem"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build Project",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build",
+				"--target",
+				"Way2RepairLoginSystem"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run Application",
+			"type": "shell",
+			"command": ".\\build\\Way2RepairLoginSystem.exe",
+			"isBackground": false,
+			"group": "test"
 		}
 	]
 }

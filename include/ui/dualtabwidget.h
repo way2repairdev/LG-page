@@ -45,6 +45,9 @@ public:
     bool hasActiveTab() const;
     QWidget* getActiveWidget() const;
 
+    // Ensure a widget is present in its content area after being reparented externally
+    void ensureContentWidgetPresent(QWidget* widget, TabType type);
+
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
 

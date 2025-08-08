@@ -453,6 +453,29 @@ void PDFViewerEmbedder::resize(int width, int height)
     // Update scroll state with new viewport dimensions
     if (m_scrollState && m_pdfLoaded) {
         UpdateScrollState(*m_scrollState, (float)height, m_pageHeights);
+
+        // Re-center/clamp horizontal offset after width changes to avoid left/right gaps
+        // Compute the maximum zoomed page width
+        float zoom = m_scrollState->zoomScale;
+        float zoomedPageWidthMax = 0.0f;
+        for (size_t i = 0; i < m_pageWidths.size(); ++i) {
+            float w = static_cast<float>(m_pageWidths[i]) * zoom;
+            if (w > zoomedPageWidthMax) zoomedPageWidthMax = w;
+        }
+
+        if (zoomedPageWidthMax <= static_cast<float>(width)) {
+            // Content fits in the viewport, keep perfectly centered
+            m_scrollState->horizontalOffset = 0.0f;
+        } else {
+            // Content is wider than viewport; clamp offset within valid range
+            float minHorizontalOffset = (static_cast<float>(width) - zoomedPageWidthMax) / 2.0f;
+            float maxHorizontalOffset = (zoomedPageWidthMax - static_cast<float>(width)) / 2.0f;
+            if (m_scrollState->horizontalOffset < minHorizontalOffset) {
+                m_scrollState->horizontalOffset = minHorizontalOffset;
+            } else if (m_scrollState->horizontalOffset > maxHorizontalOffset) {
+                m_scrollState->horizontalOffset = maxHorizontalOffset;
+            }
+        }
     }
 
     // Force texture regeneration for the new size

@@ -47,6 +47,9 @@ public:
     void removePDFViewerFromRightPanel();
     bool isSplitViewActive() const;
 
+    // Access embedded viewer pointer (for restoration)
+    QWidget* getEmbeddedPDFViewer() const { return m_embeddedPDFViewer; }
+
 signals:
     // File events
     void pcbLoaded(const QString &filePath);
@@ -65,6 +68,9 @@ public slots:
     
     // Split view slot
     void onSplitWindowClicked();
+
+    // Ensure viewport and camera are synced after activation/tab switch
+    void ensureViewportSync();
 
 protected:
     void resizeEvent(QResizeEvent *event) override;

@@ -65,6 +65,9 @@ public:
      */
     void removePCBViewerFromRightPanel();
 
+    // Access embedded viewer pointer (for restoration)
+    QWidget* getEmbeddedPCBViewer() const { return m_embeddedPCBViewer; }
+
     /**
      * Check if a PDF is currently loaded
      */
@@ -113,6 +116,9 @@ public slots:
     void searchText();
     void findNext();
     void findPrevious();
+
+    // Ensure viewport and renderer are synced after activation/tab switch
+    void ensureViewportSync();
 
 signals:
     // Emitted when PDF is successfully loaded

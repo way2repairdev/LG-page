@@ -13,6 +13,7 @@
 #include <QApplication>
 #include <QStyle>
 #include <QSizePolicy>
+#include <QVBoxLayout>
 
 // Enhanced debug logging for PCBViewerWidget
 void WritePCBDebugToFile(const QString& message) {
@@ -258,6 +259,20 @@ void PCBViewerWidget::paintEvent(QPaintEvent *event)
     QWidget::paintEvent(event);
 }
 
+void PCBViewerWidget::ensureViewportSync()
+{
+    if (!m_pcbEmbedder || !m_viewerInitialized)
+        return;
+
+    QSize containerSize = m_viewerContainer ? m_viewerContainer->size() : size();
+    int w = containerSize.width();
+    int h = containerSize.height();
+    if (w > 0 && h > 0) {
+        // resize() in embedder clamps/centers camera; call explicitly post-activation
+        m_pcbEmbedder->resize(w, h);
+    }
+}
+
 void PCBViewerWidget::focusInEvent(QFocusEvent *event)
 {
     WritePCBDebugToFile("PCB widget focus in");
@@ -333,8 +348,17 @@ void PCBViewerWidget::setupUI()
     // Create splitter for split view support (same as PDF viewer)
     m_splitter = new QSplitter(Qt::Horizontal, this);
     m_splitter->setChildrenCollapsible(false);
-    
-    // Create left panel (main PCB viewer)
+    m_splitter->setCollapsible(0, false);
+    m_splitter->setCollapsible(1, false);
+    // Track user-resized sizes for restoration
+    connect(m_splitter, &QSplitter::splitterMoved, this, [this](int, int){
+        if (!m_splitter) return;
+        QVariantList list;
+        const QList<int> sz = m_splitter->sizes();
+        for (int v : sz) list << v;
+        m_splitter->setProperty("lastSizes", list);
+    });
+
     m_leftPanel = new QWidget(this);
     QVBoxLayout* leftLayout = new QVBoxLayout(m_leftPanel);
     leftLayout->setContentsMargins(0, 0, 0, 0);
@@ -360,6 +384,8 @@ void PCBViewerWidget::setupUI()
     m_splitter->addWidget(m_rightPanel);
     
     // Set initial equal sizes
+    m_splitter->setStretchFactor(0, 1);
+    m_splitter->setStretchFactor(1, 1);
     m_splitter->setSizes({400, 400});
     
     // Add toolbar and splitter to main layout
@@ -436,16 +462,40 @@ void PCBViewerWidget::onSplitWindowClicked()
 {
     WritePCBDebugToFile("PCB split window clicked");
     
+    // Prevent re-entrancy during rapid toggles
+    if (this->property("splitTransition").toBool()) return;
+    this->setProperty("splitTransition", true);
+    QTimer::singleShot(0, this, [this]() { this->setProperty("splitTransition", false); });
+
     // Toggle between single view and split view
     if (m_isSplitView) {
         // Switch to single view
-        m_rightPanel->hide();
+        if (m_splitter) {
+            m_splitter->setCollapsible(1, true);
+        }
+        if (m_rightPanel) {
+            m_rightPanel->setMinimumSize(0, 0);
+            m_rightPanel->hide();
+            // Physically detach right panel to avoid leftover splitter handle/space
+            if (m_splitter && m_rightPanel->parent() == m_splitter) {
+                m_rightPanel->setParent(nullptr);
+            }
+        }
+        if (m_splitter) {
+            const int totalW = m_splitter->width();
+            m_splitter->setStretchFactor(0, 1);
+            m_splitter->setStretchFactor(1, 0);
+            m_splitter->setSizes({ totalW > 0 ? totalW : 1, 0 });
+            m_splitter->updateGeometry();
+        }
         m_isSplitView = false;
         
         // Release PDF viewer from right panel
         if (m_embeddedPDFViewer) {
             emit releasePDFViewer();
             removePDFViewerFromRightPanel();
+            // Clear our reference now that we've requested release
+            m_embeddedPDFViewer = nullptr;
         }
         
         // Update tooltip
@@ -460,14 +510,40 @@ void PCBViewerWidget::onSplitWindowClicked()
         WritePCBDebugToFile("PCB viewer: Switched to single view mode");
     } else {
         // Switch to split view
-        m_rightPanel->show();
+        if (m_rightPanel) {
+            m_rightPanel->setMinimumSize(400, 300);
+            if (m_splitter && m_rightPanel->parent() != m_splitter) {
+                m_splitter->insertWidget(1, m_rightPanel);
+            }
+            m_rightPanel->show();
+        }
+        if (m_splitter) {
+            m_splitter->setCollapsible(1, false);
+        }
         m_isSplitView = true;
         
         // Request PDF viewer for the right panel if available
         emit requestCurrentPDFViewer();
         
-        // Set equal sizes for both panels
-        m_splitter->setSizes({400, 400});
+        // Restore last user ratio if available; otherwise equal split
+        if (m_splitter) {
+            QVariant last = m_splitter->property("lastSizes");
+            QList<int> sizesToSet;
+            if (last.isValid() && last.canConvert<QVariantList>()) {
+                const QVariantList vl = last.toList();
+                if (vl.size() >= 2) {
+                    sizesToSet << vl[0].toInt() << vl[1].toInt();
+                }
+            }
+            if (sizesToSet.size() == 2 && sizesToSet[0] > 0 && sizesToSet[1] > 0) {
+                m_splitter->setSizes(sizesToSet);
+            } else {
+                const int totalW = m_splitter->width();
+                const int half = totalW > 0 ? qMax(1, totalW / 2) : 400;
+                m_splitter->setSizes({ half, half });
+            }
+            m_splitter->updateGeometry();
+        }
         
         // Update tooltip
         QAction* splitAction = m_toolbar->findChild<QAction*>("splitWindowAction");
@@ -481,10 +557,13 @@ void PCBViewerWidget::onSplitWindowClicked()
         WritePCBDebugToFile("PCB viewer: Switched to split view mode");
     }
     
-    // Force resize if PCB viewer is initialized
+    // Force resize if PCB viewer is initialized after layouts settle
     if (m_viewerInitialized && m_pcbEmbedder) {
-        QSize containerSize = m_viewerContainer ? m_viewerContainer->size() : size();
-        m_pcbEmbedder->resize(containerSize.width(), containerSize.height());
+        QTimer::singleShot(0, this, [this]() {
+            QWidget* activeContainer = m_viewerContainer ? m_viewerContainer : this;
+            QSize containerSize = activeContainer->size();
+            m_pcbEmbedder->resize(containerSize.width(), containerSize.height());
+        });
     }
 }
 
@@ -533,11 +612,16 @@ void PCBViewerWidget::removePDFViewerFromRightPanel()
     
     // Remove from right panel layout
     if (m_rightPanel->layout()) {
-        m_rightPanel->layout()->removeWidget(m_embeddedPDFViewer);
+        // Only detach if it's still a child of right panel
+        if (m_embeddedPDFViewer->parentWidget() == m_rightPanel) {
+            m_rightPanel->layout()->removeWidget(m_embeddedPDFViewer);
+            m_embeddedPDFViewer->setParent(nullptr);
+        } else {
+            m_rightPanel->layout()->removeWidget(m_embeddedPDFViewer);
+        }
     }
     
-    // Clear reference
-    m_embeddedPDFViewer = nullptr;
+    // Do not clear the reference here; let the owner clear after reattachment
     
     WritePCBDebugToFile("PDF viewer removed from PCB right panel");
 }

@@ -270,6 +270,39 @@ void PCBViewerEmbedder::resize(int width, int height)
 #endif
     }
 
+    // After viewport size changes, adjust camera horizontally to avoid gaps
+    if (m_renderer && m_pdfLoaded && m_pcbData) {
+        const auto& cam = m_renderer->GetCamera();
+        float zoom = cam.zoom;
+        if (zoom < 0.01f) zoom = 0.01f;
+
+        BRDPoint min_pt{}, max_pt{};
+        m_pcbData->GetBoundingBox(min_pt, max_pt);
+        float pcb_min_x = static_cast<float>(min_pt.x);
+        float pcb_max_x = static_cast<float>(max_pt.x);
+        float pcb_width = pcb_max_x - pcb_min_x;
+
+        if (pcb_width > 0.0f) {
+            float half_view_world = static_cast<float>(width) * 0.5f / zoom;
+            float cam_x = cam.x;
+            float cam_y = cam.y;
+            float cam_zoom = cam.zoom;
+
+            if (pcb_width <= 2.0f * half_view_world) {
+                // Content narrower than viewport: center exactly
+                float center_x = (pcb_min_x + pcb_max_x) * 0.5f;
+                m_renderer->SetCamera(center_x, cam_y, cam_zoom);
+            } else {
+                // Wider than viewport: clamp camera.x within valid horizontal bounds
+                float min_cam_x = pcb_min_x + half_view_world;
+                float max_cam_x = pcb_max_x - half_view_world;
+                if (cam_x < min_cam_x) cam_x = min_cam_x;
+                if (cam_x > max_cam_x) cam_x = max_cam_x;
+                m_renderer->SetCamera(cam_x, cam_y, cam_zoom);
+            }
+        }
+    }
+
     handleStatus("PCB viewer resized to " + std::to_string(width) + "x" + std::to_string(height));
 }
 

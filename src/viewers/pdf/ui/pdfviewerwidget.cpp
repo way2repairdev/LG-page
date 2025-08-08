@@ -348,9 +348,14 @@ void PDFViewerWidget::removePCBViewerFromRightPanel()
     // Get the right container's layout
     QVBoxLayout* rightContainerLayout = qobject_cast<QVBoxLayout*>(m_rightViewerContainer->layout());
     if (rightContainerLayout) {
-        // Remove the PCB viewer from the layout
-        rightContainerLayout->removeWidget(m_embeddedPCBViewer);
-        m_embeddedPCBViewer->hide();
+        // If the PCB viewer is still a child of the right container, remove and detach
+        if (m_embeddedPCBViewer->parentWidget() == m_rightViewerContainer) {
+            rightContainerLayout->removeWidget(m_embeddedPCBViewer);
+            m_embeddedPCBViewer->setParent(nullptr);
+        } else {
+            // Already reparented elsewhere; do not hide it here
+            rightContainerLayout->removeWidget(m_embeddedPCBViewer);
+        }
         
         // Clear the reference
         m_embeddedPCBViewer = nullptr;
@@ -680,6 +685,17 @@ void PDFViewerWidget::setupViewerArea()
     // Create splitter for split view support
     m_splitter = new QSplitter(Qt::Horizontal, this);
     m_splitter->setChildrenCollapsible(false);
+    m_splitter->setCollapsible(0, false);
+    m_splitter->setCollapsible(1, false);
+    // Track user-resized sizes to restore later
+    connect(m_splitter, &QSplitter::splitterMoved, this, [this](int, int) {
+        if (m_splitter) {
+            QVariantList list;
+            const QList<int> sz = m_splitter->sizes();
+            for (int v : sz) list << v;
+            m_splitter->setProperty("lastSizes", list);
+        }
+    });
     
     // Create left panel (contains toolbar + viewer)
     m_leftPanel = new QWidget(this);
@@ -752,6 +768,8 @@ void PDFViewerWidget::setupViewerArea()
     m_splitter->addWidget(m_rightPanel);
     
     // Set equal sizes initially
+    m_splitter->setStretchFactor(0, 1);
+    m_splitter->setStretchFactor(1, 1);
     m_splitter->setSizes({400, 400});
     
     // Initially, set to single view mode
@@ -1041,10 +1059,34 @@ void PDFViewerWidget::onPageInputChanged()
 
 void PDFViewerWidget::onSlipTabClicked()
 {
+    // Prevent re-entrancy during rapid toggles
+    if (this->property("splitTransition").toBool()) return;
+    this->setProperty("splitTransition", true);
+    QTimer::singleShot(0, this, [this]() { this->setProperty("splitTransition", false); });
+
     // Toggle between single view and split view
     if (m_isSplitView) {
         // Switch to single view
-        m_rightPanel->hide();
+        // Allow collapsing the right panel completely and give all space to the left
+        if (m_splitter) {
+            m_splitter->setCollapsible(1, true);
+        }
+        if (m_rightPanel) {
+            m_rightPanel->setMinimumSize(0, 0);
+            m_rightPanel->hide();
+            // Remove from splitter entirely to avoid leftover handle space
+            if (m_splitter && m_rightPanel->parent() == m_splitter) {
+                m_rightPanel->setParent(nullptr);
+            }
+        }
+        if (m_splitter) {
+            // Collapse right side; assign all width to left
+            const int totalW = m_splitter->width();
+            m_splitter->setStretchFactor(0, 1);
+            m_splitter->setStretchFactor(1, 0);
+            m_splitter->setSizes({ totalW > 0 ? totalW : 1, 0 });
+            m_splitter->updateGeometry();
+        }
         m_isSplitView = false;
         
         // Release PCB viewer from right panel
@@ -1069,7 +1111,19 @@ void PDFViewerWidget::onSlipTabClicked()
         qDebug() << "PDFViewerWidget: Switched to single view mode";
     } else {
         // Switch to split view
-        m_rightPanel->show();
+        if (m_rightPanel) {
+            // Restore a sensible minimum now that it's visible again
+            m_rightPanel->setMinimumSize(400, 300);
+            // Reinsert right panel into splitter if it was removed
+            if (m_splitter && m_rightPanel->parent() != m_splitter) {
+                m_splitter->insertWidget(1, m_rightPanel);
+            }
+            m_rightPanel->show();
+        }
+        if (m_splitter) {
+            // Prevent children from collapsing unexpectedly while in split view
+            m_splitter->setCollapsible(1, false);
+        }
         m_isSplitView = true;
         
         // Hide main toolbar and show left toolbar (always visible in split mode)
@@ -1089,8 +1143,25 @@ void PDFViewerWidget::onSlipTabClicked()
             qDebug() << "PDFViewerWidget: PDF right toolbar hidden (PCB viewer manages its own toolbar)";
         }
         
-        // Set equal sizes for both panels
-        m_splitter->setSizes({400, 400});
+        // Restore last user ratio if available; otherwise split equally
+        if (m_splitter) {
+            QVariant last = m_splitter->property("lastSizes");
+            QList<int> sizesToSet;
+            if (last.isValid() && last.canConvert<QVariantList>()) {
+                const QVariantList vl = last.toList();
+                if (vl.size() >= 2) {
+                    sizesToSet << vl[0].toInt() << vl[1].toInt();
+                }
+            }
+            if (sizesToSet.size() == 2 && sizesToSet[0] > 0 && sizesToSet[1] > 0) {
+                m_splitter->setSizes(sizesToSet);
+            } else {
+                const int totalW = m_splitter->width();
+                const int half = totalW > 0 ? qMax(1, totalW / 2) : 400;
+                m_splitter->setSizes({ half, half });
+            }
+            m_splitter->updateGeometry();
+        }
         
         // Update tooltip
         if (m_actionSlipTab) {
@@ -1106,11 +1177,13 @@ void PDFViewerWidget::onSlipTabClicked()
         qDebug() << "PDFViewerWidget: Switched to split view mode";
     }
     
-    // Force resize if PDF viewer is initialized
+    // Force resize if PDF viewer is initialized (post-layout tick to ensure splitter applied)
     if (m_viewerInitialized && m_pdfEmbedder) {
-        // Get the current size of the left container and notify the PDF embedder
-        QSize leftSize = m_leftViewerContainer->size();
-        m_pdfEmbedder->resize(leftSize.width(), leftSize.height());
+        QTimer::singleShot(0, this, [this]() {
+            QWidget* activeContainer = m_leftViewerContainer ? m_leftViewerContainer : m_viewerContainer;
+            QSize leftSize = activeContainer->size();
+            m_pdfEmbedder->resize(leftSize.width(), leftSize.height());
+        });
     }
 }
 
@@ -1362,6 +1435,11 @@ void PDFViewerWidget::showEvent(QShowEvent* event)
             }
         });
     }
+
+    // After becoming visible (e.g., after tab switch), ensure viewport sync
+    if (m_viewerInitialized) {
+        QTimer::singleShot(0, this, [this]() { ensureViewportSync(); });
+    }
 }
 
 bool PDFViewerWidget::eventFilter(QObject *watched, QEvent *event)
@@ -1381,4 +1459,21 @@ bool PDFViewerWidget::eventFilter(QObject *watched, QEvent *event)
     
     // Continue with default event processing
     return QWidget::eventFilter(watched, event);
+}
+
+void PDFViewerWidget::ensureViewportSync()
+{
+    if (!m_pdfEmbedder || !m_viewerInitialized)
+        return;
+
+    QWidget* activeContainer = m_leftViewerContainer ? m_leftViewerContainer : m_viewerContainer;
+    if (!activeContainer)
+        return;
+
+    int w = activeContainer->width();
+    int h = activeContainer->height();
+    if (w > 0 && h > 0) {
+        // resize() already recenters/clamps horizontally; call it explicitly
+        m_pdfEmbedder->resize(w, h);
+    }
 }

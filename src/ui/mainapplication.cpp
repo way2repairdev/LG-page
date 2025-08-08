@@ -440,8 +440,21 @@ void MainApplication::openPDFInTab(const QString &filePath)
     
     connect(pdfViewer, &PDFViewerWidget::releasePCBViewer, this, [this, pdfViewer]() {
         qDebug() << "MainApplication: Releasing PCB viewer from PDF viewer";
-        // The PCB viewer will be removed from the right panel
-        // and returned to its original tab location
+        // Ensure the embedded PCB widget is reattached to the PCB content area
+        QWidget* pcbWidget = pdfViewer->getEmbeddedPCBViewer();
+        if (pcbWidget) {
+            m_tabWidget->ensureContentWidgetPresent(pcbWidget, DualTabWidget::PCB_TAB);
+            pcbWidget->show();
+            pcbWidget->updateGeometry();
+            pcbWidget->update();
+            // Activate the PCB tab that owns this widget for consistency
+            for (int i = 0; i < m_tabWidget->count(DualTabWidget::PCB_TAB); ++i) {
+                if (m_tabWidget->widget(i, DualTabWidget::PCB_TAB) == pcbWidget) {
+                    m_tabWidget->setCurrentIndex(i, DualTabWidget::PCB_TAB);
+                    break;
+                }
+            }
+        }
     });
     
     // Connect split view state change signals for tree view management
@@ -581,8 +594,21 @@ void MainApplication::openPCBInTab(const QString &filePath)
     
     connect(pcbViewer, &PCBViewerWidget::releasePDFViewer, this, [this, pcbViewer]() {
         qDebug() << "MainApplication: Releasing PDF viewer from PCB viewer";
-        // The PDF viewer will be removed from the right panel
-        // and returned to its original tab location
+        // Ensure the embedded PDF widget is reattached to the PDF content area
+        QWidget* pdfWidget = pcbViewer->getEmbeddedPDFViewer();
+        if (pdfWidget) {
+            m_tabWidget->ensureContentWidgetPresent(pdfWidget, DualTabWidget::PDF_TAB);
+            pdfWidget->show();
+            pdfWidget->updateGeometry();
+            pdfWidget->update();
+            // Activate the PDF tab that owns this widget for consistency
+            for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
+                if (m_tabWidget->widget(i, DualTabWidget::PDF_TAB) == pdfWidget) {
+                    m_tabWidget->setCurrentIndex(i, DualTabWidget::PDF_TAB);
+                    break;
+                }
+            }
+        }
     });
     
     // Connect split view state change signals for tree view management
@@ -697,6 +723,25 @@ void MainApplication::onTabChangedByType(int index, DualTabWidget::TabType type)
     // Small delay before showing toolbar
     QThread::msleep(50);
     
+    // Before activating, ensure any cross-embedded viewer from the other type is restored
+    // If switching to PDF, make sure any PCB widget previously embedded is back in PCB area
+    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
+        if (auto pdf = qobject_cast<PDFViewerWidget*>(m_tabWidget->widget(i, DualTabWidget::PDF_TAB))) {
+            QWidget* pcb = pdf->getEmbeddedPCBViewer();
+            if (pcb) {
+                m_tabWidget->ensureContentWidgetPresent(pcb, DualTabWidget::PCB_TAB);
+            }
+        }
+    }
+    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PCB_TAB); ++i) {
+        if (auto pcb = qobject_cast<PCBViewerWidget*>(m_tabWidget->widget(i, DualTabWidget::PCB_TAB))) {
+            QWidget* pdf = pcb->getEmbeddedPDFViewer();
+            if (pdf) {
+                m_tabWidget->ensureContentWidgetPresent(pdf, DualTabWidget::PDF_TAB);
+            }
+        }
+    }
+
     // Show appropriate toolbar based on widget type
     if (type == DualTabWidget::PDF_TAB) {
         if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(currentWidget)) {
@@ -711,6 +756,9 @@ void MainApplication::onTabChangedByType(int index, DualTabWidget::TabType type)
             // Force layout updates
             pdfViewer->updateGeometry();
             pdfViewer->update();
+
+            // Ensure viewport/camera sync after activation (fixes horizontal gap)
+            QTimer::singleShot(0, this, [pdfViewer]() { pdfViewer->ensureViewportSync(); });
             
             statusBar()->showMessage("PDF viewer active - Use keyboard shortcuts for navigation");
         }
@@ -728,6 +776,9 @@ void MainApplication::onTabChangedByType(int index, DualTabWidget::TabType type)
             // Force layout updates
             pcbViewer->updateGeometry();
             pcbViewer->update();
+
+            // Ensure viewport/camera sync after activation
+            QTimer::singleShot(0, this, [pcbViewer]() { pcbViewer->ensureViewportSync(); });
             
             statusBar()->showMessage("PCB viewer active - Qt toolbar controls available");
         }
