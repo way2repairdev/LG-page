@@ -739,6 +739,8 @@ void DualTabWidget::onPdfCurrentChanged(int index)
 {
     logDebug(QString("PDF tab clicked - index: %1, PDF widgets count: %2").arg(index).arg(m_pdfWidgets.count()));
     if (index >= 0 && index < m_pdfWidgets.count()) {
+    // Record selection for split pairing
+    m_selectedPdfIndex = index;
         // User clicked on PDF tab - activate it with mutual exclusion
         logDebug(QString("Activating PDF tab %1").arg(index));
         activateTab(index, PDF_TAB);
@@ -751,6 +753,8 @@ void DualTabWidget::onPcbCurrentChanged(int index)
 {
     logDebug(QString("PCB tab clicked - index: %1, PCB widgets count: %2").arg(index).arg(m_pcbWidgets.count()));
     if (index >= 0 && index < m_pcbWidgets.count()) {
+    // Record selection for split pairing
+    m_selectedPcbIndex = index;
         // User clicked on PCB tab - activate it with mutual exclusion
         logDebug(QString("Activating PCB tab %1").arg(index));
         activateTab(index, PCB_TAB);
@@ -828,4 +832,10 @@ bool DualTabWidget::isRowVisible(TabType type) const
 DualTabWidget::TabType DualTabWidget::getCurrentTabType() const
 {
     return m_activeTabType;
+}
+
+int DualTabWidget::getSelectedIndex(TabType type) const
+{
+    if (type == PDF_TAB) return m_selectedPdfIndex;
+    return m_selectedPcbIndex;
 }

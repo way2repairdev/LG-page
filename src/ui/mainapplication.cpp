@@ -406,35 +406,36 @@ void MainApplication::openPDFInTab(const QString &filePath)
     // Connect PCB viewer embedding signals
     connect(pdfViewer, &PDFViewerWidget::requestCurrentPCBViewer, this, [this, pdfViewer]() {
         qDebug() << "MainApplication: PDF viewer requesting PCB viewer for split view";
-        
-        // First, check if there's an active PCB viewer
-        QWidget* activeWidget = m_tabWidget->getActiveWidget();
-        DualTabWidget::TabType activeTabType = m_tabWidget->getCurrentTabType();
-        
-        qDebug() << "MainApplication: Active tab type:" << (int)activeTabType 
-                 << "(PDF=0, PCB=1), Active widget:" << activeWidget;
-        
-        if (activeWidget && activeTabType == DualTabWidget::PCB_TAB) {
-            qDebug() << "MainApplication: Using currently active PCB viewer";
-            pdfViewer->embedPCBViewerInRightPanel(activeWidget);
-            return;
-        }
-        
-        // If no active PCB viewer, look for any available PCB viewer
-        // Check if there are any PCB tabs available
-        int pcbTabCount = m_tabWidget->count(DualTabWidget::PCB_TAB);
-        qDebug() << "MainApplication: Found" << pcbTabCount << "PCB tabs available";
-        
-        if (pcbTabCount > 0) {
-            // Get the first PCB viewer (or the most recently used one)
-            QWidget* pcbWidget = m_tabWidget->widget(0, DualTabWidget::PCB_TAB);
-            if (pcbWidget) {
-                qDebug() << "MainApplication: Using first available PCB viewer";
+
+        // Preferred: the explicitly selected PCB tab (independent of which row is active)
+        int selPcb = m_tabWidget->getSelectedIndex(DualTabWidget::PCB_TAB);
+        if (selPcb >= 0 && selPcb < m_tabWidget->count(DualTabWidget::PCB_TAB)) {
+            if (QWidget* pcbWidget = m_tabWidget->widget(selPcb, DualTabWidget::PCB_TAB)) {
+                qDebug() << "MainApplication: Using selected PCB tab index" << selPcb;
                 pdfViewer->embedPCBViewerInRightPanel(pcbWidget);
                 return;
             }
         }
-        
+
+        // Fallback: use currently active PCB if any
+        if (m_tabWidget->getCurrentTabType() == DualTabWidget::PCB_TAB) {
+            if (QWidget* activeWidget = m_tabWidget->getActiveWidget()) {
+                qDebug() << "MainApplication: Using currently active PCB viewer (fallback)";
+                pdfViewer->embedPCBViewerInRightPanel(activeWidget);
+                return;
+            }
+        }
+
+        // Last resort: first available PCB tab
+        int pcbTabCount = m_tabWidget->count(DualTabWidget::PCB_TAB);
+        if (pcbTabCount > 0) {
+            if (QWidget* pcbWidget = m_tabWidget->widget(0, DualTabWidget::PCB_TAB)) {
+                qDebug() << "MainApplication: Using first available PCB viewer (fallback)";
+                pdfViewer->embedPCBViewerInRightPanel(pcbWidget);
+                return;
+            }
+        }
+
         qDebug() << "MainApplication: No PCB viewer available to embed";
     });
     
@@ -560,35 +561,36 @@ void MainApplication::openPCBInTab(const QString &filePath)
     // Connect PCB viewer split view signals (same as PDF viewer)
     connect(pcbViewer, &PCBViewerWidget::requestCurrentPDFViewer, this, [this, pcbViewer]() {
         qDebug() << "MainApplication: PCB viewer requesting PDF viewer for split view";
-        
-        // First, check if there's an active PDF viewer
-        QWidget* activeWidget = m_tabWidget->getActiveWidget();
-        DualTabWidget::TabType activeTabType = m_tabWidget->getCurrentTabType();
-        
-        qDebug() << "MainApplication: Active tab type:" << (int)activeTabType 
-                 << "(PDF=0, PCB=1), Active widget:" << activeWidget;
-        
-        if (activeWidget && activeTabType == DualTabWidget::PDF_TAB) {
-            qDebug() << "MainApplication: Using currently active PDF viewer";
-            pcbViewer->embedPDFViewerInRightPanel(activeWidget);
-            return;
-        }
-        
-        // If no active PDF viewer, look for any available PDF viewer
-        // Check if there are any PDF tabs available
-        int pdfTabCount = m_tabWidget->count(DualTabWidget::PDF_TAB);
-        qDebug() << "MainApplication: Found" << pdfTabCount << "PDF tabs available";
-        
-        if (pdfTabCount > 0) {
-            // Get the first PDF viewer (or the most recently used one)
-            QWidget* pdfWidget = m_tabWidget->widget(0, DualTabWidget::PDF_TAB);
-            if (pdfWidget) {
-                qDebug() << "MainApplication: Using first available PDF viewer";
+
+        // Preferred: the explicitly selected PDF tab
+        int selPdf = m_tabWidget->getSelectedIndex(DualTabWidget::PDF_TAB);
+        if (selPdf >= 0 && selPdf < m_tabWidget->count(DualTabWidget::PDF_TAB)) {
+            if (QWidget* pdfWidget = m_tabWidget->widget(selPdf, DualTabWidget::PDF_TAB)) {
+                qDebug() << "MainApplication: Using selected PDF tab index" << selPdf;
                 pcbViewer->embedPDFViewerInRightPanel(pdfWidget);
                 return;
             }
         }
-        
+
+        // Fallback: use currently active PDF if any
+        if (m_tabWidget->getCurrentTabType() == DualTabWidget::PDF_TAB) {
+            if (QWidget* activeWidget = m_tabWidget->getActiveWidget()) {
+                qDebug() << "MainApplication: Using currently active PDF viewer (fallback)";
+                pcbViewer->embedPDFViewerInRightPanel(activeWidget);
+                return;
+            }
+        }
+
+        // Last resort: first available PDF tab
+        int pdfTabCount = m_tabWidget->count(DualTabWidget::PDF_TAB);
+        if (pdfTabCount > 0) {
+            if (QWidget* pdfWidget = m_tabWidget->widget(0, DualTabWidget::PDF_TAB)) {
+                qDebug() << "MainApplication: Using first available PDF viewer (fallback)";
+                pcbViewer->embedPDFViewerInRightPanel(pdfWidget);
+                return;
+            }
+        }
+
         qDebug() << "MainApplication: No PDF viewer available to embed";
     });
     

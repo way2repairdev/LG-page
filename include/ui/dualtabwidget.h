@@ -45,6 +45,10 @@ public:
     bool hasActiveTab() const;
     QWidget* getActiveWidget() const;
 
+    // Independent selection per row (doesn't switch visible content)
+    // Use this to determine split pairing: the selected PDF and selected PCB tabs.
+    int getSelectedIndex(TabType type) const;
+
     // Ensure a widget is present in its content area after being reparented externally
     void ensureContentWidgetPresent(QWidget* widget, TabType type);
 
@@ -88,6 +92,10 @@ private:
     // Separate widget lists for content isolation
     QList<QWidget*> m_pdfWidgets;
     QList<QWidget*> m_pcbWidgets;
+
+    // Track selection per row independent of active content
+    int m_selectedPdfIndex = -1;
+    int m_selectedPcbIndex = -1;
 };
 
 #endif // DUALTABWIDGET_H
