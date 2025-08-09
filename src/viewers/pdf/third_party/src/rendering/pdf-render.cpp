@@ -3,6 +3,7 @@
 #include <thread>
 #include <iostream>
 #include <mutex> // Required for std::lock_guard
+#include <cstring>
 
 PDFRenderer::PDFRenderer()
     : document_(nullptr), viewportX_(0), viewportY_(0), viewportWidth_(0), viewportHeight_(0), zoomScale_(1.0) {}
@@ -78,7 +79,8 @@ FPDF_BITMAP PDFRenderer::RenderPageToBitmap(int pageIndex, int pixelWidth, int p
     if (!page) return nullptr;
     FPDF_BITMAP bitmap = FPDFBitmap_Create(pixelWidth, pixelHeight, 0);
     FPDFBitmap_FillRect(bitmap, 0, 0, pixelWidth, pixelHeight, 0xFFFFFFFF);
-    FPDF_RenderPageBitmap(bitmap, page, 0, 0, pixelWidth, pixelHeight, 0, 0);
+    int flags = FPDF_ANNOT | FPDF_PRINTING | FPDF_RENDER_LIMITEDIMAGECACHE | FPDF_LCD_TEXT;
+    FPDF_RenderPageBitmap(bitmap, page, 0, 0, pixelWidth, pixelHeight, 0, flags);
     FPDF_ClosePage(page);
     return bitmap;
 }
@@ -107,10 +109,7 @@ FPDF_BITMAP PDFRenderer::RenderPageToBitmap(int pageIndex, int& width, int& heig
     FPDFBitmap_FillRect(bitmap, 0, 0, width, height, 0xFFFFFFFF);
     
     // Use high-quality rendering flags
-    int flags = FPDF_ANNOT | FPDF_PRINTING | FPDF_RENDER_LIMITEDIMAGECACHE;
-    if (highResolution) {
-        flags |= FPDF_RENDER_FORCEHALFTONE; // Better text rendering
-    }
+    int flags = FPDF_ANNOT | FPDF_PRINTING | FPDF_RENDER_LIMITEDIMAGECACHE | FPDF_LCD_TEXT;
     
     FPDF_RenderPageBitmap(bitmap, page, 0, 0, width, height, 0, flags);
     FPDF_ClosePage(page);
@@ -207,6 +206,49 @@ void PDFRenderer::RenderVisiblePages() {
     
     // We could add more sophisticated visible page detection here if needed
     // For now, just ensure the document is accessible and zoom scale is updated
+}
+
+// Render a portion of the page using PDFium matrix into a provided BGRA buffer.
+// pageRect is in PDF page units (points). Buffer must be width*height*4 bytes (BGRA).
+bool PDFRenderer::RenderPageRegionToBGRA(int pageIndex,
+                                         double pageLeft, double pageTop,
+                                         double pageRight, double pageBottom,
+                                         int outWidth, int outHeight,
+                                         void* outBGRA, int outStride) {
+    std::lock_guard<std::mutex> lock(document_mutex_);
+    if (!document_ || !outBGRA || outWidth <= 0 || outHeight <= 0) return false;
+
+    FPDF_PAGE page = FPDF_LoadPage(document_, pageIndex);
+    if (!page) return false;
+
+    // Create bitmap wrapping the output buffer
+    FPDF_BITMAP bmp = FPDFBitmap_CreateEx(outWidth, outHeight, FPDFBitmap_BGRA, outBGRA, outStride);
+    if (!bmp) { FPDF_ClosePage(page); return false; }
+
+    // Fill white background
+    FPDFBitmap_FillRect(bmp, 0, 0, outWidth, outHeight, 0xFFFFFFFF);
+
+    // Build matrix: map page rect to device rect [0..outWidth]x[0..outHeight]
+    FS_MATRIX m;
+    const double sx = (double)outWidth / (pageRight - pageLeft);
+    const double sy = -(double)outHeight / (pageBottom - pageTop); // flip Y
+    m.a = sx;  m.b = 0;   m.c = 0;   m.d = sy;
+    m.e = -pageLeft * sx;
+    m.f = -pageTop  * sy;
+
+    FS_RECTF clip;
+    clip.left = (float)pageLeft;
+    clip.top = (float)pageTop;
+    clip.right = (float)pageRight;
+    clip.bottom = (float)pageBottom;
+
+    int flags = FPDF_ANNOT | FPDF_PRINTING | FPDF_RENDER_LIMITEDIMAGECACHE;
+    FPDF_RenderPageBitmapWithMatrix(bmp, page, &m, &clip, flags);
+
+    FPDF_ClosePage(page);
+    // bmp is destroyed by caller if using CreateEx with external buffer? We used external buffer, so destroy wrapper.
+    FPDFBitmap_Destroy(bmp);
+    return true;
 }
 
 void PDFRenderer::RenderInBackground() {

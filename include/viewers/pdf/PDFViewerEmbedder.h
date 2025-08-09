@@ -6,6 +6,9 @@
 #include <vector>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include <atomic>
+
+#include "viewers/pdf/AsyncRender.h"
 
 // Forward declarations for your existing PDF viewer components
 class PDFRenderer;
@@ -149,6 +152,21 @@ private:
     bool m_needsVisibleRegeneration;
     int m_lastWinWidth;
     int m_lastWinHeight;
+
+    // GL capabilities
+    int m_glMaxTextureSize = 0;
+
+    // Throttling for regen while interacting
+    double m_lastPanRegenTime = 0.0;
+    double m_lastScrollRegenTime = 0.0;
+
+    // Async rendering state
+    std::unique_ptr<AsyncRenderQueue> m_asyncQueue;
+    std::atomic<int> m_generation{0};
+
+    // Helpers for async visible regeneration
+    void scheduleVisibleRegeneration(bool settled);
+    void processAsyncResults();
     
     // Private helper methods
     bool createEmbeddedWindow();

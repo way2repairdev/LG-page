@@ -150,6 +150,7 @@ set(PDF_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/src/ui/menu-integration.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/src/ui/tab-manager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/src/globals.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/core/AsyncRender.cpp
 )
 
 # PCB viewer sources

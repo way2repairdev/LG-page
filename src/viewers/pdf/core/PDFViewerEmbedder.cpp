@@ -345,6 +345,9 @@ bool PDFViewerEmbedder::loadPDF(const std::string& filePath)
         return false;
     }
     
+    // Create async render queue now that a document is loaded
+    m_asyncQueue = std::make_unique<AsyncRenderQueue>(m_renderer.get());
+
     // Force full regeneration on next update
     m_needsFullRegeneration = true;
     
@@ -405,9 +408,12 @@ void PDFViewerEmbedder::update()
         m_lastWinWidth = currentWidth;
         m_lastWinHeight = currentHeight;
         m_needsFullRegeneration = false; // Reset the flag after regeneration
+        // After full regen, also schedule async visible refresh for crispness
+        scheduleVisibleRegeneration(true);
     } else if (needsVisibleRegeneration) {
-        regenerateVisibleTextures();
-        m_needsVisibleRegeneration = false; // Reset the flag after regeneration
+        // Use async visible regeneration instead of blocking sync path
+        scheduleVisibleRegeneration(false);
+        m_needsVisibleRegeneration = false; // Reset the flag after scheduling
     }
 
     // IMPORTANT: Update search state and trigger search if needed
@@ -416,13 +422,12 @@ void PDFViewerEmbedder::update()
         PerformTextSearch(*m_scrollState, m_pageHeights, m_pageWidths);
     }
 
+    // Drain async results and update textures before drawing
+    processAsyncResults();
+
     // Render the frame
     renderFrame();
     
-    // Handle background rendering for better performance
-    handleBackgroundRendering();
-    
-    // Swap buffers and poll events
     glfwSwapBuffers(m_glfwWindow);
     glfwPollEvents();
 }
@@ -449,8 +454,6 @@ void PDFViewerEmbedder::resize(int width, int height)
         }
 #endif
     }
-
-    // Update scroll state with new viewport dimensions
     if (m_scrollState && m_pdfLoaded) {
         UpdateScrollState(*m_scrollState, (float)height, m_pageHeights);
 
@@ -480,6 +483,11 @@ void PDFViewerEmbedder::resize(int width, int height)
 
     // Force texture regeneration for the new size
     m_needsFullRegeneration = true;
+    // Cancel pending renders and reschedule visible
+    if (m_asyncQueue) {
+        m_asyncQueue->cancelAll();
+        scheduleVisibleRegeneration(false);
+    }
     
     std::cout << "PDFViewerEmbedder: Resized to " << width << "x" << height << std::endl;
 }
@@ -491,6 +499,8 @@ void PDFViewerEmbedder::shutdown()
     }
 
     std::cout << "PDFViewerEmbedder: Starting shutdown..." << std::endl;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     // Clean up textures first
     cleanupTextures();
@@ -576,6 +586,9 @@ void PDFViewerEmbedder::zoomIn()
     std::cout << "DEBUG: ZoomIn completed - New zoom: " << newZoom << " (delta: " << (newZoom/oldZoom) << ")" << std::endl;
     std::cout << "DEBUG: Page 0 will render at: " << (m_pageWidths[0] * newZoom) << " x " << (m_pageHeights[0] * newZoom) << " pixels" << std::endl;
     std::cout << "Embedded viewer: HandleZoom zoom in to " << m_scrollState->zoomScale << std::endl;
+
+    // Schedule progressive visible regeneration
+    scheduleVisibleRegeneration(false);
 }
 
 void PDFViewerEmbedder::zoomOut()
@@ -616,15 +629,18 @@ void PDFViewerEmbedder::zoomOut()
     std::cout << "DEBUG: ZoomOut completed - New zoom: " << newZoom << " (delta: " << (newZoom/oldZoom) << ")" << std::endl;
     std::cout << "DEBUG: Page 0 will render at: " << (m_pageWidths[0] * newZoom) << " x " << (m_pageHeights[0] * newZoom) << " pixels" << std::endl;
     std::cout << "Embedded viewer: HandleZoom zoom out to " << m_scrollState->zoomScale << std::endl;
+
+    // Schedule progressive visible regeneration
+    scheduleVisibleRegeneration(false);
 }
 
 void PDFViewerEmbedder::setZoom(float zoomLevel)
 {
     if (!m_scrollState) return;
     
-    // Apply SAME zoom limits as HandleZoom function (0.35f to 5.0f)
-    if (zoomLevel < 0.35f) zoomLevel = 0.35f;
-    if (zoomLevel > 5.0f) zoomLevel = 5.0f;
+    // Apply SAME zoom limits as HandleZoom function (0.05f to 20.0f)
+    if (zoomLevel < 0.05f) zoomLevel = 0.05f;
+    if (zoomLevel > 20.0f) zoomLevel = 20.0f;
     
     // Calculate zoom delta to reach target zoom level
     float currentZoom = m_scrollState->zoomScale;
@@ -642,6 +658,9 @@ void PDFViewerEmbedder::setZoom(float zoomLevel)
                m_pageHeights, m_pageWidths);
     
     std::cout << "Embedded viewer: Set zoom to " << m_scrollState->zoomScale << std::endl;
+
+    // Schedule progressive visible regeneration
+    scheduleVisibleRegeneration(true);
 }
 
 void PDFViewerEmbedder::goToPage(int pageNumber)
@@ -992,7 +1011,7 @@ bool PDFViewerEmbedder::initializeOpenGL()
             }
         }
         
-        debugFile << "Max Texture Size: " << caps.maxTextureSize << std::endl;
+    debugFile << "Max Texture Size: " << caps.maxTextureSize << std::endl;
         
         GLint maxViewportDims[2];
         glGetIntegerv(GL_MAX_VIEWPORT_DIMS, maxViewportDims);
@@ -1051,6 +1070,19 @@ bool PDFViewerEmbedder::initializeOpenGL()
     }
     
     std::cout << "=================================" << std::endl;
+
+    // Cache GL max texture size for runtime clamping
+    m_glMaxTextureSize = caps.maxTextureSize;
+    if (m_glMaxTextureSize <= 0) {
+        GLint q = 0;
+        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &q);
+        m_glMaxTextureSize = (int)q;
+    }
+    if (m_glMaxTextureSize <= 0) {
+        // Fallback to a safe default if query failed
+        m_glMaxTextureSize = 8192;
+    }
+    std::cout << "GL_MAX_TEXTURE_SIZE cached: " << m_glMaxTextureSize << std::endl;
     
     return true;
 }
@@ -1232,35 +1264,28 @@ void PDFViewerEmbedder::regenerateTextures()
         m_renderer->GetOriginalPageSize(i, originalPageWidth, originalPageHeight);
         
         // Calculate texture size based on zoom level applied to ACTUAL page dimensions
-        // FIXED: Apply texture size limits to prevent blank screen at high zoom levels
-        float effectiveZoom = (m_scrollState->zoomScale > 0.5f) ? m_scrollState->zoomScale : 0.5f;
-        
-        // Apply maximum texture zoom to prevent exceeding OpenGL limits
-        // From pipeline debug, max texture size is 16384 - stay well below this
-        effectiveZoom = std::min(effectiveZoom, 3.0f); // Limit texture resolution
-        
-        int textureWidth = static_cast<int>(originalPageWidth * effectiveZoom);
-        int textureHeight = static_cast<int>(originalPageHeight * effectiveZoom);
-        
-        // Additional safety check: ensure we don't exceed reasonable texture sizes
-        const int MAX_TEXTURE_DIM = 8192; // Conservative limit for older GPUs
+        float effectiveZoom = m_scrollState->zoomScale;
+        int textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
+        int textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
+
+        // Clamp to runtime GL max texture size conservatively
+        const int MAX_TEXTURE_DIM = (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 8192);
         if (textureWidth > MAX_TEXTURE_DIM) {
             float scale = (float)MAX_TEXTURE_DIM / textureWidth;
             textureWidth = MAX_TEXTURE_DIM;
-            textureHeight = static_cast<int>(textureHeight * scale);
+            textureHeight = std::max(1, (int)(textureHeight * scale));
         }
         if (textureHeight > MAX_TEXTURE_DIM) {
             float scale = (float)MAX_TEXTURE_DIM / textureHeight;
             textureHeight = MAX_TEXTURE_DIM;
-            textureWidth = static_cast<int>(textureWidth * scale);
+            textureWidth = std::max(1, (int)(textureWidth * scale));
         }
         
         // Ensure minimum texture size for readability
-        if (textureWidth < 200) textureWidth = 200;
-        if (textureHeight < 200) textureHeight = 200;
+    // Allow very small textures at low zoom to avoid upscaling blur
         
         // Debug output for high zoom levels
-        if (m_scrollState->zoomScale > 3.0f) {
+    if (m_scrollState->zoomScale > 6.0f) {
             std::cout << "HIGH ZOOM DEBUG (Full): ZoomScale=" << m_scrollState->zoomScale 
                       << ", EffectiveZoom=" << effectiveZoom 
                       << ", TextureSize=" << textureWidth << "x" << textureHeight 
@@ -1305,42 +1330,33 @@ void PDFViewerEmbedder::regenerateVisibleTextures()
         m_renderer->GetOriginalPageSize(i, originalPageWidth, originalPageHeight);
         
         // Calculate texture size based on zoom level applied to ACTUAL page dimensions
-        // FIXED: Apply texture size limits to prevent blank screen at high zoom levels
-        float effectiveZoom = (m_scrollState->zoomScale > 0.5f) ? m_scrollState->zoomScale : 0.5f;
-        
-        // Apply maximum texture zoom to prevent exceeding OpenGL limits
-        // From pipeline debug, max texture size is 16384 - stay well below this
-        effectiveZoom = std::min(effectiveZoom, 3.0f); // Limit texture resolution
-        
-        int textureWidth = static_cast<int>(originalPageWidth * effectiveZoom);
-        int textureHeight = static_cast<int>(originalPageHeight * effectiveZoom);
-        
-        // Additional safety check: ensure we don't exceed reasonable texture sizes
-        const int MAX_TEXTURE_DIM = 8192; // Conservative limit for older GPUs
+        float effectiveZoom = m_scrollState->zoomScale;
+        int textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
+        int textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
+
+        // Clamp to runtime GL max texture size conservatively
+        const int MAX_TEXTURE_DIM = (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 8192);
         if (textureWidth > MAX_TEXTURE_DIM) {
             float scale = (float)MAX_TEXTURE_DIM / textureWidth;
             textureWidth = MAX_TEXTURE_DIM;
-            textureHeight = static_cast<int>(textureHeight * scale);
+            textureHeight = std::max(1, (int)(textureHeight * scale));
         }
         if (textureHeight > MAX_TEXTURE_DIM) {
             float scale = (float)MAX_TEXTURE_DIM / textureHeight;
             textureHeight = MAX_TEXTURE_DIM;
-            textureWidth = static_cast<int>(textureWidth * scale);
+            textureWidth = std::max(1, (int)(textureWidth * scale));
         }
         
-        // Ensure minimum texture size for readability
-        if (textureWidth < 200) textureWidth = 200;
-        if (textureHeight < 200) textureHeight = 200;
+    // Allow very small textures at low zoom to avoid upscaling blur
         
         // Debug output for high zoom levels
-        if (m_scrollState->zoomScale > 3.0f) {
+    if (m_scrollState->zoomScale > 6.0f) {
             std::cout << "HIGH ZOOM DEBUG (Visible): ZoomScale=" << m_scrollState->zoomScale 
                       << ", EffectiveZoom=" << effectiveZoom 
                       << ", TextureSize=" << textureWidth << "x" << textureHeight 
                       << ", OriginalPage=" << originalPageWidth << "x" << originalPageHeight << std::endl;
         }
-        if (textureWidth < 200) textureWidth = 200;
-        if (textureHeight < 200) textureHeight = 200;
+    // Allow very small textures at low zoom to avoid upscaling blur
         
         // Render at calculated size using actual page dimensions (no window fitting)
         FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, textureWidth, textureHeight);
@@ -1374,34 +1390,28 @@ void PDFViewerEmbedder::regeneratePageTexture(int pageIndex)
     
     // Calculate texture size based on zoom level applied to ACTUAL page dimensions
     // FIXED: Apply texture size limits to prevent blank screen at high zoom levels
-    float effectiveZoom = (m_scrollState->zoomScale > 0.5f) ? m_scrollState->zoomScale : 0.5f;
-    
-    // Apply maximum texture zoom to prevent exceeding OpenGL limits
-    // From pipeline debug, max texture size is 16384 - stay well below this
-    effectiveZoom = std::min(effectiveZoom, 3.0f); // Limit texture resolution
-    
-    int textureWidth = static_cast<int>(originalPageWidth * effectiveZoom);
-    int textureHeight = static_cast<int>(originalPageHeight * effectiveZoom);
-    
-    // Additional safety check: ensure we don't exceed reasonable texture sizes
-    const int MAX_TEXTURE_DIM = 8192; // Conservative limit for older GPUs
+    float effectiveZoom = m_scrollState->zoomScale;
+
+    int textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
+    int textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
+
+    // Clamp to runtime GL max texture size conservatively
+    const int MAX_TEXTURE_DIM = (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 8192);
     if (textureWidth > MAX_TEXTURE_DIM) {
         float scale = (float)MAX_TEXTURE_DIM / textureWidth;
         textureWidth = MAX_TEXTURE_DIM;
-        textureHeight = static_cast<int>(textureHeight * scale);
+        textureHeight = std::max(1, (int)(textureHeight * scale));
     }
     if (textureHeight > MAX_TEXTURE_DIM) {
         float scale = (float)MAX_TEXTURE_DIM / textureHeight;
         textureHeight = MAX_TEXTURE_DIM;
-        textureWidth = static_cast<int>(textureWidth * scale);
+        textureWidth = std::max(1, (int)(textureWidth * scale));
     }
     
-    // Ensure minimum texture size for readability
-    if (textureWidth < 200) textureWidth = 200;
-    if (textureHeight < 200) textureHeight = 200;
+    // Allow very small textures at low zoom to avoid upscaling blur
     
     // Debug output for high zoom levels
-    if (m_scrollState->zoomScale > 3.0f) {
+    if (m_scrollState->zoomScale > 6.0f) {
         std::cout << "HIGH ZOOM DEBUG (Single): Page=" << pageIndex 
                   << ", ZoomScale=" << m_scrollState->zoomScale 
                   << ", EffectiveZoom=" << effectiveZoom 
@@ -1494,8 +1504,8 @@ unsigned int PDFViewerEmbedder::createTextureFromPDFBitmap(void* buffer, int wid
     GLuint textureID;
     glGenTextures(1, &textureID);
     glBindTexture(GL_TEXTURE_2D, textureID);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, buffer);
     glBindTexture(GL_TEXTURE_2D, 0);
     return textureID;
@@ -1504,9 +1514,9 @@ unsigned int PDFViewerEmbedder::createTextureFromPDFBitmap(void* buffer, int wid
 // Texture optimization method for smooth zoom transitions
 float PDFViewerEmbedder::getOptimalTextureZoom(float currentZoom) const
 {
-    // FIXED: Apply texture zoom limits that match our texture generation
-    // This prevents coordinate misplacement and texture size issues
-    return std::clamp(currentZoom, 0.2f, 3.0f); // Match the 3.0f limit from texture generation
+    // Keep as-is; clamping occurs in regeneration code using GL_MAX_TEXTURE_SIZE
+    // Avoid artificially reducing zoom which would cause blur
+    return currentZoom;
 }
 
 // Static callback wrappers
@@ -1578,10 +1588,22 @@ void PDFViewerEmbedder::onCursorPos(double xpos, double ypos)
     
     if (m_scrollState->isPanning) {
         UpdatePanning(*m_scrollState, xpos, ypos, (float)m_windowWidth, (float)m_windowHeight, m_pageHeights);
+        // While panning, schedule lightweight async visible regeneration at a limited rate
+        double now = glfwGetTime();
+        if (now - m_lastPanRegenTime > 0.050) { // 20 FPS cap for regen submits
+            scheduleVisibleRegeneration(false);
+            m_lastPanRegenTime = now;
+        }
     }
     
     if (m_scrollState->isScrollBarDragging) {
         UpdateScrollBarDragging(*m_scrollState, ypos, (float)m_windowHeight);
+        // Throttled regeneration while dragging the scrollbar
+        double now = glfwGetTime();
+        if (now - m_lastScrollRegenTime > 0.050) { // ~20 FPS
+            scheduleVisibleRegeneration(false);
+            m_lastScrollRegenTime = now;
+        }
     }
 }
 
@@ -1621,6 +1643,8 @@ void PDFViewerEmbedder::onMouseButton(int button, int action, int /*mods*/)
         } else if (action == GLFW_RELEASE) {
             // Stop scroll bar dragging
             StopScrollBarDragging(*m_scrollState);
+            // Fire a settled crisp regeneration after scrollbar drag ends
+            scheduleVisibleRegeneration(true);
             
             // End text selection (but not for double-click word selection)
             if (!m_scrollState->textSelection.isDoubleClick) {
@@ -1649,6 +1673,8 @@ void PDFViewerEmbedder::onMouseButton(int button, int action, int /*mods*/)
             
             // Restore default cursor
             glfwSetCursor(m_glfwWindow, nullptr);
+            // Fire a settled crisp regeneration
+            scheduleVisibleRegeneration(true);
         }
     } else if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
         if (action == GLFW_PRESS) {
@@ -1658,6 +1684,7 @@ void PDFViewerEmbedder::onMouseButton(int button, int action, int /*mods*/)
         } else if (action == GLFW_RELEASE) {
             StopPanning(*m_scrollState);
             glfwSetCursor(m_glfwWindow, nullptr);
+            scheduleVisibleRegeneration(true);
         }
     }
 }
@@ -1679,6 +1706,12 @@ void PDFViewerEmbedder::onScroll(double xoffset, double yoffset)
     if (cursorX >= barX) {
         // Handle scroll bar scrolling using existing logic
         HandleScroll(*m_scrollState, (float)yoffset);
+        // Throttled regen while scrollbar scrolling
+        double now = glfwGetTime();
+        if (now - m_lastScrollRegenTime > 0.050) {
+            scheduleVisibleRegeneration(false);
+            m_lastScrollRegenTime = now;
+        }
         return;
     }
     
@@ -1752,6 +1785,9 @@ void PDFViewerEmbedder::onScroll(double xoffset, double yoffset)
         
         std::cout << "PDFViewerEmbedder: Mouse wheel zoom at cursor (" << cursorX << ", " << cursorY 
                   << ") with delta " << zoomDelta << " to zoom " << m_scrollState->zoomScale << std::endl;
+
+    // Progressive visible regeneration while zooming
+    scheduleVisibleRegeneration(false);
     }
 }
 
@@ -1805,45 +1841,54 @@ void PDFViewerEmbedder::onKey(int key, int scancode, int action, int mods)
                 // Home: Go to top of current page
                 m_scrollState->scrollOffset = 0.0f;
                 m_scrollState->forceRedraw = true;
+                // Ensure crisp visible pages after keyboard scroll
+                scheduleVisibleRegeneration(false);
             }
         } else if (key == GLFW_KEY_END) {
             // End key navigation
             if (mods & GLFW_MOD_CONTROL) {
                 // Ctrl+End: Go to last page
                 goToPage(getPageCount());
+                // goToPage sets a visible regen flag; no extra call needed
             } else {
                 // End: Go to bottom of document
                 m_scrollState->scrollOffset = m_scrollState->maxOffset;
                 m_scrollState->forceRedraw = true;
+                scheduleVisibleRegeneration(false);
             }
         } else if (key == GLFW_KEY_PAGE_UP) {
             // Page Up: Scroll up by page height
             float pageHeight = m_windowHeight * 0.9f; // 90% of window height
             m_scrollState->scrollOffset = std::max(0.0f, m_scrollState->scrollOffset - pageHeight);
             m_scrollState->forceRedraw = true;
+            scheduleVisibleRegeneration(false);
         } else if (key == GLFW_KEY_PAGE_DOWN) {
             // Page Down: Scroll down by page height
             float pageHeight = m_windowHeight * 0.9f; // 90% of window height
             m_scrollState->scrollOffset = std::min(m_scrollState->maxOffset, 
                                                     m_scrollState->scrollOffset + pageHeight);
             m_scrollState->forceRedraw = true;
+            scheduleVisibleRegeneration(false);
         } else if (key == GLFW_KEY_UP) {
             // Arrow up: Fine scroll up
             float scrollAmount = 50.0f; // pixels
             m_scrollState->scrollOffset = std::max(0.0f, m_scrollState->scrollOffset - scrollAmount);
             m_scrollState->forceRedraw = true;
+            scheduleVisibleRegeneration(false);
         } else if (key == GLFW_KEY_DOWN) {
             // Arrow down: Fine scroll down
             float scrollAmount = 50.0f; // pixels
             m_scrollState->scrollOffset = std::min(m_scrollState->maxOffset, 
                                                     m_scrollState->scrollOffset + scrollAmount);
             m_scrollState->forceRedraw = true;
+            scheduleVisibleRegeneration(false);
         } else if (key == GLFW_KEY_LEFT) {
             // Arrow left: Horizontal scroll or previous page
             if (mods & GLFW_MOD_CONTROL) {
                 previousPage();
             } else {
                 HandleHorizontalScroll(*m_scrollState, -1.0f, (float)m_windowWidth);
+                scheduleVisibleRegeneration(false);
             }
         } else if (key == GLFW_KEY_RIGHT) {
             // Arrow right: Horizontal scroll or next page
@@ -1851,10 +1896,11 @@ void PDFViewerEmbedder::onKey(int key, int scancode, int action, int mods)
                 nextPage();
             } else {
                 HandleHorizontalScroll(*m_scrollState, 1.0f, (float)m_windowWidth);
+                scheduleVisibleRegeneration(false);
             }
         } else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_9 && (mods & GLFW_MOD_CONTROL)) {
             // Ctrl+1-9: Quick zoom levels
-            float zoomLevels[] = {0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 2.5f, 3.0f};
+            float zoomLevels[] = {0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f, 6.0f};
             int index = key - GLFW_KEY_1;
             if (index < 9) {
                 setZoom(zoomLevels[index]);
@@ -1933,4 +1979,66 @@ int PDFViewerEmbedder::getCurrentSearchResultIndex() const
     
     // Return the current search result index (0-based)
     return m_scrollState->textSearch.currentResultIndex;
+}
+
+// --- Async visible regeneration helpers ---
+void PDFViewerEmbedder::scheduleVisibleRegeneration(bool settled) {
+    if (!m_pdfLoaded || !m_asyncQueue) return;
+
+    // Compute visible range
+    int firstVisible = -1, lastVisible = -1;
+    GetVisiblePageRange(*m_scrollState, m_pageHeights, firstVisible, lastVisible);
+    if (firstVisible < 0 || lastVisible < firstVisible) return;
+
+    // Bump generation for each scheduling to cancel stale results
+    int gen = ++m_generation;
+
+    // Build tasks for visible pages only
+    std::vector<PageRenderTask> tasks;
+    int priority = 0;
+    for (int i = firstVisible; i <= lastVisible; ++i) {
+        // Choose target pixel size based on current zoom and page original size
+        double pw = m_originalPageWidths[i];
+        double ph = m_originalPageHeights[i];
+    float zoom = m_scrollState->zoomScale;
+    // Always full quality for sharp visuals
+    float quality = 1.0f;
+    int w = std::max(8, (int)(pw * zoom * quality));
+    int h = std::max(8, (int)(ph * zoom * quality));
+
+        // Clamp texture size to avoid oversize allocations based on runtime GL limit
+        const int MAX_DIM = (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 8192);
+        if (w > MAX_DIM) { float s = (float)MAX_DIM / w; w = MAX_DIM; h = std::max(1, (int)(h * s)); }
+        if (h > MAX_DIM) { float s = (float)MAX_DIM / h; h = MAX_DIM; w = std::max(1, (int)(w * s)); }
+
+        tasks.push_back(PageRenderTask{ i, w, h, gen, priority++ });
+    }
+
+    m_asyncQueue->submit(std::move(tasks), gen);
+}
+
+void PDFViewerEmbedder::processAsyncResults() {
+    if (!m_asyncQueue) return;
+    auto results = m_asyncQueue->drainResults();
+    if (results.empty()) return;
+
+    // Upload results to GL textures
+    glfwMakeContextCurrent(m_glfwWindow);
+    for (auto& r : results) {
+        // Recreate page texture at new size for simplicity (could be sub-image into atlas)
+        if (r.pageIndex < 0 || r.pageIndex >= (int)m_textures.size()) continue;
+        if (m_textures[r.pageIndex]) glDeleteTextures(1, &m_textures[r.pageIndex]);
+
+        GLuint tex=0; glGenTextures(1, &tex);
+        glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, r.width, r.height, 0, GL_BGRA, GL_UNSIGNED_BYTE, r.bgra.data());
+        glBindTexture(GL_TEXTURE_2D, 0);
+        m_textures[r.pageIndex] = tex;
+
+        // Keep base page size unchanged; zoom is applied in draw
+        // m_pageWidths/Heights already track original page size
+    }
 }

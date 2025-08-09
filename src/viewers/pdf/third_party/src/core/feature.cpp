@@ -176,8 +176,8 @@ bool IsPageVisible(const PDFScrollState& state, const std::vector<int>& pageHeig
 void HandleZoom(PDFScrollState& state, float zoomDelta, float cursorX, float cursorY, float winWidth, float winHeight, std::vector<int>& pageHeights, const std::vector<int>& pageWidths) {
     float oldZoom = state.zoomScale;
     state.zoomScale *= zoomDelta;
-    if (state.zoomScale < 0.35f) state.zoomScale = 0.35f;
-    if (state.zoomScale > 5.0f) state.zoomScale = 5.0f;
+        if (state.zoomScale < 0.05f) state.zoomScale = 0.05f;
+        if (state.zoomScale > 20.0f) state.zoomScale = 20.0f;
     float zoomRatio = state.zoomScale / oldZoom;
 
     // Reduce threshold for more responsive zoom (from 0.1% to 0.05%)

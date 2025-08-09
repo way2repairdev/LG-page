@@ -61,6 +61,14 @@ public:
     // Helper to render visible pages
     void RenderVisiblePages();
 
+    // Render a portion of a page into a caller-provided BGRA buffer using PDFium matrix.
+    // page rectangle in page units (points). Returns false on failure.
+    bool RenderPageRegionToBGRA(int pageIndex,
+                                double pageLeft, double pageTop,
+                                double pageRight, double pageBottom,
+                                int outWidth, int outHeight,
+                                void* outBGRA, int outStride);
+
 private:
     FPDF_DOCUMENT document_;
     std::mutex document_mutex_; // Added for thread safety
