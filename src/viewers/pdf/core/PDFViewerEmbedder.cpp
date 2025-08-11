@@ -369,17 +369,48 @@ bool PDFViewerEmbedder::loadPDF(const std::string& filePath)
 
 void PDFViewerEmbedder::update()
 {
-    if (!m_initialized || !m_pdfLoaded) {
-        return;
-    }
+    if (!m_initialized || !m_pdfLoaded) return;
 
     // Make OpenGL context current
     glfwMakeContextCurrent(m_glfwWindow);
-    
+
     // Update window dimensions
     int currentWidth, currentHeight;
     glfwGetFramebufferSize(m_glfwWindow, &currentWidth, &currentHeight);
-    
+
+    // Apply any pending horizontal centering request here, where window width is known
+    if (m_scrollState && m_scrollState->pendingHorizCenter &&
+        m_scrollState->pageWidths && m_scrollState->pendingHorizPage >= 0 &&
+        m_scrollState->pendingHorizPage < (int)m_scrollState->pageWidths->size()) {
+        int pageIndex = m_scrollState->pendingHorizPage;
+        float pageWidthPx = (*m_scrollState->pageWidths)[pageIndex] * m_scrollState->zoomScale;
+        float relX = std::clamp(m_scrollState->pendingHorizRelX, 0.0f, 1.0f);
+        float selectionCenterXOnPage = relX * pageWidthPx;
+        // Center selection in the viewport horizontally:
+        // xCenter = (windowWidth/2) - horizontalOffset
+        // pageLeftX = xCenter - pageWidth/2
+        // We want: pageLeftX + selectionCenterXOnPage == windowWidth/2
+        // Solve -> horizontalOffset = selectionCenterXOnPage - (pageWidth/2)
+        float desired = selectionCenterXOnPage - (pageWidthPx * 0.5f);
+
+        // Clamp using current bounds; recompute bounds for this window width
+        float maxHoriz = 0.0f;
+        float zoomedPageWidthMax = 0.0f;
+        for (int w : *m_scrollState->pageWidths) {
+            float pw = w * m_scrollState->zoomScale;
+            if (pw > zoomedPageWidthMax) zoomedPageWidthMax = pw;
+        }
+        if (zoomedPageWidthMax > (float)currentWidth) {
+            maxHoriz = (zoomedPageWidthMax - (float)currentWidth) * 0.5f;
+        }
+        if (maxHoriz > 0.0f) desired = std::clamp(desired, -maxHoriz, maxHoriz);
+        m_scrollState->horizontalOffset = desired;
+
+        // Clear pending flag
+        m_scrollState->pendingHorizCenter = false;
+        m_scrollState->pendingHorizPage = -1;
+    }
+
     if (currentWidth != m_lastWinWidth || currentHeight != m_lastWinHeight) {
         m_needsFullRegeneration = true;
         m_windowWidth = currentWidth;
@@ -390,7 +421,7 @@ void PDFViewerEmbedder::update()
     // Check if we need to regenerate textures due to window resize or zoom change
     bool needsFullRegeneration = (currentWidth != m_lastWinWidth || currentHeight != m_lastWinHeight) || m_needsFullRegeneration;
     bool needsVisibleRegeneration = m_needsVisibleRegeneration;
-    
+
     if (m_scrollState->zoomChanged) {
         float zoomDifference = std::abs(m_scrollState->zoomScale - m_scrollState->lastRenderedZoom) / m_scrollState->lastRenderedZoom;
         
@@ -434,6 +465,12 @@ void PDFViewerEmbedder::update()
     if (s_pendingSettledRegen && (now - s_lastWheelZoomTime) > 0.12) {
         scheduleVisibleRegeneration(true);
         s_pendingSettledRegen = false;
+    }
+
+    // If navigation or other actions requested an immediate redraw, schedule a visible regeneration
+    if (m_scrollState->forceRedraw) {
+        m_scrollState->forceRedraw = false;
+        scheduleVisibleRegeneration(false);
     }
 
     // IMPORTANT: Update search state and trigger search if needed
@@ -706,9 +743,6 @@ void PDFViewerEmbedder::goToPage(int pageNumber)
     for (int i = 0; i < pageIndex && i < (int)m_pageHeights.size(); ++i) {
         // Add scaled page height (considering current zoom)
         targetOffset += m_pageHeights[i] * m_scrollState->zoomScale;
-        
-        // Add spacing between pages (consistent with getCurrentPage)
-        targetOffset += 10.0f; // Page spacing
     }
     
     std::cout << "PDFViewerEmbedder::goToPage() - Navigating to page " << pageNumber 
@@ -1593,6 +1627,7 @@ void PDFViewerEmbedder::onCursorPos(double xpos, double ypos)
     if (!m_scrollState) return;
     
     m_scrollState->lastCursorX = (float)xpos;
+
     m_scrollState->lastCursorY = (float)ypos;
     
     // Reuse your existing cursor handling logic
@@ -1805,15 +1840,21 @@ void PDFViewerEmbedder::onKey(int key, int scancode, int action, int mods)
             // Enter for search navigation
             if (mods & GLFW_MOD_SHIFT) {
                 NavigateToPreviousSearchResult(*m_scrollState, m_pageHeights);
+                // Ensure the viewport updates promptly after navigation
+                scheduleVisibleRegeneration(false);
             } else {
                 NavigateToNextSearchResult(*m_scrollState, m_pageHeights);
+                // Ensure the viewport updates promptly after navigation
+                scheduleVisibleRegeneration(false);
             }
         } else if (key == GLFW_KEY_F3) {
             // F3 for search navigation
             if (mods & GLFW_MOD_SHIFT) {
                 NavigateToPreviousSearchResult(*m_scrollState, m_pageHeights);
+                scheduleVisibleRegeneration(false);
             } else {
                 NavigateToNextSearchResult(*m_scrollState, m_pageHeights);
+                scheduleVisibleRegeneration(false);
             }
         } else if (key == GLFW_KEY_C && (mods & GLFW_MOD_CONTROL)) {
             // Ctrl+C for copying selected text
@@ -1941,14 +1982,18 @@ bool PDFViewerEmbedder::findText(const std::string& searchTerm)
 void PDFViewerEmbedder::findNext()
 {
     if (m_scrollState) {
-        NavigateToNextSearchResult(*m_scrollState, m_pageHeights);
+    NavigateToNextSearchResult(*m_scrollState, m_pageHeights);
+    // Refresh visible pages to reflect new selection location
+    scheduleVisibleRegeneration(false);
     }
 }
 
 void PDFViewerEmbedder::findPrevious()
 {
     if (m_scrollState) {
-        NavigateToPreviousSearchResult(*m_scrollState, m_pageHeights);
+    NavigateToPreviousSearchResult(*m_scrollState, m_pageHeights);
+    // Refresh visible pages to reflect new selection location
+    scheduleVisibleRegeneration(false);
     }
 }
 

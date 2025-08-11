@@ -147,6 +147,29 @@
 			"command": ".\\build\\Way2RepairLoginSystem.exe",
 			"isBackground": false,
 			"group": "test"
+		},
+		{
+			"label": "Run exe once",
+			"type": "shell",
+			"command": ".\\build\\Way2RepairLoginSystem.exe",
+			"isBackground": false,
+			"group": "test"
+		},
+		{
+			"label": "Build Once",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build",
+				"--target",
+				"Way2RepairLoginSystem"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
 		}
 	]
 }

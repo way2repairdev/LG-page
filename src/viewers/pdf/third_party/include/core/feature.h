@@ -122,6 +122,11 @@ struct PDFScrollState {
       // Navigation control flag
     bool preventScrollOffsetOverride = false; // Prevent UpdateScrollState from overriding navigation scroll offset
     bool forceRedraw = false; // Force immediate redraw after navigation
+
+  // Pending horizontal centering request (handled by embedder with window width)
+  bool pendingHorizCenter = false;    // Whether a horizontal center adjustment is pending
+  int pendingHorizPage = -1;          // Page index for which centering applies
+  float pendingHorizRelX = 0.5f;      // Selection center X relative to page width [0..1]
     
     // Text selection support
     TextSelection textSelection;              // Current text selection state
