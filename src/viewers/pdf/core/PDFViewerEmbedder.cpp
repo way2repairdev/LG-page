@@ -20,6 +20,7 @@
 #include <cmath>
 #include <fstream>
 #include <ctime>
+#include <limits>
 
 // Prevent Windows min/max macros from conflicting with std::min/max
 #ifdef min
@@ -35,6 +36,10 @@ extern PDFRenderer* g_renderer;
 extern std::vector<int>* g_pageHeights;
 extern std::vector<int>* g_pageWidths;
 
+
+// Transient zoom gesture state (file-scope to avoid header changes)
+static double s_lastWheelZoomTime = 0.0;        // Last time we received a wheel-zoom event
+static bool   s_pendingSettledRegen = false;    // Whether a crisp regen should run after zoom settles
 
 
 PDFViewerEmbedder::PDFViewerEmbedder()
@@ -396,8 +401,16 @@ void PDFViewerEmbedder::update()
         }
         // For full regeneration, use higher threshold (3%) to avoid too frequent full regens
         else if (zoomDifference > 0.03f) {
-            needsFullRegeneration = true;
-            m_scrollState->lastRenderedZoom = m_scrollState->zoomScale;
+            // Avoid heavy full regen while a zoom gesture is active; defer to after it settles
+            double now = glfwGetTime();
+            bool zoomGestureActive = (now - s_lastWheelZoomTime) < 0.20; // 200 ms grace window
+            if (!zoomGestureActive) {
+                needsFullRegeneration = true;
+                m_scrollState->lastRenderedZoom = m_scrollState->zoomScale;
+            } else {
+                // Ensure we schedule a crisp visible regen once settled
+                s_pendingSettledRegen = true;
+            }
         }
         m_scrollState->zoomChanged = false; // Reset the flag
     }
@@ -414,6 +427,13 @@ void PDFViewerEmbedder::update()
         // Use async visible regeneration instead of blocking sync path
         scheduleVisibleRegeneration(false);
         m_needsVisibleRegeneration = false; // Reset the flag after scheduling
+    }
+
+    // If a zoom gesture just stopped, do one crisp settled regen for visible pages
+    double now = glfwGetTime();
+    if (s_pendingSettledRegen && (now - s_lastWheelZoomTime) > 0.12) {
+        scheduleVisibleRegeneration(true);
+        s_pendingSettledRegen = false;
     }
 
     // IMPORTANT: Update search state and trigger search if needed
@@ -638,9 +658,9 @@ void PDFViewerEmbedder::setZoom(float zoomLevel)
 {
     if (!m_scrollState) return;
     
-    // Apply SAME zoom limits as HandleZoom function (0.05f to 20.0f)
-    if (zoomLevel < 0.05f) zoomLevel = 0.05f;
-    if (zoomLevel > 20.0f) zoomLevel = 20.0f;
+    // Apply SAME zoom limits as HandleZoom function (0.35f to 15.0f)
+    if (zoomLevel < 0.35f) zoomLevel = 0.35f;
+    if (zoomLevel > 15.0f) zoomLevel = 15.0f;
     
     // Calculate zoom delta to reach target zoom level
     float currentZoom = m_scrollState->zoomScale;
@@ -1717,7 +1737,10 @@ void PDFViewerEmbedder::onScroll(double xoffset, double yoffset)
     
     // Otherwise, handle cursor-based zooming with mouse wheel
     if (std::abs(yoffset) > 0.01) {
-        float zoomDelta = (yoffset > 0) ? 1.1f : 1.0f / 1.1f;
+        // Use a stronger but bounded delta so high zoom stays responsive
+        float stepUp = 1.2f;
+        float rawDelta = (yoffset > 0) ? stepUp : 1.0f / stepUp;
+        float zoomDelta = std::clamp(rawDelta, 0.85f, 1.25f);
         
         // CRITICAL DEBUG: Log detailed state before HandleZoom
         std::ofstream debugFile("build/zoom_debug.txt", std::ios::app);
@@ -1750,44 +1773,19 @@ void PDFViewerEmbedder::onScroll(double xoffset, double yoffset)
             debugFile << "===========================================" << std::endl;
         }
         
-        // Use current cursor position as zoom focal point
-        HandleZoom(*m_scrollState, zoomDelta, (float)cursorX, (float)cursorY, 
-                   (float)m_windowWidth, (float)m_windowHeight, 
+        HandleZoom(*m_scrollState, zoomDelta, (float)cursorX, (float)cursorY,
+                   (float)m_windowWidth, (float)m_windowHeight,
                    m_pageHeights, m_pageWidths);
         
-        // CRITICAL DEBUG: Log detailed state after HandleZoom
-        if (debugFile.is_open()) {
-            debugFile << "=== ZOOM DEBUG - AFTER HandleZoom ===" << std::endl;
-            debugFile << "New zoom: " << m_scrollState->zoomScale << std::endl;
-            debugFile << "New scrollOffset: " << m_scrollState->scrollOffset << std::endl;
-            debugFile << "New horizontalOffset: " << m_scrollState->horizontalOffset << std::endl;
-            
-            // Log new visible page range
-            int newFirstVisible, newLastVisible;
-            GetVisiblePageRange(*m_scrollState, m_pageHeights, newFirstVisible, newLastVisible);
-            debugFile << "New visible pages: " << newFirstVisible << " to " << newLastVisible << std::endl;
-            debugFile << "ZOOM JUMP DETECTED: " << ((newFirstVisible < firstVisible) ? "YES" : "NO") << std::endl;
-            
-            // Calculate how much scroll offset changed
-            float scrollOffsetDelta = m_scrollState->scrollOffset - firstVisible;  // This should be the old scrollOffset
-            debugFile << "Scroll offset change: " << scrollOffsetDelta << std::endl;
-            
-            // CRITICAL: Log if we jumped from near last page to earlier page
-            bool wasNearLastPage = (lastVisible >= (int)m_pageHeights.size() - 3);
-            bool isNowNearLastPage = (newLastVisible >= (int)m_pageHeights.size() - 3);
-            if (wasNearLastPage && !isNowNearLastPage) {
-                debugFile << "!!! PROBLEMATIC JUMP: Was on last pages, now on earlier pages !!!" << std::endl;
-            }
-            
-            debugFile << "===========================================" << std::endl;
-            debugFile.close();
+        // Schedule progressive visible regeneration during wheel zooming
+        double now = glfwGetTime();
+        s_lastWheelZoomTime = now;
+        s_pendingSettledRegen = true; // mark that we'll want a crisp pass after the gesture ends
+        if (now - m_lastScrollRegenTime > 0.030) { // a bit faster during zoom
+            // Always preview-quality while actively zooming; settled pass is triggered by idle timer
+            scheduleVisibleRegeneration(false);
+            m_lastScrollRegenTime = now;
         }
-        
-        std::cout << "PDFViewerEmbedder: Mouse wheel zoom at cursor (" << cursorX << ", " << cursorY 
-                  << ") with delta " << zoomDelta << " to zoom " << m_scrollState->zoomScale << std::endl;
-
-    // Progressive visible regeneration while zooming
-    scheduleVisibleRegeneration(false);
     }
 }
 
@@ -2000,18 +1998,32 @@ void PDFViewerEmbedder::scheduleVisibleRegeneration(bool settled) {
         // Choose target pixel size based on current zoom and page original size
         double pw = m_originalPageWidths[i];
         double ph = m_originalPageHeights[i];
-    float zoom = m_scrollState->zoomScale;
-    // Always full quality for sharp visuals
-    float quality = 1.0f;
-    int w = std::max(8, (int)(pw * zoom * quality));
-    int h = std::max(8, (int)(ph * zoom * quality));
+        float zoom = m_scrollState->zoomScale;
+
+        // Progressive quality: while not settled (gesture ongoing), cap to a preview size
+        float quality = 1.0f;
+        if (!settled) {
+            // Cap max dimension relative to window to keep wheel zoom snappy
+            const int windowMax = std::max(m_windowWidth, m_windowHeight);
+            const int PREVIEW_MAX = std::max(256, std::min(windowMax + windowMax / 2, // ~1.5x window
+                                                           (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 4096)));
+            const double desiredMax = std::max(pw * zoom, ph * zoom);
+            if (desiredMax > 0.0) {
+                quality = std::min(1.0, (double)PREVIEW_MAX / desiredMax);
+                // Avoid too blurry preview
+                quality = std::max(quality, 0.3f);
+            }
+        }
+
+        int w = std::max(8, (int)std::lround(pw * zoom * quality));
+        int h = std::max(8, (int)std::lround(ph * zoom * quality));
 
         // Clamp texture size to avoid oversize allocations based on runtime GL limit
         const int MAX_DIM = (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 8192);
         if (w > MAX_DIM) { float s = (float)MAX_DIM / w; w = MAX_DIM; h = std::max(1, (int)(h * s)); }
         if (h > MAX_DIM) { float s = (float)MAX_DIM / h; h = MAX_DIM; w = std::max(1, (int)(w * s)); }
 
-        tasks.push_back(PageRenderTask{ i, w, h, gen, priority++ });
+    tasks.push_back(PageRenderTask{ i, w, h, gen, priority++ });
     }
 
     m_asyncQueue->submit(std::move(tasks), gen);

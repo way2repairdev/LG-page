@@ -13,7 +13,9 @@
 float GetVisiblePageMaxWidth(const PDFScrollState& state, const std::vector<int>& pageHeights);
 #include <iostream> // For debug output
 
-#undef max // Resolve macro conflicts with `max`
+// Resolve Windows macro conflicts with std::min/std::max
+#undef max
+#undef min
 
 // External references
 extern MenuIntegration* g_menuIntegration;
@@ -53,7 +55,8 @@ void HandleHorizontalScroll(PDFScrollState& state, float xoffset, float winWidth
     // xoffset: positive = scroll right, negative = scroll left
 
     // Only allow horizontal scrolling if content exceeds viewport width
-    if (state.pageWidthMax * state.zoomScale > winWidth) {
+    // NOTE: state.pageWidthMax is already in screen units at the current zoom
+    if (state.pageWidthMax > winWidth) {
         state.horizontalOffset += xoffset * (winWidth * 0.1f);
         if (state.horizontalOffset < 0.0f) state.horizontalOffset = 0.0f;
         if (state.horizontalOffset > state.maxHorizontalOffset) state.horizontalOffset = state.maxHorizontalOffset;
@@ -174,14 +177,18 @@ bool IsPageVisible(const PDFScrollState& state, const std::vector<int>& pageHeig
 }
 
 void HandleZoom(PDFScrollState& state, float zoomDelta, float cursorX, float cursorY, float winWidth, float winHeight, std::vector<int>& pageHeights, const std::vector<int>& pageWidths) {
+    // Normalize delta so mouse wheel steps feel consistent across scales
+    // Expectation: zoomDelta ~ 1.2 for wheel up, ~ 1/1.2 for wheel down
     float oldZoom = state.zoomScale;
-    state.zoomScale *= zoomDelta;
-        if (state.zoomScale < 0.05f) state.zoomScale = 0.05f;
-        if (state.zoomScale > 20.0f) state.zoomScale = 20.0f;
+    // Bound the instantaneous delta to avoid extreme jumps or sluggishness
+    float boundedDelta = std::clamp(zoomDelta, 0.8f, 1.25f);
+    state.zoomScale *= boundedDelta;
+    // Apply global zoom bounds
+    state.zoomScale = std::clamp(state.zoomScale, 0.35f, 15.0f);
     float zoomRatio = state.zoomScale / oldZoom;
 
-    // Reduce threshold for more responsive zoom (from 0.1% to 0.05%)
-    if (std::abs(zoomRatio - 1.0f) < 0.0005f) return;
+    // Reduce threshold so tiny deltas don't trigger heavy work, but keep it responsive
+    if (std::abs(zoomRatio - 1.0f) < 0.0002f) return;
 
     // ENHANCED CURSOR-BASED ZOOM: Uses viewport-aligned coordinate system
     // This implementation uses the exact same coordinate transformation pipeline
@@ -413,7 +420,8 @@ void HandleZoom(PDFScrollState& state, float zoomDelta, float cursorX, float cur
             float pageWidth = pageHeights[i] * state.zoomScale * 0.77f; // Approximate aspect ratio
             if (pageWidth > state.pageWidthMax) state.pageWidthMax = pageWidth;
         }
-    }// Update maximum scroll offsets (for UI elements) with proper bottom padding
+    }
+    // Update maximum scroll offsets (for UI elements) with proper bottom padding
     state.maxOffset = std::max(0.0f, state.pageHeightSum - winHeight + bottomPadding);
     // FIXED: maxHorizontalOffset calculation for the coordinate system
     // Since horizontalOffset works in reverse (positive = move left), we need proper bounds
@@ -428,10 +436,10 @@ void HandleZoom(PDFScrollState& state, float zoomDelta, float cursorX, float cur
     if (state.scrollOffset > state.maxOffset) state.scrollOffset = state.maxOffset;
     
     // Horizontal constraints - only clamp if content exceeds viewport
-    if (state.pageWidthMax * state.zoomScale > winWidth) {
-        float zoomedPageWidth = state.pageWidthMax * state.zoomScale;
-        float minHorizontalOffset = (winWidth - zoomedPageWidth) / 2.0f;
-        float maxHorizontalOffset = (zoomedPageWidth - winWidth) / 2.0f;
+    // NOTE: state.pageWidthMax is already computed in screen units for current zoom
+    if (state.pageWidthMax > winWidth) {
+        float minHorizontalOffset = (winWidth - state.pageWidthMax) / 2.0f;
+        float maxHorizontalOffset = (state.pageWidthMax - winWidth) / 2.0f;
         if (state.horizontalOffset > maxHorizontalOffset) state.horizontalOffset = maxHorizontalOffset;
         if (state.horizontalOffset < minHorizontalOffset) state.horizontalOffset = minHorizontalOffset;
     }

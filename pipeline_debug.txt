@@ -440,3 +440,107 @@ Capabilities:
 - Max Texture Size: 16384
 === End Pipeline Debug ===
 
+=== Pipeline Selection Debug ===
+Timestamp: Mon Aug 11 12:54:59 2025
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+OpenGL Version: 4.6.0 NVIDIA 456.71
+Vendor: NVIDIA Corporation
+Renderer: GeForce GT 730/PCIe/SSE2
+Capabilities:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Max Texture Size: 16384
+=== End Pipeline Debug ===
+
+=== Pipeline Selection Debug ===
+Timestamp: Mon Aug 11 12:57:22 2025
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+OpenGL Version: 4.6.0 NVIDIA 456.71
+Vendor: NVIDIA Corporation
+Renderer: GeForce GT 730/PCIe/SSE2
+Capabilities:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Max Texture Size: 16384
+=== End Pipeline Debug ===
+
+=== Pipeline Selection Debug ===
+Timestamp: Mon Aug 11 12:58:11 2025
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+OpenGL Version: 4.6.0 NVIDIA 456.71
+Vendor: NVIDIA Corporation
+Renderer: GeForce GT 730/PCIe/SSE2
+Capabilities:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Max Texture Size: 16384
+=== End Pipeline Debug ===
+
+=== Pipeline Selection Debug ===
+Timestamp: Mon Aug 11 12:58:27 2025
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+OpenGL Version: 4.6.0 NVIDIA 456.71
+Vendor: NVIDIA Corporation
+Renderer: GeForce GT 730/PCIe/SSE2
+Capabilities:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Max Texture Size: 16384
+=== End Pipeline Debug ===
+
+=== Pipeline Selection Debug ===
+Timestamp: Mon Aug 11 12:59:26 2025
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+OpenGL Version: 4.6.0 NVIDIA 456.71
+Vendor: NVIDIA Corporation
+Renderer: GeForce GT 730/PCIe/SSE2
+Capabilities:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Max Texture Size: 16384
+=== End Pipeline Debug ===
+
+=== Pipeline Selection Debug ===
+Timestamp: Mon Aug 11 13:09:43 2025
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+OpenGL Version: 4.6.0 NVIDIA 456.71
+Vendor: NVIDIA Corporation
+Renderer: GeForce GT 730/PCIe/SSE2
+Capabilities:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Max Texture Size: 16384
+=== End Pipeline Debug ===
+
+=== Pipeline Selection Debug ===
+Timestamp: Mon Aug 11 13:13:15 2025
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+OpenGL Version: 4.6.0 NVIDIA 456.71
+Vendor: NVIDIA Corporation
+Renderer: GeForce GT 730/PCIe/SSE2
+Capabilities:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Max Texture Size: 16384
+=== End Pipeline Debug ===
+
+=== Pipeline Selection Debug ===
+Timestamp: Mon Aug 11 13:14:48 2025
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+OpenGL Version: 4.6.0 NVIDIA 456.71
+Vendor: NVIDIA Corporation
+Renderer: GeForce GT 730/PCIe/SSE2
+Capabilities:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Max Texture Size: 16384
+=== End Pipeline Debug ===
+
