@@ -134,6 +134,9 @@ private:
     
     // OpenGL state
     std::vector<unsigned int> m_textures;
+    // Track current GL texture pixel dimensions per page for skip logic
+    std::vector<int> m_textureWidths;  // 0 if not created
+    std::vector<int> m_textureHeights; // 0 if not created
     std::vector<int> m_pageWidths;
     std::vector<int> m_pageHeights;
     std::vector<double> m_originalPageWidths;
@@ -172,6 +175,8 @@ private:
     // Throttling for regen while interacting
     double m_lastPanRegenTime = 0.0;
     double m_lastScrollRegenTime = 0.0;
+    double m_lastPreviewRegenTime = 0.0; // debounce rapid progressive zoom regenerations
+    double m_lastHighQualityNavigationTime = 0.0; // avoid immediate double high-quality passes
 
     // Async rendering state
     std::unique_ptr<AsyncRenderQueue> m_asyncQueue;

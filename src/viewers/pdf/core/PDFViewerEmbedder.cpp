@@ -246,6 +246,8 @@ bool PDFViewerEmbedder::loadPDF(const std::string& filePath)
     
     // Initialize texture and dimension arrays
     m_textures.resize(pageCount);
+    m_textureWidths.assign(pageCount, 0);
+    m_textureHeights.assign(pageCount, 0);
     m_pageWidths.resize(pageCount);
     m_pageHeights.resize(pageCount);
     m_originalPageWidths.resize(pageCount);
@@ -2264,6 +2266,19 @@ int PDFViewerEmbedder::getCurrentSearchResultIndex() const
 void PDFViewerEmbedder::scheduleVisibleRegeneration(bool settled) {
     if (!m_pdfLoaded || !m_asyncQueue) return;
 
+    // Debounce progressive (non-settled) regeneration to at most ~1 every 55 ms
+    double now = glfwGetTime();
+    if (!settled) {
+        const double DEBOUNCE_INTERVAL = 0.055; // ~18 fps ceiling while interacting
+        if (now - m_lastPreviewRegenTime < DEBOUNCE_INTERVAL) {
+            return; // Skip scheduling too soon
+        }
+        m_lastPreviewRegenTime = now;
+    } else {
+        // Record time of high quality regen to optionally gate follow-ups
+        m_lastHighQualityNavigationTime = now;
+    }
+
     // Compute visible range
     int firstVisible = -1, lastVisible = -1;
     GetVisiblePageRange(*m_scrollState, m_pageHeights, firstVisible, lastVisible);
@@ -2275,7 +2290,19 @@ void PDFViewerEmbedder::scheduleVisibleRegeneration(bool settled) {
     // Build tasks for visible pages only
     std::vector<PageRenderTask> tasks;
     int priority = 0;
+    // When not settled, limit progressive pass to center-most 2 pages to reduce GPU churn
+    int progressiveFirst = firstVisible;
+    int progressiveLast = lastVisible;
+    if (!settled) {
+        int mid = (firstVisible + lastVisible) / 2;
+        progressiveFirst = std::max(firstVisible, mid - 1);
+        progressiveLast = std::min(lastVisible, mid + 1);
+    }
+
     for (int i = firstVisible; i <= lastVisible; ++i) {
+        if (!settled && (i < progressiveFirst || i > progressiveLast)) {
+            continue; // Skip less important pages in preview passes
+        }
         // Choose target pixel size based on current zoom and page original size
         double pw = m_originalPageWidths[i];
         double ph = m_originalPageHeights[i];
@@ -2284,9 +2311,9 @@ void PDFViewerEmbedder::scheduleVisibleRegeneration(bool settled) {
         // Progressive quality: while not settled (gesture ongoing), cap to a preview size
         float quality = 1.0f;
         if (!settled) {
-            // Cap max dimension relative to window to keep wheel zoom snappy
+            // Cap max dimension relative to window to keep wheel zoom snappy (reduced to ~window size)
             const int windowMax = std::max(m_windowWidth, m_windowHeight);
-            const int PREVIEW_MAX = std::max(256, std::min(windowMax + windowMax / 2, // ~1.5x window
+            const int PREVIEW_MAX = std::max(256, std::min(windowMax, // <= window dimension
                                                            (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 4096)));
             const double desiredMax = std::max(pw * zoom, ph * zoom);
             if (desiredMax > 0.0) {
@@ -2298,6 +2325,19 @@ void PDFViewerEmbedder::scheduleVisibleRegeneration(bool settled) {
 
         int w = std::max(8, (int)std::lround(pw * zoom * quality));
         int h = std::max(8, (int)std::lround(ph * zoom * quality));
+
+        // Near-size skip: if existing texture within 8% of desired in both dimensions, skip unless settled high quality
+        if (i >= 0 && i < (int)m_textureWidths.size()) {
+            int existingW = m_textureWidths[i];
+            int existingH = m_textureHeights[i];
+            if (existingW > 0 && existingH > 0) {
+                float dw = std::abs(existingW - w) / (float)std::max(w, 1);
+                float dh = std::abs(existingH - h) / (float)std::max(h, 1);
+                if (!settled && dw < 0.08f && dh < 0.08f) {
+                    continue; // Texture close enough during interaction
+                }
+            }
+        }
 
         // Clamp texture size to avoid oversize allocations based on runtime GL limit
         const int MAX_DIM = (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 8192);
@@ -2336,7 +2376,15 @@ void PDFViewerEmbedder::processAsyncResults() {
         glBindTexture(GL_TEXTURE_2D, 0);
         m_textures[r.pageIndex] = tex;
 
-        // Keep base page size unchanged; zoom is applied in draw
-        // m_pageWidths/Heights already track original page size
+        // Record the uploaded texture size for skip / reuse heuristics
+        if (r.pageIndex >= 0 && r.pageIndex < (int)m_textureWidths.size()) {
+            m_textureWidths[r.pageIndex] = r.width;
+        }
+        if (r.pageIndex >= 0 && r.pageIndex < (int)m_textureHeights.size()) {
+            m_textureHeights[r.pageIndex] = r.height;
+        }
+
+    // Keep base page size unchanged; zoom applied in draw. Original page
+    // size tracked separately; here we only update current texture dims.
     }
 }
