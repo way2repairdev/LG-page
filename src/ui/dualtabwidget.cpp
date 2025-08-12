@@ -371,6 +371,14 @@ void DualTabWidget::setMovable(bool movable)
 void DualTabWidget::activateTab(int index, TabType type)
 {
     logDebug(QString("activateTab() called - index: %1, type: %2").arg(index).arg((int)type));
+    // Fast path: if this tab is already active, do nothing to avoid unnecessary
+    // deactivate/reactivate cycles that can trigger heavy redraws in child viewers.
+    if (m_hasActiveTab && type == m_activeTabType) {
+        if ((type == PDF_TAB && index == m_activePdfIndex) || (type == PCB_TAB && index == m_activePcbIndex)) {
+            logDebug("activateTab(): requested tab already active - skipping");
+            return;
+        }
+    }
     
     // Step 1: Deactivate all tabs first
     logDebug("Step 1: Deactivating all tabs");

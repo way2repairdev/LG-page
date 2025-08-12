@@ -498,16 +498,15 @@ void MenuIntegration::OnFileOpen() {
         char narrowPath[260];
         WideCharToMultiByte(CP_UTF8, 0, szFile, -1, narrowPath, sizeof(narrowPath), nullptr, nullptr);
         
-        // Create new tab with the PDF document
+        // Open or activate existing tab with the PDF document (prevents duplicate tabs + unnecessary re-render)
         if (g_tabManager) {
-            int newTabIndex = g_tabManager->CreateNewTab(narrowPath);
-            if (newTabIndex >= 0) {
-                std::cout << "Successfully opened PDF in new tab: " << narrowPath << std::endl;
-                
-                // Update search toolbar to reflect the new tab
+            int tabIndex = g_tabManager->OpenOrActivateFile(narrowPath);
+            if (tabIndex >= 0) {
+                // If it was newly created we already switched; if existing we just activated.
+                std::cout << "PDF open/activate request handled (tab index=" << tabIndex << ") path: " << narrowPath << std::endl;
                 UpdateSearchToolbar();
             } else {
-                MessageBox(hwnd, L"Failed to load PDF document", L"Error", MB_OK | MB_ICONERROR);
+                MessageBox(hwnd, L"Failed to load or activate PDF document", L"Error", MB_OK | MB_ICONERROR);
             }
         } else {
             // Fallback to legacy behavior if tab manager is not available

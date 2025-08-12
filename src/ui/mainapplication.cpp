@@ -358,14 +358,20 @@ void MainApplication::openPDFInTab(const QString &filePath)
     // Show loading message
     statusBar()->showMessage("Loading PDF file...");
     
-    // Check if PDF file is already open in PDF tabs
+    auto normalizePath = [](QString p){
+        QString n = p; n.replace("\\", "/"); n = n.toLower(); return n;
+    };
+    const QString targetNorm = normalizePath(filePath);
+    // Check if PDF file is already open in PDF tabs (normalized comparison)
     for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
         QWidget *tabWidget = m_tabWidget->widget(i, DualTabWidget::PDF_TAB);
-        if (tabWidget && tabWidget->property("filePath").toString() == filePath) {
-            // File is already open, just switch to that tab
-            m_tabWidget->setCurrentIndex(i, DualTabWidget::PDF_TAB);
-            statusBar()->showMessage("PDF file already open in tab");
-            return;
+        if (tabWidget) {
+            QString existing = tabWidget->property("filePath").toString();
+            if (!existing.isEmpty() && normalizePath(existing) == targetNorm) {
+                m_tabWidget->setCurrentIndex(i, DualTabWidget::PDF_TAB);
+                statusBar()->showMessage("PDF file already open in tab");
+                return;
+            }
         }
     }
     

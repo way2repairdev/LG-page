@@ -61,6 +61,10 @@ int TabManager::CreateNewTab(const std::string& filename) {
     auto newTab = std::make_unique<PDFTab>();
     newTab->filename = filename;
     newTab->displayName = ExtractFilename(filename);
+    // Build normalized path (lowercase + forward slashes) for duplicate detection
+    newTab->normalizedPath = filename;
+    std::replace(newTab->normalizedPath.begin(), newTab->normalizedPath.end(), '\\', '/');
+    std::transform(newTab->normalizedPath.begin(), newTab->normalizedPath.end(), newTab->normalizedPath.begin(), [](unsigned char c){ return (char)std::tolower(c); });
     newTab->tabIndex = static_cast<int>(tabs.size());
     newTab->renderer = std::make_unique<PDFRenderer>();
     
@@ -81,6 +85,37 @@ int TabManager::CreateNewTab(const std::string& filename) {
         tabs.pop_back();
         return -1;
     }
+}
+
+// Helper to normalize a path for comparisons
+static std::string NormalizePathForCompare(const std::string& path) {
+    std::string norm = path;
+    std::replace(norm.begin(), norm.end(), '\\', '/');
+    std::transform(norm.begin(), norm.end(), norm.begin(), [](unsigned char c){ return (char)std::tolower(c); });
+    return norm;
+}
+
+int TabManager::OpenOrActivateFile(const std::string& filename) {
+    if (filename.empty()) return -1;
+
+    std::string target = NormalizePathForCompare(filename);
+
+    // First scan existing tabs for a match
+    for (size_t i = 0; i < tabs.size(); ++i) {
+        if (tabs[i] && tabs[i]->normalizedPath == target) {
+            // Already open: just switch; DO NOT reload to avoid flicker/re-render
+            SwitchToTab((int)i);
+            std::cout << "TabManager: Activated existing tab for file: " << filename << std::endl;
+            return (int)i;
+        }
+    }
+
+    // Not open yet: create
+    int idx = CreateNewTab(filename);
+    if (idx >= 0) {
+        std::cout << "TabManager: Opened new tab for file: " << filename << std::endl;
+    }
+    return idx;
 }
 
 bool TabManager::LoadPDFInTab(int tabIndex, const std::string& filename) {

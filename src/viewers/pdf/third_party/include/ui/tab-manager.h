@@ -17,6 +17,7 @@ struct GLFWwindow;
 struct PDFTab {
     std::string filename;           // Full path to the PDF file
     std::string displayName;        // Display name for the tab (just filename)
+    std::string normalizedPath;     // Normalized (lowercase, unified slashes) full path for duplicate detection
     std::unique_ptr<PDFRenderer> renderer;  // PDF renderer for this tab
     PDFScrollState scrollState;     // Scroll state for this tab
     std::vector<GLuint> textures;   // OpenGL textures for pages
@@ -67,6 +68,8 @@ public:
     
     // Tab management
     int CreateNewTab(const std::string& filename);
+    // Open file: if already open just activate, else create new tab. Returns tab index or -1 on failure
+    int OpenOrActivateFile(const std::string& filename);
     bool LoadPDFInTab(int tabIndex, const std::string& filename);
     bool CloseTab(int tabIndex);
     bool SwitchToTab(int tabIndex);

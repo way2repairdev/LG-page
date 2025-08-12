@@ -171,6 +171,25 @@ bool PDFViewerEmbedder::loadPDF(const std::string& filePath)
         return false;
     }
 
+    // FAST PATH: If this exact file is already loaded in this embedder, skip all work.
+    // This must happen BEFORE attempting to open the file or re-run PDFium load.
+    auto normalizePathForCompare = [](std::string p){
+        std::replace(p.begin(), p.end(), '\\', '/');
+        std::transform(p.begin(), p.end(), p.begin(), [](unsigned char c){ return (char)std::tolower(c); });
+        return p;
+    };
+    if (m_pdfLoaded) {
+        std::string currentNorm = normalizePathForCompare(m_currentFilePath);
+        std::string incomingNorm = normalizePathForCompare(filePath);
+        if (currentNorm == incomingNorm) {
+            if (m_scrollState) {
+                m_scrollState->forceRedraw = true; // light redraw only
+                m_scrollState->zoomChanged = false;
+            }
+            return true; // Already loaded, no reload
+        }
+    }
+
     // Verify file exists and is accessible
     std::ifstream file(filePath, std::ios::binary);
     if (!file.good()) {
