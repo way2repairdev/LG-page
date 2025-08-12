@@ -345,25 +345,39 @@ bool PDFViewerEmbedder::loadPDF(const std::string& filePath)
 
     // Initialize scroll state for the new document
     try {
-        // CRITICAL DEBUGGING: Check initial zoom and page dimensions
-        std::cout << "=== CRITICAL DEBUG: ZOOM INITIALIZATION ===" << std::endl;
-        std::cout << "Initial zoom scale: " << m_scrollState->zoomScale << std::endl;
+        // CONSISTENT PDF OPENING: Set initial zoom to fit first page to viewer
+        // This ensures all PDFs open with the same consistent view of the first page
+        std::cout << "=== CONSISTENT PDF ZOOM INITIALIZATION ===" << std::endl;
         std::cout << "Window dimensions: " << m_windowWidth << " x " << m_windowHeight << std::endl;
         
-        // Calculate what the page will look like at current zoom
-        if (!m_pageWidths.empty() && !m_pageHeights.empty()) {
-            float pageDisplayWidth = m_pageWidths[0] * m_scrollState->zoomScale;
-            float pageDisplayHeight = m_pageHeights[0] * m_scrollState->zoomScale;
-            std::cout << "Page 0 will display at: " << pageDisplayWidth << " x " << pageDisplayHeight << " pixels" << std::endl;
-            std::cout << "Page width ratio to window: " << (pageDisplayWidth / m_windowWidth) << std::endl;
-            std::cout << "Page height ratio to window: " << (pageDisplayHeight / m_windowHeight) << std::endl;
+        if (!m_pageWidths.empty() && !m_pageHeights.empty() && m_windowWidth > 0 && m_windowHeight > 0) {
+            // Calculate zoom to fit first page within viewer with some padding
+            float pageWidth = static_cast<float>(m_pageWidths[0]);
+            float pageHeight = static_cast<float>(m_pageHeights[0]);
             
-            // Check if the page appears to be auto-fitted
-            float widthRatio = pageDisplayWidth / m_windowWidth;
-            float heightRatio = pageDisplayHeight / m_windowHeight;
-            if (widthRatio > 0.8f && widthRatio < 1.2f && heightRatio > 0.8f && heightRatio < 1.2f) {
-                std::cout << "WARNING: Page appears to be auto-fitted to window!" << std::endl;
-            }
+            // Add 5% padding on each side (so use 90% of available space)
+            float availableWidth = m_windowWidth * 0.90f;
+            float availableHeight = m_windowHeight * 0.90f;
+            
+            // Calculate zoom scales for width and height fitting
+            float zoomForWidth = availableWidth / pageWidth;
+            float zoomForHeight = availableHeight / pageHeight;
+            
+            // Use the smaller zoom to ensure the page fits completely
+            float fitZoom = std::min(zoomForWidth, zoomForHeight);
+            
+            // Apply reasonable zoom bounds (don't go too small or too large)
+            fitZoom = std::clamp(fitZoom, 0.35f, 15.0f);
+            
+            // Set the initial zoom to fit the first page
+            m_scrollState->zoomScale = fitZoom;
+            
+            std::cout << "Page 0 original size: " << pageWidth << " x " << pageHeight << " pixels" << std::endl;
+            std::cout << "Available display area: " << availableWidth << " x " << availableHeight << " pixels" << std::endl;
+            std::cout << "Calculated fit zoom: " << fitZoom << std::endl;
+            std::cout << "Page 0 will display at: " << (pageWidth * fitZoom) << " x " << (pageHeight * fitZoom) << " pixels" << std::endl;
+        } else {
+            std::cout << "Using default zoom scale: " << m_scrollState->zoomScale << std::endl;
         }
         std::cout << "================================================" << std::endl;
         
