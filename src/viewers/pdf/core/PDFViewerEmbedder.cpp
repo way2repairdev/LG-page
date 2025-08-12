@@ -549,8 +549,14 @@ void PDFViewerEmbedder::update()
 
     // If navigation or other actions requested an immediate redraw, schedule a visible regeneration
     if (m_scrollState->forceRedraw) {
+        bool highQuality = m_scrollState->requestHighQualityVisibleRegen;
         m_scrollState->forceRedraw = false;
-        scheduleVisibleRegeneration(false);
+        if (highQuality) {
+            scheduleVisibleRegeneration(true); // settled quality
+        } else {
+            scheduleVisibleRegeneration(false);
+        }
+        m_scrollState->requestHighQualityVisibleRegen = false; // reset
     }
 
     // IMPORTANT: Update search state and trigger search if needed

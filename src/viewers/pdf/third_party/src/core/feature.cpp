@@ -2223,6 +2223,9 @@ void NavigateToSearchResultPrecise(PDFScrollState& state, const std::vector<int>
     state.maxOffset = maxScrollOffset;
     state.preventScrollOffsetOverride = true;
     state.forceRedraw = true;
+    // Request a high-quality regeneration of the newly visible pages so the target result
+    // area is rendered crisply without needing an extra pan/zoom interaction.
+    state.requestHighQualityVisibleRegen = true;
     
     // Also set active text selection to current result so it renders in blue only
     if (result.pageIndex < (int)state.textPages.size() && state.textPages[result.pageIndex].isLoaded) {

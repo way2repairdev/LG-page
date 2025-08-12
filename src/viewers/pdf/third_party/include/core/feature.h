@@ -122,6 +122,9 @@ struct PDFScrollState {
       // Navigation control flag
     bool preventScrollOffsetOverride = false; // Prevent UpdateScrollState from overriding navigation scroll offset
     bool forceRedraw = false; // Force immediate redraw after navigation
+  // When set together with forceRedraw, viewer should regenerate visible pages at full (settled) quality
+  // instead of the low-quality progressive preview used during active zoom gestures.
+  bool requestHighQualityVisibleRegen = false;
 
   // Pending horizontal centering request (handled by embedder with window width)
   bool pendingHorizCenter = false;    // Whether a horizontal center adjustment is pending
