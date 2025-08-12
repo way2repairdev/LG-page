@@ -644,7 +644,14 @@ void XZZPCBFile::ParsePartBlockOriginal(std::vector<char>& buf) {
                 if (pin_net == "NC") {
                     pin.net = "NC";
                 } else {
-                    pin.net = pin_net;
+                    // Check if we have an alias for this net from the JSON data
+                    if (net_alias_dict.find(pin_net) != net_alias_dict.end()) {
+                        std::string net_alias = net_alias_dict[pin_net];
+                        std::cout << "Using alias for net " << pin_net << " -> " << net_alias << std::endl;
+                        pin.net = net_alias;
+                    } else {
+                        pin.net = pin_net;
+                    }
                 }                pin.part = parts.size() + 1;
 
                 if (!diode_reading.empty()) {
@@ -1016,7 +1023,7 @@ void XZZPCBFile::ParseJsonData(std::vector<char>::iterator json_start, std::vect
     std::cout << "Found JSON data: " << json_data.substr(0, 100) << "..." << std::endl;
     
     // Simple JSON parsing for the specific structure
-    // Looking for: {"part":[{"reference":"N752","alias":"J11100","pad":[...]},...]}
+    // Looking for: {"part":[{"reference":"N752","alias":"J11100","pad":[...]},...], "net":[{"name":"Net665","alias":"PP_VDD_BOOST"},...]}
     
     size_t part_array_start = json_data.find("\"part\":[");
     if (part_array_start == std::string::npos) {
@@ -1149,7 +1156,77 @@ void XZZPCBFile::ParseJsonData(std::vector<char>::iterator json_start, std::vect
         pos = part_end + 1;
     }
     
-    std::cout << "Parsed " << part_alias_dict.size() << " part aliases and diode readings" << std::endl;
+    // Now look for net aliases in the JSON data
+    // Looking for: "net":[{"name":"Net665","alias":"PP_VDD_BOOST"},{"name":"Net642","alias":"PP_VDD_MAIN"}]
+    
+    size_t net_array_start = json_data.find("\"net\":[");
+    if (net_array_start != std::string::npos) {
+        std::cout << "Found 'net' array in JSON" << std::endl;
+        
+        // Start parsing from the opening bracket of the net array
+        size_t net_pos = net_array_start + 7; // Skip "\"net\":["
+        
+        while (net_pos < json_data.length()) {
+            // Find next net object
+            size_t net_start = json_data.find("{", net_pos);
+            if (net_start == std::string::npos) break;
+            
+            // Find the end of this net object
+            size_t net_end = net_start;
+            int net_brace_count = 0;
+            for (size_t i = net_start; i < json_data.length(); i++) {
+                if (json_data[i] == '{') {
+                    net_brace_count++;
+                } else if (json_data[i] == '}') {
+                    net_brace_count--;
+                    if (net_brace_count == 0) {
+                        net_end = i;
+                        break;
+                    }
+                }
+            }
+            
+            if (net_brace_count != 0) break;
+            
+            // Extract net object
+            std::string net_obj = json_data.substr(net_start, net_end - net_start + 1);
+            
+            // Parse name and alias
+            std::string net_name, net_alias;
+            
+            // Extract net name
+            size_t name_start = net_obj.find("\"name\":\"");
+            if (name_start != std::string::npos) {
+                name_start += 8; // Skip "\"name\":\""
+                size_t name_end = net_obj.find("\"", name_start);
+                if (name_end != std::string::npos) {
+                    net_name = net_obj.substr(name_start, name_end - name_start);
+                }
+            }
+            
+            // Extract alias
+            size_t alias_start = net_obj.find("\"alias\":\"");
+            if (alias_start != std::string::npos) {
+                alias_start += 9; // Skip "\"alias\":\""
+                size_t alias_end = net_obj.find("\"", alias_start);
+                if (alias_end != std::string::npos) {
+                    net_alias = net_obj.substr(alias_start, alias_end - alias_start);
+                }
+            }
+            
+            // Store the net alias mapping
+            if (!net_name.empty() && !net_alias.empty()) {
+                net_alias_dict[net_name] = net_alias;
+                std::cout << "Mapping net " << net_name << " -> " << net_alias << std::endl;
+            }
+            
+            net_pos = net_end + 1;
+        }
+    } else {
+        std::cout << "No 'net' array found in JSON" << std::endl;
+    }
+    
+    std::cout << "Parsed " << part_alias_dict.size() << " part aliases and " << net_alias_dict.size() << " net aliases" << std::endl;
 }
 
 void XZZPCBFile::DumpHexAroundPosition(const std::vector<char>& buf, size_t pos, size_t range) {
