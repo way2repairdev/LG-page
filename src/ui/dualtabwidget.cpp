@@ -8,6 +8,7 @@
 #include <QMouseEvent>
 #include <QTimer>
 #include <QTabBar>
+#include <QMessageBox>
 
 // Debug logging function
 void logDebug(const QString &message) {
@@ -42,7 +43,8 @@ void DualTabWidget::setupUI()
     // Create PDF tab widget (Row 1)
     m_pdfTabWidget = new QTabWidget();
     m_pdfTabWidget->setTabsClosable(true);
-    m_pdfTabWidget->setMovable(true);
+    // Disable tab dragging/reordering for PDF tabs
+    m_pdfTabWidget->setMovable(false);
     
     // Style PDF tab widget with blue theme (default active styling)
     m_pdfTabWidget->setStyleSheet(
@@ -79,7 +81,8 @@ void DualTabWidget::setupUI()
     // Create PCB tab widget (Row 2)  
     m_pcbTabWidget = new QTabWidget();
     m_pcbTabWidget->setTabsClosable(true);
-    m_pcbTabWidget->setMovable(true);
+    // Disable tab dragging/reordering for PCB tabs
+    m_pcbTabWidget->setMovable(false);
     
     // Style PCB tab widget with green theme (default inactive styling)
     m_pcbTabWidget->setStyleSheet(
@@ -169,6 +172,21 @@ int DualTabWidget::addTab(QWidget *widget, const QIcon &icon, const QString &lab
     if (!widget) {
         logDebug("addTab() failed - widget is null");
         return -1;
+    }
+
+    const int kMaxTabsPerGroup = 5;
+    if (type == PDF_TAB) {
+        if (m_pdfWidgets.count() >= kMaxTabsPerGroup) {
+            logDebug("addTab() blocked - PDF tab limit reached (5) - emitting tabLimitReached");
+            emit tabLimitReached(PDF_TAB, kMaxTabsPerGroup);
+            return -1; // Do NOT disturb current active viewer
+        }
+    } else if (type == PCB_TAB) {
+        if (m_pcbWidgets.count() >= kMaxTabsPerGroup) {
+            logDebug("addTab() blocked - PCB tab limit reached (5) - emitting tabLimitReached");
+            emit tabLimitReached(PCB_TAB, kMaxTabsPerGroup);
+            return -1;
+        }
     }
     
     int tabIndex = -1;
@@ -361,10 +379,12 @@ void DualTabWidget::setTabsClosable(bool closable)
     m_pcbTabWidget->setTabsClosable(closable);
 }
 
-void DualTabWidget::setMovable(bool movable)
+void DualTabWidget::setMovable(bool /*movable*/)
 {
-    m_pdfTabWidget->setMovable(movable);
-    m_pcbTabWidget->setMovable(movable);
+    // Force immovable tabs regardless of requested value
+    m_pdfTabWidget->setMovable(false);
+    m_pcbTabWidget->setMovable(false);
+    logDebug("setMovable() override: tab dragging disabled globally");
 }
 
 // Core new methods for mutual exclusion and content isolation

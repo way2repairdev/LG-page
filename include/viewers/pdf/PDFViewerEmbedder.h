@@ -138,6 +138,13 @@ private:
     std::vector<int> m_pageHeights;
     std::vector<double> m_originalPageWidths;
     std::vector<double> m_originalPageHeights;
+    // Per-texture byte sizes (RGBA) to track memory usage
+    std::vector<size_t> m_textureByteSizes;
+
+    // Memory budgeting (helps prevent OOM / driver resets when multiple tabs active)
+    size_t m_memoryBudgetBytes = 256ull * 1024ull * 1024ull; // 256 MB default budget for all page textures in this viewer
+    size_t m_currentTextureBytes = 0;                         // Tracked allocated texture bytes
+    bool   m_budgetDownscaleApplied = false;                  // Flag to indicate textures were downscaled due to budget
     
     // Viewer state
     bool m_initialized;
@@ -146,6 +153,12 @@ private:
     int m_windowWidth;
     int m_windowHeight;
     std::string m_currentFilePath;
+
+    // Diagnostics
+    long long m_viewerId = 0;                 // Unique id per viewer instance
+    static std::atomic<long long> s_nextViewerId; // Generator
+    bool isActiveGlobal() const;              // Whether global pointers map to this viewer
+    void logContextMismatch(const char* where) const; // Helper
     
     // Rendering state management
     bool m_needsFullRegeneration;
@@ -180,6 +193,9 @@ private:
     void handleBackgroundRendering();
     void cleanupTextures();
     unsigned int createTextureFromPDFBitmap(void* bitmap, int width, int height);
+    void trackTextureAllocation(size_t oldBytes, size_t newBytes, int index);
+    void enforceMemoryBudget();
+    float computeAdaptiveZoomForBudget(double originalW, double originalH, float requestedZoom, size_t pendingBytes) const;
     
     // Texture optimization helpers
     float getOptimalTextureZoom(float currentZoom) const;

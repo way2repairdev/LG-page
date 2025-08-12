@@ -17,6 +17,8 @@
 #include <QTimer>
 #include <QShortcut>
 #include <QThread>
+#include <QToolTip>
+#include <QCursor>
 
 MainApplication::MainApplication(const UserSession &userSession, QWidget *parent)
     : QMainWindow(parent)
@@ -252,6 +254,11 @@ void MainApplication::setupTabWidget()
             this, &MainApplication::onTabCloseRequestedByType);
     connect(m_tabWidget, &DualTabWidget::currentChanged, 
             this, &MainApplication::onTabChangedByType);
+    // Non-blocking notification when user hits tab limit (avoid modal dialog that interrupts rendering)
+    connect(m_tabWidget, &DualTabWidget::tabLimitReached, this, [this](DualTabWidget::TabType type, int maxTabs){
+        QString kind = (type == DualTabWidget::PDF_TAB) ? "PDF" : "PCB";
+        statusBar()->showMessage(QString("%1 tab limit (%2) reached. Close a tab before opening another.").arg(kind).arg(maxTabs), 5000);
+    });
 }
 
 void MainApplication::loadLocalFiles()
@@ -355,25 +362,35 @@ void MainApplication::openFileInTab(const QString &filePath)
 
 void MainApplication::openPDFInTab(const QString &filePath)
 {
-    // Show loading message
-    statusBar()->showMessage("Loading PDF file...");
-    
-    auto normalizePath = [](QString p){
-        QString n = p; n.replace("\\", "/"); n = n.toLower(); return n;
-    };
+    // First: see if this PDF is already open (should NOT be blocked by limit)
+    auto normalizePath = [](QString p){ QString n = p; n.replace("\\", "/"); return n.toLower(); };
     const QString targetNorm = normalizePath(filePath);
-    // Check if PDF file is already open in PDF tabs (normalized comparison)
     for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
         QWidget *tabWidget = m_tabWidget->widget(i, DualTabWidget::PDF_TAB);
         if (tabWidget) {
             QString existing = tabWidget->property("filePath").toString();
             if (!existing.isEmpty() && normalizePath(existing) == targetNorm) {
                 m_tabWidget->setCurrentIndex(i, DualTabWidget::PDF_TAB);
-                statusBar()->showMessage("PDF file already open in tab");
+                statusBar()->showMessage("PDF already open (switched)", 4000);
                 return;
             }
         }
     }
+
+    // Enforce max PDF tab limit ONLY for new tabs
+    const int kMaxPdfTabs = 5;
+    if (m_tabWidget->count(DualTabWidget::PDF_TAB) >= kMaxPdfTabs) {
+        const QString msg = QString("PDF tab limit (%1) reached. Close a tab before opening another.").arg(kMaxPdfTabs);
+        statusBar()->showMessage(msg, 6000);
+        QToolTip::showText(QCursor::pos(), msg, this, QRect(), 2500);
+        QApplication::beep();
+        return;
+    }
+
+    // Proceed with load
+    statusBar()->showMessage("Loading PDF file...");
+    
+    // (Duplicate check already performed above)
     
     // Verify file exists and is readable
     QFileInfo fileInfo(filePath);
@@ -477,10 +494,16 @@ void MainApplication::openPDFInTab(const QString &filePath)
         statusBar()->showMessage("Normal view mode - Tree view restored");
     });
     
-    // Add PDF viewer to PDF tab row
+    // Add PDF viewer to PDF tab row (will fail with -1 if limit race condition)
     QString tabName = fileInfo.fileName();
     QIcon tabIcon = getFileIcon(filePath);
     int tabIndex = m_tabWidget->addTab(pdfViewer, tabIcon, tabName, DualTabWidget::PDF_TAB);
+    if (tabIndex < 0) {
+        // Safety: dual tab widget rejected addition (limit). Clean up and exit.
+        pdfViewer->deleteLater();
+        statusBar()->showMessage("Cannot open PDF: tab limit reached.", 5000);
+        return;
+    }
     
     // Switch to the new tab
     m_tabWidget->setCurrentIndex(tabIndex, DualTabWidget::PDF_TAB);
@@ -523,19 +546,27 @@ void MainApplication::openPDFInTab(const QString &filePath)
 
 void MainApplication::openPCBInTab(const QString &filePath)
 {
-    // Show loading message
-    statusBar()->showMessage("Loading PCB file...");
-    
-    // Check if PCB file is already open in PCB tabs
+    // Duplicate first (not blocked by limit)
     for (int i = 0; i < m_tabWidget->count(DualTabWidget::PCB_TAB); ++i) {
         QWidget *tabWidget = m_tabWidget->widget(i, DualTabWidget::PCB_TAB);
         if (tabWidget && tabWidget->property("filePath").toString() == filePath) {
-            // File is already open, just switch to that tab
             m_tabWidget->setCurrentIndex(i, DualTabWidget::PCB_TAB);
-            statusBar()->showMessage("PCB file already open in tab");
+            statusBar()->showMessage("PCB already open (switched)", 4000);
             return;
         }
     }
+
+    // Limit only for new tabs
+    const int kMaxPcbTabs = 5;
+    if (m_tabWidget->count(DualTabWidget::PCB_TAB) >= kMaxPcbTabs) {
+        const QString msg = QString("PCB tab limit (%1) reached. Close a tab before opening another.").arg(kMaxPcbTabs);
+        statusBar()->showMessage(msg, 6000);
+        QToolTip::showText(QCursor::pos(), msg, this, QRect(), 2500);
+        QApplication::beep();
+        return;
+    }
+
+    statusBar()->showMessage("Loading PCB file...");
     
     // Verify file exists and is readable
     QFileInfo fileInfo(filePath);

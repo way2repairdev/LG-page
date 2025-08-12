@@ -5,23 +5,58 @@
 #include <mutex> // Required for std::lock_guard
 #include <cstring>
 
+// PDFium lifecycle manager (ref-counted) to prevent multiple init/destroy mismatches
+namespace {
+    struct PDFiumLifecycle {
+        std::mutex mtx;
+        int refCount = 0;
+        static PDFiumLifecycle& instance() { static PDFiumLifecycle inst; return inst; }
+        void acquire() {
+            std::lock_guard<std::mutex> lock(mtx);
+            if (refCount == 0) {
+                try {
+                    FPDF_InitLibrary();
+                    std::cout << "PDFium initialized (global)" << std::endl;
+                } catch (...) {
+                    std::cerr << "Failed to initialize PDFium (global)" << std::endl;
+                    throw;
+                }
+            }
+            ++refCount;
+        }
+        void release() {
+            std::lock_guard<std::mutex> lock(mtx);
+            if (refCount > 0) {
+                --refCount;
+                if (refCount == 0) {
+                    FPDF_DestroyLibrary();
+                    std::cout << "PDFium destroyed (global)" << std::endl;
+                }
+            }
+        }
+    };
+}
+
 PDFRenderer::PDFRenderer()
-    : document_(nullptr), viewportX_(0), viewportY_(0), viewportWidth_(0), viewportHeight_(0), zoomScale_(1.0) {}
+    : document_(nullptr), viewportX_(0), viewportY_(0), viewportWidth_(0), viewportHeight_(0), zoomScale_(1.0) {
+    // Defer actual PDFium init until Initialize() to keep previous semantics
+}
 
 PDFRenderer::~PDFRenderer() {
     if (document_) {
         FPDF_CloseDocument(document_);
+        document_ = nullptr;
     }
-    FPDF_DestroyLibrary();
+    // Release global PDFium only when last renderer goes away
+    PDFiumLifecycle::instance().release();
 }
 
 void PDFRenderer::Initialize() {
     try {
-        FPDF_InitLibrary();
-        std::cout << "PDFRenderer: PDFium library initialized successfully" << std::endl;
+        PDFiumLifecycle::instance().acquire();
+        std::cout << "PDFRenderer: PDFium library (ref-counted) ready" << std::endl;
     } catch (...) {
-        std::cerr << "PDFRenderer: Failed to initialize PDFium library" << std::endl;
-        std::cerr << "PDFRenderer: This is likely due to missing or incompatible PDFium DLL/library" << std::endl;
+        std::cerr << "PDFRenderer: Failed during PDFium lifecycle acquire" << std::endl;
         throw std::runtime_error("PDFium initialization failed");
     }
 }

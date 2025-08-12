@@ -59,6 +59,9 @@ PDFViewerEmbedder::PDFViewerEmbedder()
     , m_lastWinWidth(0)
     , m_lastWinHeight(0)
 {
+    static std::atomic<long long> s_counter{0};
+    m_viewerId = ++s_counter;
+    std::cout << "PDFViewerEmbedder["<<m_viewerId<<"] ctor" << std::endl;
 }
 
 PDFViewerEmbedder::~PDFViewerEmbedder()
@@ -390,6 +393,50 @@ void PDFViewerEmbedder::update()
 {
     if (!m_initialized || !m_pdfLoaded) return;
 
+    // If globals point elsewhere (another active tab), skip heavy work to avoid race
+    if (!(g_scrollState == m_scrollState.get() && g_renderer == m_renderer.get())) {
+        // Try to detect if this viewer should become the active one. Conditions:
+        // 1. No active global viewer (globals null)
+        // 2. Our window currently has focus
+        // 3. Our parent HWND is foreground window (tab switched at higher UI layer)
+        bool claimGlobals = false;
+        if (!g_scrollState && !g_renderer) {
+            claimGlobals = true;
+        }
+#ifdef _WIN32
+        else if (m_childHwnd && GetFocus() == m_childHwnd) {
+            claimGlobals = true;
+        } else if (m_parentHwnd && GetForegroundWindow() == m_parentHwnd) {
+            claimGlobals = true;
+        }
+#endif
+        if (claimGlobals) {
+            g_scrollState = m_scrollState.get();
+            g_renderer = m_renderer.get();
+            g_pageHeights = &m_pageHeights;
+            g_pageWidths = &m_pageWidths;
+            // Decide what level of regeneration is needed
+            bool anyTexture = false;
+            for (auto tex : m_textures) { if (tex != 0) { anyTexture = true; break; } }
+            if (!anyTexture) {
+                // No textures yet: do a full regen pass
+                m_needsFullRegeneration = true;
+            } else {
+                // Textures exist but may be stale vs current zoom: regen visible only
+                m_needsVisibleRegeneration = true;
+            }
+            std::cout << "PDFViewerEmbedder["<<m_viewerId<<"] claimed global active viewer context" << std::endl;
+        } else {
+            // Not active: still allow lightweight rendering of existing textures so previously
+            // generated content remains visible instead of a blank window. Skip regeneration.
+            glfwMakeContextCurrent(m_glfwWindow);
+            renderFrame();
+            glfwSwapBuffers(m_glfwWindow);
+            glfwPollEvents();
+            return;
+        }
+    }
+
     // Make OpenGL context current
     glfwMakeContextCurrent(m_glfwWindow);
 
@@ -580,6 +627,16 @@ void PDFViewerEmbedder::shutdown()
 
     // Clean up textures first
     cleanupTextures();
+
+    // CRITICAL: Stop async rendering thread BEFORE destroying renderer or other state.
+    // Previously we destroyed the PDFRenderer while the AsyncRenderQueue worker thread
+    // could still be rendering a page (it holds a raw PDFRenderer*). That creates a
+    // dangling pointer use-after-free when many tabs are opened/closed or switched rapidly.
+    // Resetting here joins the worker thread safely (AsyncRenderQueue dtor joins).
+    if (m_asyncQueue) {
+        std::cout << "PDFViewerEmbedder: Stopping async render queue..." << std::endl;
+        m_asyncQueue.reset();
+    }
     
     // Clean up GLFW window
     if (m_glfwWindow) {
@@ -1329,6 +1386,9 @@ void PDFViewerEmbedder::regenerateTextures()
     m_textures.resize(pageCount);
     m_pageWidths.resize(pageCount);
     m_pageHeights.resize(pageCount);
+    m_textureByteSizes.assign(pageCount, 0);
+    m_currentTextureBytes = 0;
+    m_budgetDownscaleApplied = false;
     
     // Regenerate all textures using ACTUAL page dimensions (not window-fitted)
     for (int i = 0; i < pageCount; ++i) {
@@ -1338,8 +1398,17 @@ void PDFViewerEmbedder::regenerateTextures()
         
         // Calculate texture size based on zoom level applied to ACTUAL page dimensions
         float effectiveZoom = m_scrollState->zoomScale;
+        // Adaptive zoom reduce if we are over budget (pre-flight)
         int textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
         int textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
+        size_t projectedBytes = (size_t)textureWidth * (size_t)textureHeight * 4ull;
+        float adjustedZoom = computeAdaptiveZoomForBudget(originalPageWidth, originalPageHeight, effectiveZoom, projectedBytes);
+        if (adjustedZoom != effectiveZoom) {
+            effectiveZoom = adjustedZoom;
+            textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
+            textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
+            m_budgetDownscaleApplied = true;
+        }
 
         // Clamp to runtime GL max texture size conservatively
         const int MAX_TEXTURE_DIM = (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 8192);
@@ -1367,7 +1436,11 @@ void PDFViewerEmbedder::regenerateTextures()
         
         // Render at calculated size using actual page dimensions (no window fitting)
         FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, textureWidth, textureHeight);
-        m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+    size_t oldBytes = m_textureByteSizes[i];
+    m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+    size_t newBytes = (size_t)textureWidth * (size_t)textureHeight * 4ull;
+    m_textureByteSizes[i] = newBytes;
+    trackTextureAllocation(oldBytes, newBytes, i);
         
         // Store BASE dimensions (ACTUAL page dimensions, not window-fitted)
         // These will be scaled by zoomScale during rendering
@@ -1382,6 +1455,7 @@ void PDFViewerEmbedder::regenerateTextures()
     m_scrollState->lastRenderedZoom = m_scrollState->zoomScale;
     
     m_needsFullRegeneration = false;
+    enforceMemoryBudget();
 }
 
 void PDFViewerEmbedder::regenerateVisibleTextures()
@@ -1406,6 +1480,14 @@ void PDFViewerEmbedder::regenerateVisibleTextures()
         float effectiveZoom = m_scrollState->zoomScale;
         int textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
         int textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
+        size_t projectedBytes = (size_t)textureWidth * (size_t)textureHeight * 4ull;
+        float adjustedZoom = computeAdaptiveZoomForBudget(originalPageWidth, originalPageHeight, effectiveZoom, projectedBytes);
+        if (adjustedZoom != effectiveZoom) {
+            effectiveZoom = adjustedZoom;
+            textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
+            textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
+            m_budgetDownscaleApplied = true;
+        }
 
         // Clamp to runtime GL max texture size conservatively
         const int MAX_TEXTURE_DIM = (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 8192);
@@ -1433,7 +1515,11 @@ void PDFViewerEmbedder::regenerateVisibleTextures()
         
         // Render at calculated size using actual page dimensions (no window fitting)
         FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, textureWidth, textureHeight);
-        m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+    size_t oldBytes = m_textureByteSizes[i];
+    m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+    size_t newBytes = (size_t)textureWidth * (size_t)textureHeight * 4ull;
+    m_textureByteSizes[i] = newBytes;
+    trackTextureAllocation(oldBytes, newBytes, i);
         
         // Store BASE dimensions (ACTUAL page dimensions, not window-fitted)
         // These will be scaled by zoomScale during rendering
@@ -1444,6 +1530,7 @@ void PDFViewerEmbedder::regenerateVisibleTextures()
     }
     
     m_needsVisibleRegeneration = false;
+    enforceMemoryBudget();
 }
 
 void PDFViewerEmbedder::regeneratePageTexture(int pageIndex)
@@ -1467,6 +1554,14 @@ void PDFViewerEmbedder::regeneratePageTexture(int pageIndex)
 
     int textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
     int textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
+    size_t projectedBytes = (size_t)textureWidth * (size_t)textureHeight * 4ull;
+    float adjustedZoom = computeAdaptiveZoomForBudget(originalPageWidth, originalPageHeight, effectiveZoom, projectedBytes);
+    if (adjustedZoom != effectiveZoom) {
+        effectiveZoom = adjustedZoom;
+        textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
+        textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
+        m_budgetDownscaleApplied = true;
+    }
 
     // Clamp to runtime GL max texture size conservatively
     const int MAX_TEXTURE_DIM = (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 8192);
@@ -1494,7 +1589,16 @@ void PDFViewerEmbedder::regeneratePageTexture(int pageIndex)
     
     // Render at calculated size using actual page dimensions (no window fitting)
     FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(pageIndex, textureWidth, textureHeight);
+    if (!bmp) {
+        std::cerr << "PDFViewerEmbedder["<<m_viewerId<<"] regeneratePageTexture: NULL bitmap page="<<pageIndex
+                  <<" size="<<textureWidth<<"x"<<textureHeight<<" (skipping)" << std::endl;
+        return;
+    }
+    size_t oldBytes = m_textureByteSizes[pageIndex];
     m_textures[pageIndex] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+    size_t newBytes = (size_t)textureWidth * (size_t)textureHeight * 4ull;
+    m_textureByteSizes[pageIndex] = newBytes;
+    trackTextureAllocation(oldBytes, newBytes, pageIndex);
     
     // Store BASE dimensions (ACTUAL page dimensions, not window-fitted)
     // These will be scaled by zoomScale during rendering
@@ -1502,6 +1606,7 @@ void PDFViewerEmbedder::regeneratePageTexture(int pageIndex)
     m_pageHeights[pageIndex] = static_cast<int>(originalPageHeight);
     
     FPDFBitmap_Destroy(bmp);
+    enforceMemoryBudget();
 }
 
 void PDFViewerEmbedder::handleBackgroundRendering()
@@ -1553,8 +1658,16 @@ void PDFViewerEmbedder::handleBackgroundRendering()
             }
             
             FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(backgroundRenderIndex, textureWidth, textureHeight);
+            size_t oldBytes = m_textureByteSizes.size() > (size_t)backgroundRenderIndex ? m_textureByteSizes[backgroundRenderIndex] : 0;
+            if (m_textureByteSizes.size() <= (size_t)backgroundRenderIndex) {
+                m_textureByteSizes.resize(backgroundRenderIndex + 1, 0);
+            }
             m_textures[backgroundRenderIndex] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+            size_t newBytes = (size_t)textureWidth * (size_t)textureHeight * 4ull;
+            m_textureByteSizes[backgroundRenderIndex] = newBytes;
+            trackTextureAllocation(oldBytes, newBytes, backgroundRenderIndex);
             FPDFBitmap_Destroy(bmp);
+            enforceMemoryBudget();
             break;
         }
     }
@@ -1563,13 +1676,16 @@ void PDFViewerEmbedder::handleBackgroundRendering()
 void PDFViewerEmbedder::cleanupTextures()
 {
     if (!m_textures.empty()) {
-        for (GLuint texture : m_textures) {
+        for (size_t i = 0; i < m_textures.size(); ++i) {
+            GLuint texture = m_textures[i];
             if (texture) {
                 glDeleteTextures(1, &texture);
             }
         }
         m_textures.clear();
     }
+    m_textureByteSizes.clear();
+    m_currentTextureBytes = 0;
 }
 
 unsigned int PDFViewerEmbedder::createTextureFromPDFBitmap(void* buffer, int width, int height)
@@ -1582,6 +1698,87 @@ unsigned int PDFViewerEmbedder::createTextureFromPDFBitmap(void* buffer, int wid
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, buffer);
     glBindTexture(GL_TEXTURE_2D, 0);
     return textureID;
+}
+
+// Track allocation delta and update total
+void PDFViewerEmbedder::trackTextureAllocation(size_t oldBytes, size_t newBytes, int index) {
+    if (newBytes == oldBytes) return;
+    if (newBytes > oldBytes) {
+        m_currentTextureBytes += (newBytes - oldBytes);
+    } else if (oldBytes > newBytes) {
+        m_currentTextureBytes -= (oldBytes - newBytes);
+    }
+    // Optional: log when large (>8MB) allocations happen
+    if (newBytes > 8ull * 1024ull * 1024ull) {
+        std::cout << "Texture " << index << " size=" << newBytes/1024/1024 << "MB totalUsed=" << m_currentTextureBytes/1024/1024 << "MB" << std::endl;
+    }
+}
+
+// Compute adaptive zoom to keep projected allocation within remaining budget
+float PDFViewerEmbedder::computeAdaptiveZoomForBudget(double originalW, double originalH, float requestedZoom, size_t projectedBytes) const {
+    if (m_memoryBudgetBytes == 0) return requestedZoom; // disabled
+    size_t remaining = (m_currentTextureBytes < m_memoryBudgetBytes) ? (m_memoryBudgetBytes - m_currentTextureBytes) : 0;
+    if (projectedBytes <= remaining) return requestedZoom; // fine
+    if (remaining == 0) {
+        // Hard pressure: shrink requested zoom proportionally
+        double area = originalW * originalH;
+        if (area <= 0) return requestedZoom;
+        double maxPixels = (double)remaining / 4.0; // RGBA
+        if (maxPixels <= 0) maxPixels = 1.0;
+        double scaleFactor = std::sqrt(maxPixels / area);
+        return (float)std::max(8.0 / std::max(originalW, originalH), scaleFactor); // ensure min size
+    }
+    double over = (double)projectedBytes / (double)remaining; // >1 means overflow factor
+    if (over <= 1.0) return requestedZoom;
+    double reduction = 1.0 / std::sqrt(over); // scale linear dims by sqrt to reduce area
+    float adjusted = (float)(requestedZoom * reduction);
+    // Clamp not below minimal meaningful sampling (approx 0.15 of requested)
+    if (adjusted < requestedZoom * 0.15f) adjusted = requestedZoom * 0.15f;
+    return adjusted;
+}
+
+// Enforce global budget after allocations (evict/downscale non-visible textures if needed)
+void PDFViewerEmbedder::enforceMemoryBudget() {
+    if (m_memoryBudgetBytes == 0) return; // disabled
+    if (m_currentTextureBytes <= m_memoryBudgetBytes) return;
+
+    // Strategy: first delete non-visible high-cost textures until under budget.
+    int firstVisible=-1, lastVisible=-1;
+    if (m_scrollState) {
+        GetVisiblePageRange(*m_scrollState, m_pageHeights, firstVisible, lastVisible);
+    }
+    // Build list of candidate indices (outside visible range) sorted by size desc
+    struct Item { int idx; size_t bytes; };
+    std::vector<Item> candidates;
+    for (int i = 0; i < (int)m_textures.size(); ++i) {
+        bool visible = (i >= firstVisible && i <= lastVisible);
+        if (!visible && m_textures[i] && i < (int)m_textureByteSizes.size()) {
+            candidates.push_back({i, m_textureByteSizes[i]});
+        }
+    }
+    std::sort(candidates.begin(), candidates.end(), [](const Item&a,const Item&b){return a.bytes>b.bytes;});
+    for (auto &c : candidates) {
+        if (m_currentTextureBytes <= m_memoryBudgetBytes) break;
+        if (m_textures[c.idx]) {
+            glDeleteTextures(1, &m_textures[c.idx]);
+            m_textures[c.idx] = 0;
+            m_currentTextureBytes -= c.bytes;
+            m_textureByteSizes[c.idx] = 0;
+        }
+    }
+    // If still over budget, downscale visible pages progressively (regenVisibleTextures will rebuild)
+    if (m_currentTextureBytes > m_memoryBudgetBytes * 1.05) { // allow small hysteresis
+        // Request a visible regeneration at reduced zoom (soft approach: pretend lastRenderedZoom smaller)
+        if (m_scrollState) {
+            m_scrollState->lastRenderedZoom = m_scrollState->zoomScale * 0.7f; // force regen path
+        }
+        m_needsVisibleRegeneration = true;
+        m_budgetDownscaleApplied = true;
+    }
+    if (m_budgetDownscaleApplied) {
+        std::cout << "Memory budget enforcement: total=" << m_currentTextureBytes/1024/1024
+                  << "MB budget=" << m_memoryBudgetBytes/1024/1024 << "MB" << std::endl;
+    }
 }
 
 // Texture optimization method for smooth zoom transitions
@@ -2101,6 +2298,11 @@ void PDFViewerEmbedder::processAsyncResults() {
     // Upload results to GL textures
     glfwMakeContextCurrent(m_glfwWindow);
     for (auto& r : results) {
+        // Drop stale generation results (e.g., from an older zoom / resize / tab activation)
+        // to avoid overwriting with wrong-sized textures or resurrecting freed pages.
+        if (r.generation != m_generation.load()) {
+            continue;
+        }
         // Recreate page texture at new size for simplicity (could be sub-image into atlas)
         if (r.pageIndex < 0 || r.pageIndex >= (int)m_textures.size()) continue;
         if (m_textures[r.pageIndex]) glDeleteTextures(1, &m_textures[r.pageIndex]);

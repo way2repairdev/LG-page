@@ -59,6 +59,7 @@ signals:
     void tabCloseRequested(int index, TabType type);
     void currentChanged(int index, TabType type);
     void activeTabChanged(TabType type); // New signal for active tab type changes
+    void tabLimitReached(TabType type, int maxTabs); // Emitted when user tries to exceed per-group tab limit
 
 private slots:
     void onPdfTabCloseRequested(int index);
