@@ -2278,3 +2278,135 @@
 [PCB-DEBUG] Setting PCB toolbar visible: true
 [PCB-DEBUG] PCB widget hide event
 [PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI with split view support
+[PCB-DEBUG] Setting up PCB viewer Qt toolbar with PDF viewer styling
+[PCB-DEBUG] Split window action removed (feature deprecated)
+[PCB-DEBUG] PCB Qt toolbar setup completed with PDF viewer styling
+[PCB-DEBUG] PCB viewer UI setup completed (single-pane)
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget resized to 1503x865
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/demo.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI with split view support
+[PCB-DEBUG] Setting up PCB viewer Qt toolbar with PDF viewer styling
+[PCB-DEBUG] Split window action removed (feature deprecated)
+[PCB-DEBUG] PCB Qt toolbar setup completed with PDF viewer styling
+[PCB-DEBUG] PCB viewer UI setup completed (single-pane)
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget resized to 1503x865
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/demo.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI with split view support
+[PCB-DEBUG] Setting up PCB viewer Qt toolbar with PDF viewer styling
+[PCB-DEBUG] Split window action removed (feature deprecated)
+[PCB-DEBUG] PCB Qt toolbar setup completed with PDF viewer styling
+[PCB-DEBUG] PCB viewer UI setup completed (single-pane)
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget resized to 1503x865
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/demo.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] Setting PCB toolbar visible: false
