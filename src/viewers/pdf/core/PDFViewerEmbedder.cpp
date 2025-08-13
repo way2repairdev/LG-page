@@ -1253,17 +1253,33 @@ void PDFViewerEmbedder::renderFrame()
 {
     // Set viewport
     glViewport(0, 0, m_windowWidth, m_windowHeight);
-    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    // Use a very light neutral tone instead of pure white to reduce contrast + hide tearing
+    glClearColor(0.965f, 0.965f, 0.97f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     
     if (!m_pdfLoaded) {
         return;
     }
     
-    // Enable texturing and blending
-    glEnable(GL_TEXTURE_2D);
+    // Enable blending early (used for gradient / placeholders)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // Draw a subtle vertical gradient background (light gray to slightly lighter gray)
+    glDisable(GL_TEXTURE_2D);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0, m_windowWidth, m_windowHeight, 0, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glBegin(GL_QUADS);
+        glColor4f(0.958f, 0.958f, 0.965f, 1.0f); glVertex2f(0, 0);
+        glColor4f(0.958f, 0.958f, 0.965f, 1.0f); glVertex2f((float)m_windowWidth, 0);
+        glColor4f(0.975f, 0.975f, 0.98f, 1.0f); glVertex2f((float)m_windowWidth, (float)m_windowHeight);
+        glColor4f(0.975f, 0.975f, 0.98f, 1.0f); glVertex2f(0, (float)m_windowHeight);
+    glEnd();
+    glColor4f(1,1,1,1);
+    glEnable(GL_TEXTURE_2D);
     
     int pageCount = m_renderer->GetPageCount();
     float yOffset = -m_scrollState->scrollOffset;
@@ -1271,6 +1287,11 @@ void PDFViewerEmbedder::renderFrame()
     // Use pipeline-specific rendering
     auto selectedPipeline = m_pipelineManager->getSelectedPipeline();
     
+    // NOTE: Page spacing was previously 12px but that introduced a mismatch with
+    // scrollOffset math (which doesn't account for spacing) causing cursor-centered
+    // zoom to drift. Setting to 0 restores original zoom behavior. If spacing is
+    // reintroduced later, UpdateScrollState and related computations must include it.
+    const float PAGE_SPACING = 0.0f; // keep 0 to preserve correct zoom focal mapping
     if (selectedPipeline == RenderingPipeline::LEGACY_IMMEDIATE) {
         // Legacy OpenGL 2.1 - Use fixed function pipeline with immediate mode
         glMatrixMode(GL_PROJECTION);
@@ -1280,29 +1301,48 @@ void PDFViewerEmbedder::renderFrame()
         glLoadIdentity();
         
         // Draw pages using immediate mode (supported in legacy pipeline)
-        for (int i = 0; i < pageCount; ++i) {
-            if (m_textures[i] == 0) continue;
-            
+    for (int i = 0; i < pageCount; ++i) {
             float pageW = (float)m_pageWidths[i] * m_scrollState->zoomScale;
             float pageH = (float)m_pageHeights[i] * m_scrollState->zoomScale;
             
             float xCenter = (m_windowWidth / 2.0f) - m_scrollState->horizontalOffset;
             float yCenter = yOffset + pageH / 2.0f;
-            
             float x = xCenter - pageW / 2.0f;
             float y = yCenter - pageH / 2.0f;
-            
-            glBindTexture(GL_TEXTURE_2D, m_textures[i]);
-            glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-            
-            glBegin(GL_QUADS);
-            glTexCoord2f(0.0f, 0.0f); glVertex2f(x, y);
-            glTexCoord2f(1.0f, 0.0f); glVertex2f(x + pageW, y);
-            glTexCoord2f(1.0f, 1.0f); glVertex2f(x + pageW, y + pageH);
-            glTexCoord2f(0.0f, 1.0f); glVertex2f(x, y + pageH);
-            glEnd();
-            
-            yOffset += pageH;
+
+            if (m_textures[i] != 0) {
+                glBindTexture(GL_TEXTURE_2D, m_textures[i]);
+                glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+                glBegin(GL_QUADS);
+                glTexCoord2f(0.0f, 0.0f); glVertex2f(x, y);
+                glTexCoord2f(1.0f, 0.0f); glVertex2f(x + pageW, y);
+                glTexCoord2f(1.0f, 1.0f); glVertex2f(x + pageW, y + pageH);
+                glTexCoord2f(0.0f, 1.0f); glVertex2f(x, y + pageH);
+                glEnd();
+            } else {
+                // Improved placeholder: soft neutral card with subtle shimmer (no black flash)
+                glBindTexture(GL_TEXTURE_2D, 0);
+                double t = glfwGetTime();
+                float shimmer = 0.15f + 0.10f * (float)sin(t * 3.5 + i * 0.7);
+                float topL = 0.94f + shimmer * 0.05f;
+                float botL = 0.935f + shimmer * 0.04f;
+                // Card background
+                glBegin(GL_QUADS);
+                    glColor4f(topL, topL, topL, 1.0f); glVertex2f(x, y);
+                    glColor4f(topL, topL, topL, 1.0f); glVertex2f(x + pageW, y);
+                    glColor4f(botL, botL, botL, 1.0f); glVertex2f(x + pageW, y + pageH);
+                    glColor4f(botL, botL, botL, 1.0f); glVertex2f(x, y + pageH);
+                glEnd();
+                // Soft inner border (shadow) to suggest depth
+                glColor4f(0.80f, 0.80f, 0.82f, 0.55f);
+                glBegin(GL_LINE_LOOP);
+                    glVertex2f(x+0.5f, y+0.5f);
+                    glVertex2f(x + pageW-0.5f, y+0.5f);
+                    glVertex2f(x + pageW-0.5f, y + pageH-0.5f);
+                    glVertex2f(x+0.5f, y + pageH-0.5f);
+                glEnd();
+            }
+            yOffset += pageH + PAGE_SPACING;
         }
     }
     else {
@@ -1316,30 +1356,45 @@ void PDFViewerEmbedder::renderFrame()
         
         // Draw pages one by one using immediate mode (works in compatibility profile)
         // This ensures compatibility while still using the modern pipeline path
-        for (int i = 0; i < pageCount; ++i) {
-            if (m_textures[i] == 0) continue;
-            
+    for (int i = 0; i < pageCount; ++i) {
             float pageW = (float)m_pageWidths[i] * m_scrollState->zoomScale;
             float pageH = (float)m_pageHeights[i] * m_scrollState->zoomScale;
-            
+
             float xCenter = (m_windowWidth / 2.0f) - m_scrollState->horizontalOffset;
             float yCenter = yOffset + pageH / 2.0f;
-            
             float x = xCenter - pageW / 2.0f;
             float y = yCenter - pageH / 2.0f;
-            
-            glBindTexture(GL_TEXTURE_2D, m_textures[i]);
-            glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-            
-            // Use immediate mode for now - this should work in both profiles
-            glBegin(GL_QUADS);
-            glTexCoord2f(0.0f, 0.0f); glVertex2f(x, y);
-            glTexCoord2f(1.0f, 0.0f); glVertex2f(x + pageW, y);
-            glTexCoord2f(1.0f, 1.0f); glVertex2f(x + pageW, y + pageH);
-            glTexCoord2f(0.0f, 1.0f); glVertex2f(x, y + pageH);
-            glEnd();
-            
-            yOffset += pageH;
+
+            if (m_textures[i] != 0) {
+                glBindTexture(GL_TEXTURE_2D, m_textures[i]);
+                glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+                glBegin(GL_QUADS);
+                glTexCoord2f(0.0f, 0.0f); glVertex2f(x, y);
+                glTexCoord2f(1.0f, 0.0f); glVertex2f(x + pageW, y);
+                glTexCoord2f(1.0f, 1.0f); glVertex2f(x + pageW, y + pageH);
+                glTexCoord2f(0.0f, 1.0f); glVertex2f(x, y + pageH);
+                glEnd();
+            } else {
+                glBindTexture(GL_TEXTURE_2D, 0);
+                double t = glfwGetTime();
+                float shimmer = 0.15f + 0.10f * (float)sin(t * 3.5 + i * 0.7);
+                float topL = 0.94f + shimmer * 0.05f;
+                float botL = 0.935f + shimmer * 0.04f;
+                glBegin(GL_QUADS);
+                    glColor4f(topL, topL, topL, 1.0f); glVertex2f(x, y);
+                    glColor4f(topL, topL, topL, 1.0f); glVertex2f(x + pageW, y);
+                    glColor4f(botL, botL, botL, 1.0f); glVertex2f(x + pageW, y + pageH);
+                    glColor4f(botL, botL, botL, 1.0f); glVertex2f(x, y + pageH);
+                glEnd();
+                glColor4f(0.80f, 0.80f, 0.82f, 0.55f);
+                glBegin(GL_LINE_LOOP);
+                    glVertex2f(x+0.5f, y+0.5f);
+                    glVertex2f(x + pageW-0.5f, y+0.5f);
+                    glVertex2f(x + pageW-0.5f, y + pageH-0.5f);
+                    glVertex2f(x+0.5f, y + pageH-0.5f);
+                glEnd();
+            }
+            yOffset += pageH + PAGE_SPACING;
         }
     }
     
@@ -1427,10 +1482,15 @@ void PDFViewerEmbedder::regenerateTextures()
         float adjustedZoom = computeAdaptiveZoomForBudget(originalPageWidth, originalPageHeight, effectiveZoom, projectedBytes);
         if (adjustedZoom != effectiveZoom) {
             effectiveZoom = adjustedZoom;
-            textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
-            textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
             m_budgetDownscaleApplied = true;
         }
+        // HARD FLOOR: don't allow effective texture zoom to drop below % of requested (prevents 8x8 block pages)
+        const float MIN_EFFECTIVE_RATIO = 0.55f; // keep at least 55% resolution to avoid ugly block artifact
+        if (effectiveZoom < m_scrollState->zoomScale * MIN_EFFECTIVE_RATIO) {
+            effectiveZoom = m_scrollState->zoomScale * MIN_EFFECTIVE_RATIO;
+        }
+        textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
+        textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
 
         // Clamp to runtime GL max texture size conservatively
         const int MAX_TEXTURE_DIM = (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 8192);
@@ -1458,18 +1518,21 @@ void PDFViewerEmbedder::regenerateTextures()
         
         // Render at calculated size using actual page dimensions (no window fitting)
         FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, textureWidth, textureHeight);
-    size_t oldBytes = m_textureByteSizes[i];
-    m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
-    size_t newBytes = (size_t)textureWidth * (size_t)textureHeight * 4ull;
-    m_textureByteSizes[i] = newBytes;
-    trackTextureAllocation(oldBytes, newBytes, i);
-        
+        if (!bmp) {
+            // Fallback: no bitmap (PDFium failure) – leave texture 0 so placeholder renders (avoid black).
+            m_textures[i] = 0;
+        } else {
+            size_t oldBytes = (m_textureByteSizes.size()> (size_t)i)? m_textureByteSizes[i] : 0;
+            if (m_textureByteSizes.size() <= (size_t)i) m_textureByteSizes.resize(i+1,0);
+            m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+            size_t newBytes = (size_t)textureWidth * (size_t)textureHeight * 4ull;
+            m_textureByteSizes[i] = newBytes;
+            trackTextureAllocation(oldBytes, newBytes, i);
+            FPDFBitmap_Destroy(bmp);
+        }
         // Store BASE dimensions (ACTUAL page dimensions, not window-fitted)
-        // These will be scaled by zoomScale during rendering
         m_pageWidths[i] = static_cast<int>(originalPageWidth);
         m_pageHeights[i] = static_cast<int>(originalPageHeight);
-        
-        FPDFBitmap_Destroy(bmp);
     }
     
     // Update scroll state
@@ -1506,10 +1569,14 @@ void PDFViewerEmbedder::regenerateVisibleTextures()
         float adjustedZoom = computeAdaptiveZoomForBudget(originalPageWidth, originalPageHeight, effectiveZoom, projectedBytes);
         if (adjustedZoom != effectiveZoom) {
             effectiveZoom = adjustedZoom;
-            textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
-            textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
             m_budgetDownscaleApplied = true;
         }
+        const float MIN_EFFECTIVE_RATIO = 0.55f;
+        if (effectiveZoom < m_scrollState->zoomScale * MIN_EFFECTIVE_RATIO) {
+            effectiveZoom = m_scrollState->zoomScale * MIN_EFFECTIVE_RATIO;
+        }
+        textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
+        textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
 
         // Clamp to runtime GL max texture size conservatively
         const int MAX_TEXTURE_DIM = (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 8192);
@@ -1537,18 +1604,20 @@ void PDFViewerEmbedder::regenerateVisibleTextures()
         
         // Render at calculated size using actual page dimensions (no window fitting)
         FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, textureWidth, textureHeight);
-    size_t oldBytes = m_textureByteSizes[i];
-    m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
-    size_t newBytes = (size_t)textureWidth * (size_t)textureHeight * 4ull;
-    m_textureByteSizes[i] = newBytes;
-    trackTextureAllocation(oldBytes, newBytes, i);
-        
+        if (!bmp) {
+            m_textures[i] = 0; // placeholder will show
+        } else {
+            size_t oldBytes = (m_textureByteSizes.size()> (size_t)i)? m_textureByteSizes[i] : 0;
+            if (m_textureByteSizes.size() <= (size_t)i) m_textureByteSizes.resize(i+1,0);
+            m_textures[i] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+            size_t newBytes = (size_t)textureWidth * (size_t)textureHeight * 4ull;
+            m_textureByteSizes[i] = newBytes;
+            trackTextureAllocation(oldBytes, newBytes, i);
+            FPDFBitmap_Destroy(bmp);
+        }
         // Store BASE dimensions (ACTUAL page dimensions, not window-fitted)
-        // These will be scaled by zoomScale during rendering
         m_pageWidths[i] = static_cast<int>(originalPageWidth);
         m_pageHeights[i] = static_cast<int>(originalPageHeight);
-        
-        FPDFBitmap_Destroy(bmp);
     }
     
     m_needsVisibleRegeneration = false;
@@ -1580,10 +1649,14 @@ void PDFViewerEmbedder::regeneratePageTexture(int pageIndex)
     float adjustedZoom = computeAdaptiveZoomForBudget(originalPageWidth, originalPageHeight, effectiveZoom, projectedBytes);
     if (adjustedZoom != effectiveZoom) {
         effectiveZoom = adjustedZoom;
-        textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
-        textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
         m_budgetDownscaleApplied = true;
     }
+    const float MIN_EFFECTIVE_RATIO = 0.55f;
+    if (effectiveZoom < m_scrollState->zoomScale * MIN_EFFECTIVE_RATIO) {
+        effectiveZoom = m_scrollState->zoomScale * MIN_EFFECTIVE_RATIO;
+    }
+    textureWidth = std::max(8, (int)(originalPageWidth * effectiveZoom));
+    textureHeight = std::max(8, (int)(originalPageHeight * effectiveZoom));
 
     // Clamp to runtime GL max texture size conservatively
     const int MAX_TEXTURE_DIM = (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 8192);
@@ -1613,21 +1686,19 @@ void PDFViewerEmbedder::regeneratePageTexture(int pageIndex)
     FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(pageIndex, textureWidth, textureHeight);
     if (!bmp) {
         std::cerr << "PDFViewerEmbedder["<<m_viewerId<<"] regeneratePageTexture: NULL bitmap page="<<pageIndex
-                  <<" size="<<textureWidth<<"x"<<textureHeight<<" (skipping)" << std::endl;
-        return;
+                  <<" size="<<textureWidth<<"x"<<textureHeight<<" (placeholder kept)" << std::endl;
+    } else {
+        size_t oldBytes = (m_textureByteSizes.size()> (size_t)pageIndex)? m_textureByteSizes[pageIndex] : 0;
+        if (m_textureByteSizes.size() <= (size_t)pageIndex) m_textureByteSizes.resize(pageIndex+1,0);
+        m_textures[pageIndex] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
+        size_t newBytes = (size_t)textureWidth * (size_t)textureHeight * 4ull;
+        m_textureByteSizes[pageIndex] = newBytes;
+        trackTextureAllocation(oldBytes, newBytes, pageIndex);
+        FPDFBitmap_Destroy(bmp);
     }
-    size_t oldBytes = m_textureByteSizes[pageIndex];
-    m_textures[pageIndex] = createTextureFromPDFBitmap(FPDFBitmap_GetBuffer(bmp), textureWidth, textureHeight);
-    size_t newBytes = (size_t)textureWidth * (size_t)textureHeight * 4ull;
-    m_textureByteSizes[pageIndex] = newBytes;
-    trackTextureAllocation(oldBytes, newBytes, pageIndex);
-    
-    // Store BASE dimensions (ACTUAL page dimensions, not window-fitted)
-    // These will be scaled by zoomScale during rendering
+    // Store BASE dimensions
     m_pageWidths[pageIndex] = static_cast<int>(originalPageWidth);
     m_pageHeights[pageIndex] = static_cast<int>(originalPageHeight);
-    
-    FPDFBitmap_Destroy(bmp);
     enforceMemoryBudget();
 }
 
@@ -1662,6 +1733,10 @@ void PDFViewerEmbedder::handleBackgroundRendering()
             backgroundZoom = (backgroundZoom > 0.3f) ? backgroundZoom : 0.3f;
             // Apply same texture limit for background rendering
             backgroundZoom = std::min(backgroundZoom, 2.0f); // Even more conservative for background
+            // Ensure background still has a sane floor to avoid 8x8 blocks appearing dark
+            if (backgroundZoom < m_scrollState->zoomScale * 0.45f) {
+                backgroundZoom = m_scrollState->zoomScale * 0.45f;
+            }
             
             int textureWidth = static_cast<int>(originalPageWidth * backgroundZoom);
             int textureHeight = static_cast<int>(originalPageHeight * backgroundZoom);
@@ -1715,9 +1790,13 @@ unsigned int PDFViewerEmbedder::createTextureFromPDFBitmap(void* buffer, int wid
     GLuint textureID;
     glGenTextures(1, &textureID);
     glBindTexture(GL_TEXTURE_2D, textureID);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    // Use linear filtering + mipmaps to avoid harsh pixel blocks at low zoom
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, buffer);
+    glGenerateMipmap(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
     return textureID;
 }

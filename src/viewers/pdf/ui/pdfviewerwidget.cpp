@@ -41,6 +41,7 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_searchInput(nullptr)
     , m_updateTimer(new QTimer(this))
     , m_navigationTimer(new QTimer(this))
+    , m_searchDebounceTimer(new QTimer(this))
     , m_viewerInitialized(false)
     , m_pdfLoaded(false)
     , m_usingFallback(false)
@@ -53,6 +54,30 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     m_navigationTimer->setSingleShot(true);
     m_navigationTimer->setInterval(100);
     connect(m_navigationTimer, &QTimer::timeout, this, [this]() { m_navigationInProgress = false; });
+
+    // Debounced search setup
+    if (m_searchDebounceTimer) {
+        m_searchDebounceTimer->setSingleShot(true);
+        m_searchDebounceTimer->setInterval(SEARCH_DEBOUNCE_MS);
+        connect(m_searchDebounceTimer, &QTimer::timeout, this, [this]() {
+            if (!m_searchInput)
+                return;
+            QString term = m_searchInput->text().trimmed();
+            if (term.isEmpty()) {
+                if (isPDFLoaded() && m_pdfEmbedder)
+                    m_pdfEmbedder->clearSelection();
+                m_lastSearchTerm.clear();
+            } else {
+                // Only execute if term changed from last executed to avoid redundant find cycles
+                if (term != m_lastSearchTerm) {
+                    m_lastSearchTerm = term;
+                    searchText();
+                }
+            }
+            updateStatusInfo();
+            syncToolbarStates();
+        });
+    }
 }
 
 PDFViewerWidget::~PDFViewerWidget()
@@ -160,6 +185,14 @@ void PDFViewerWidget::setupToolbar()
     m_actionFindNext->setToolTip("Find Next");
     connect(m_actionFindNext, &QAction::triggered, this, &PDFViewerWidget::findNext);
 
+    // Compact status area
+    m_toolbar->addSeparator();
+    m_statusInfoLabel = new QLabel("No PDF", this);
+    m_statusInfoLabel->setObjectName("statusInfoLabel");
+    m_statusInfoLabel->setMinimumWidth(110);
+    m_statusInfoLabel->setStyleSheet("QLabel#statusInfoLabel{color:#444;padding:0 4px;font:10pt 'Segoe UI';}");
+    m_toolbar->addWidget(m_statusInfoLabel);
+
     syncToolbarStates();
 }
 
@@ -199,6 +232,7 @@ bool PDFViewerWidget::loadPDF(const QString &filePath)
     emit pdfLoaded(filePath);
     emit pageChanged(getCurrentPage(), getPageCount());
     syncToolbarStates();
+    updateStatusInfo();
     return true;
 }
 
@@ -287,13 +321,37 @@ void PDFViewerWidget::syncToolbarStates()
     if (m_totalPagesLabel)    m_totalPagesLabel->setText(QString("/ %1").arg(total));
 }
 
+void PDFViewerWidget::updatePageInputSafely(int currentPage)
+{
+    if (!m_pageInput) return;
+    // Don't overwrite while user is actively typing (has focus and navigation not programmatic)
+    bool userTyping = m_pageInput->hasFocus() && !m_navigationInProgress;
+    QString want = QString::number(currentPage);
+    if (!userTyping && m_pageInput->text() != want) {
+        m_pageInput->setText(want);
+    }
+}
+
 void PDFViewerWidget::updateViewer()
 {
     if (m_pdfEmbedder && m_viewerInitialized) {
         m_pdfEmbedder->update();
         if (isPDFLoaded()) {
-            emit pageChanged(getCurrentPage(), getPageCount());
-            emit zoomChanged(getCurrentZoom());
+            int cur = getCurrentPage();
+            double z = getCurrentZoom();
+            // Only emit if changed to reduce signal noise
+            if (cur != m_lastKnownPage) {
+                updatePageInputSafely(cur);
+                emit pageChanged(cur, getPageCount());
+                m_lastKnownPage = cur;
+                syncToolbarStates();
+                updateStatusInfo();
+            }
+            if (std::abs(z - m_lastKnownZoom) > 1e-6) {
+                emit zoomChanged(z);
+                m_lastKnownZoom = z;
+                updateStatusInfo();
+            }
         }
     }
 }
@@ -314,6 +372,7 @@ void PDFViewerWidget::onPageInputChanged()
         m_pageInput->setText(QString::number(getCurrentPage()));
     }
     m_pageInput->clearFocus();
+    updatePageInputSafely(getCurrentPage());
     syncToolbarStates();
 }
 
@@ -325,10 +384,12 @@ void PDFViewerWidget::onSearchInputChanged()
     if (term.isEmpty()) {
         if (isPDFLoaded() && m_pdfEmbedder)
             m_pdfEmbedder->clearSelection();
+        m_lastSearchTerm.clear();
     } else {
-        searchText();
+        scheduleDebouncedSearch();
     }
     syncToolbarStates();
+    updateStatusInfo();
 }
 
 void PDFViewerWidget::checkForSelectedText()
@@ -358,9 +419,9 @@ void PDFViewerWidget::goToPage(int pageNumber)
     m_navigationInProgress = true;
     m_navigationTimer->start();
     m_pdfEmbedder->goToPage(pageNumber);
-    if (m_pageInput)
-        m_pageInput->setText(QString::number(pageNumber));
+    updatePageInputSafely(pageNumber);
     syncToolbarStates();
+    updateStatusInfo();
 }
 
 void PDFViewerWidget::nextPage()
@@ -370,6 +431,7 @@ void PDFViewerWidget::nextPage()
         m_navigationTimer->start();
         m_pdfEmbedder->nextPage();
         syncToolbarStates();
+    updateStatusInfo();
     }
 }
 
@@ -380,6 +442,7 @@ void PDFViewerWidget::previousPage()
         m_navigationTimer->start();
         m_pdfEmbedder->previousPage();
         syncToolbarStates();
+    updateStatusInfo();
     }
 }
 
@@ -388,6 +451,7 @@ void PDFViewerWidget::zoomIn()
     if (isPDFLoaded() && m_pdfEmbedder) {
         m_pdfEmbedder->zoomIn();
         syncToolbarStates();
+    updateStatusInfo();
     }
 }
 
@@ -396,6 +460,7 @@ void PDFViewerWidget::zoomOut()
     if (isPDFLoaded() && m_pdfEmbedder) {
         m_pdfEmbedder->zoomOut();
         syncToolbarStates();
+    updateStatusInfo();
     }
 }
 
@@ -403,12 +468,14 @@ void PDFViewerWidget::rotateLeft()
 {
     if (isPDFLoaded() && m_pdfEmbedder)
         m_pdfEmbedder->rotateLeft();
+    updateStatusInfo();
 }
 
 void PDFViewerWidget::rotateRight()
 {
     if (isPDFLoaded() && m_pdfEmbedder)
         m_pdfEmbedder->rotateRight();
+    updateStatusInfo();
 }
 
 void PDFViewerWidget::searchText()
@@ -424,12 +491,14 @@ void PDFViewerWidget::findNext()
 {
     if (isPDFLoaded() && m_pdfEmbedder)
         m_pdfEmbedder->findNext();
+    updateStatusInfo();
 }
 
 void PDFViewerWidget::findPrevious()
 {
     if (isPDFLoaded() && m_pdfEmbedder)
         m_pdfEmbedder->findPrevious();
+    updateStatusInfo();
 }
 
 void PDFViewerWidget::ensureViewportSync()
@@ -479,4 +548,35 @@ bool PDFViewerWidget::eventFilter(QObject *watched, QEvent *event)
 void PDFViewerWidget::paintEvent(QPaintEvent *event)
 {
     QWidget::paintEvent(event);
+}
+
+// --- New helper methods ---
+void PDFViewerWidget::updateStatusInfo()
+{
+    if (!m_statusInfoLabel) return;
+    if (!isPDFLoaded()) {
+        if (m_statusInfoLabel->text() != "No PDF")
+            m_statusInfoLabel->setText("No PDF");
+        return;
+    }
+    int cur = getCurrentPage();
+    int total = getPageCount();
+    double zoomPct = getCurrentZoom() * 100.0;
+    // Choose precision: below 100% show one decimal if needed
+    QString zoomStr = (zoomPct < 100.0 && std::abs(zoomPct - std::round(zoomPct)) > 0.05)
+        ? QString::number(zoomPct, 'f', 1)
+        : QString::number(std::round(zoomPct));
+    QString composed = QString("Pg %1/%2  %3%")
+        .arg(cur)
+        .arg(total)
+        .arg(zoomStr);
+    if (m_statusInfoLabel->text() != composed)
+        m_statusInfoLabel->setText(composed);
+}
+
+void PDFViewerWidget::scheduleDebouncedSearch()
+{
+    if (!m_searchDebounceTimer)
+        return;
+    m_searchDebounceTimer->start();
 }

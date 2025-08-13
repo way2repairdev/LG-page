@@ -132,6 +132,9 @@ private:
     void setupIndividualToolbar(QToolBar* toolbar, bool isLeftPanel);
     void syncToolbarStates();
     void initializePDFViewer();
+    void updatePageInputSafely(int currentPage);
+    void updateStatusInfo();
+    void scheduleDebouncedSearch();
     
     // Core PDF viewer component (your existing renderer)
     std::unique_ptr<PDFViewerEmbedder> m_pdfEmbedder;
@@ -166,12 +169,14 @@ private:
     // Search widgets (shared/main toolbar)
     QLabel* m_searchLabel;
     QLineEdit* m_searchInput;
+    QLabel* m_statusInfoLabel;    // Compact status (page & zoom)
     
     // Split view navigation widgets removed
     
     // Update timer for the embedded viewer
     QTimer* m_updateTimer;
     QTimer* m_navigationTimer;  // Timer to reset navigation flag
+    QTimer* m_searchDebounceTimer; // Debounce timer for search
     
     // State tracking
     bool m_viewerInitialized;
@@ -181,6 +186,10 @@ private:
     bool m_navigationInProgress;  // Flag to track when programmatic navigation is happening
     QString m_currentFilePath;
     QString m_lastSelectedText;  // Track last selected text to detect changes
+    int m_lastKnownPage = -1;    // Track last page to avoid redundant UI churn
+    double m_lastKnownZoom = -1; // Track last zoom level
+    QString m_lastSearchTerm;    // Track last executed search term
+    static constexpr int SEARCH_DEBOUNCE_MS = 250;
     
     // Constants
     static constexpr int UPDATE_INTERVAL_MS = 16; // ~60 FPS
