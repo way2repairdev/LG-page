@@ -724,8 +724,8 @@ void PDFViewerEmbedder::zoomIn()
     float centerY = m_windowHeight / 2.0f;
     
     // Call HandleZoom with 1.2f zoom delta (same as MenuIntegration)
-    HandleZoom(*m_scrollState, 1.2f, centerX, centerY, 
-               (float)m_windowWidth, (float)m_windowHeight, 
+    HandleZoom(*m_scrollState, 1.2f, centerX, centerY,
+               (float)m_windowWidth, (float)m_windowHeight,
                m_pageHeights, m_pageWidths);
     
     float newZoom = m_scrollState->zoomScale;
@@ -767,8 +767,8 @@ void PDFViewerEmbedder::zoomOut()
     float centerY = m_windowHeight / 2.0f;
     
     // Call HandleZoom with 1/1.2f zoom delta (same as MenuIntegration)
-    HandleZoom(*m_scrollState, 1.0f/1.2f, centerX, centerY, 
-               (float)m_windowWidth, (float)m_windowHeight, 
+    HandleZoom(*m_scrollState, 1.0f/1.2f, centerX, centerY,
+               (float)m_windowWidth, (float)m_windowHeight,
                m_pageHeights, m_pageWidths);
     
     float newZoom = m_scrollState->zoomScale;
@@ -808,8 +808,8 @@ void PDFViewerEmbedder::setZoom(float zoomLevel)
     float centerY = m_windowHeight / 2.0f;
     
     // Call HandleZoom with calculated delta
-    HandleZoom(*m_scrollState, zoomDelta, centerX, centerY, 
-               (float)m_windowWidth, (float)m_windowHeight, 
+    HandleZoom(*m_scrollState, zoomDelta, centerX, centerY,
+               (float)m_windowWidth, (float)m_windowHeight,
                m_pageHeights, m_pageWidths);
     
     std::cout << "Embedded viewer: Set zoom to " << m_scrollState->zoomScale << std::endl;
@@ -2093,50 +2093,62 @@ void PDFViewerEmbedder::onScroll(double xoffset, double yoffset)
         float stepUp = 1.2f;
         float rawDelta = (yoffset > 0) ? stepUp : 1.0f / stepUp;
         float zoomDelta = std::clamp(rawDelta, 0.85f, 1.25f);
-        
-        // CRITICAL DEBUG: Log detailed state before HandleZoom
-        std::ofstream debugFile("build/zoom_debug.txt", std::ios::app);
-        int firstVisible = -1, lastVisible = -1;
-        if (debugFile.is_open()) {
-            debugFile << "=== ZOOM DEBUG - BEFORE HandleZoom ===" << std::endl;
-            debugFile << "Cursor position: (" << cursorX << ", " << cursorY << ")" << std::endl;
-            debugFile << "Window size: " << m_windowWidth << "x" << m_windowHeight << std::endl;
-            debugFile << "Current zoom: " << m_scrollState->zoomScale << std::endl;
-            debugFile << "Current scrollOffset: " << m_scrollState->scrollOffset << std::endl;
-            debugFile << "Current horizontalOffset: " << m_scrollState->horizontalOffset << std::endl;
-            debugFile << "Zoom delta: " << zoomDelta << std::endl;
-            debugFile << "Page count: " << (m_pageHeights.size()) << std::endl;
-            
-            // Log current visible page range
-            GetVisiblePageRange(*m_scrollState, m_pageHeights, firstVisible, lastVisible);
-            debugFile << "Visible pages: " << firstVisible << " to " << lastVisible << std::endl;
-            
-            // SPECIAL DEBUG for last page issue
-            bool isNearLastPage = (lastVisible >= (int)m_pageHeights.size() - 3);
-            debugFile << "NEAR LAST PAGE: " << (isNearLastPage ? "YES" : "NO") << std::endl;
-            
-            // Log page heights for context (only log relevant pages to reduce spam)
-            int startPage = std::max(0, firstVisible - 1);
-            int endPage = std::min((int)m_pageHeights.size() - 1, lastVisible + 1);
-            for (int i = startPage; i <= endPage; ++i) {
-                debugFile << "Page " << i << " height: " << m_pageHeights[i] << " (scaled: " 
-                          << (m_pageHeights[i] * m_scrollState->zoomScale) << ")" << std::endl;
-            }
-            debugFile << "===========================================" << std::endl;
-        }
-        
+
+        // (Disabled heavy per-tick file logging – it was causing I/O stalls during fast wheel zoom)
+        // If needed for deep debugging, wrap the logging block in an #ifdef and re-enable.
+
         HandleZoom(*m_scrollState, zoomDelta, (float)cursorX, (float)cursorY,
                    (float)m_windowWidth, (float)m_windowHeight,
                    m_pageHeights, m_pageWidths);
-        
-        // Schedule progressive visible regeneration during wheel zooming
+
+        // Detect whether this wheel event starts a new gesture (long gap since last one)
         double now = glfwGetTime();
+        double previousWheelTime = s_lastWheelZoomTime;
         s_lastWheelZoomTime = now;
-        s_pendingSettledRegen = true; // mark that we'll want a crisp pass after the gesture ends
-        if (now - m_lastScrollRegenTime > 0.030) { // a bit faster during zoom
-            // Always preview-quality while actively zooming; settled pass is triggered by idle timer
+        bool newGesture = (now - previousWheelTime) > 0.25; // 250 ms gap ⇒ new gesture
+
+        s_pendingSettledRegen = true; // request crisp pass after idle
+
+        bool triggeredPreview = false;
+        if (m_scrollState->lastRenderedZoom > 0.0f) {
+            float ratio = m_scrollState->zoomScale / m_scrollState->lastRenderedZoom;
+            bool zoomingIn = ratio > 1.0f;
+            float upThreshold = 1.5f;
+            float downThreshold = 0.55f;
+            if (((zoomingIn && ratio > upThreshold) || (!zoomingIn && ratio < downThreshold)) &&
+                (now - m_lastScrollRegenTime) > 0.095) {
+                scheduleVisibleRegeneration(false); // quick preview regen
+                m_lastScrollRegenTime = now;
+                triggeredPreview = true;
+            }
+        }
+
+        // Guarantee at least one preview at the start of a gesture even if thresholds not crossed
+        if (!triggeredPreview && newGesture) {
             scheduleVisibleRegeneration(false);
-            m_lastScrollRegenTime = now;
+            triggeredPreview = true;
+        }
+
+        // If visible pages currently have no textures (fresh load / eviction), force a preview regen
+        if (!triggeredPreview) {
+            int firstVisible=-1, lastVisible=-1;
+            GetVisiblePageRange(*m_scrollState, m_pageHeights, firstVisible, lastVisible);
+            bool missingTexture = false;
+            if (firstVisible >= 0 && lastVisible >= firstVisible) {
+                for (int i = firstVisible; i <= lastVisible; ++i) {
+                    if (i >= 0 && i < (int)m_textures.size() && m_textures[i] == 0) { missingTexture = true; break; }
+                }
+            }
+            if (missingTexture && (now - m_lastScrollRegenTime) > 0.03) { // faster path when blank
+                scheduleVisibleRegeneration(false);
+                m_lastScrollRegenTime = now;
+                triggeredPreview = true;
+            }
+        }
+
+        if (!triggeredPreview) {
+            // Just force redraw with scaled (existing) textures for ultra-low-latency feedback
+            m_scrollState->forceRedraw = true;
         }
     }
 }
@@ -2423,7 +2435,7 @@ void PDFViewerEmbedder::scheduleVisibleRegeneration(bool settled) {
         if (w > MAX_DIM) { float s = (float)MAX_DIM / w; w = MAX_DIM; h = std::max(1, (int)(h * s)); }
         if (h > MAX_DIM) { float s = (float)MAX_DIM / h; h = MAX_DIM; w = std::max(1, (int)(w * s)); }
 
-    tasks.push_back(PageRenderTask{ i, w, h, gen, priority++ });
+    tasks.push_back(PageRenderTask{ i, w, h, gen, priority++, !settled });
     }
 
     m_asyncQueue->submit(std::move(tasks), gen);
@@ -2448,10 +2460,17 @@ void PDFViewerEmbedder::processAsyncResults() {
 
         GLuint tex=0; glGenTextures(1, &tex);
         glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        if (r.preview) {
+            // Cheaper filtering & no mipmaps for preview to speed interaction
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        } else {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        }
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, r.width, r.height, 0, GL_BGRA, GL_UNSIGNED_BYTE, r.bgra.data());
+        if (!r.preview) glGenerateMipmap(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, 0);
         m_textures[r.pageIndex] = tex;
 

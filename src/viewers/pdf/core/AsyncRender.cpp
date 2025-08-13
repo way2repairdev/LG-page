@@ -77,11 +77,12 @@ void AsyncRenderQueue::workerLoop() {
             continue;
         }
 
-        PageRenderResult res;
+    PageRenderResult res;
         res.pageIndex = task.pageIndex;
         res.width = task.pixelWidth;
         res.height = task.pixelHeight;
         res.generation = task.generation;
+    res.preview = task.preview;
         res.bgra.resize(res.height * stride);
         std::memcpy(res.bgra.data(), buffer, res.bgra.size());
 

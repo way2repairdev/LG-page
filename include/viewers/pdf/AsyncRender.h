@@ -17,6 +17,7 @@ struct PageRenderTask {
     int pixelHeight{0};
     int generation{0};
     int priority{0}; // smaller = higher priority
+    bool preview{false}; // preview quality (gesture in progress) = cheaper render
 };
 
 // Result containing BGRA pixels for upload on the GL thread
@@ -26,6 +27,7 @@ struct PageRenderResult {
     int height{0};
     int generation{0};
     std::vector<std::uint8_t> bgra; // width*height*4
+    bool preview{false}; // propagate preview flag for GL upload filtering (e.g., skip mipmaps)
 };
 
 // Simple async queue with a single worker thread for PDFium rendering.
