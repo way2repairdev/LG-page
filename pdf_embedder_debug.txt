@@ -54,7 +54,3 @@ Page 0 pixel dimensions after zoom: 2030.16 x 1436.32 pixels
 ZOOM DEBUG: ZoomOut called - Current zoom: 2.41398
 ZOOM DEBUG: ZoomOut completed - New zoom: 2.01165 (delta: 0.833333)
 Page 0 pixel dimensions after zoom: 1691.8 x 1196.93 pixels
-ZOOM DEBUG: ZoomIn called - Current zoom: 6.25334
-ZOOM DEBUG: ZoomIn called - Current zoom: 7.50401
-ZOOM DEBUG: ZoomIn called - Current zoom: 9.00481
-ZOOM DEBUG: ZoomIn called - Current zoom: 10.8058

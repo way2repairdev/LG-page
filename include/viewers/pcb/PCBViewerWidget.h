@@ -5,6 +5,7 @@
 #include <QVBoxLayout>
 #include <QToolBar>
 #include <QTimer>
+#include <QSplitter>
 #include <memory>
 
 // Forward declarations
@@ -41,7 +42,13 @@ public:
     bool isToolbarVisible() const;
     QToolBar* getToolbar() const;
     
-    // Split view functionality removed
+    // Split view functionality (same as PDF viewer)
+    void embedPDFViewerInRightPanel(QWidget* pdfViewer);
+    void removePDFViewerFromRightPanel();
+    bool isSplitViewActive() const;
+
+    // Access embedded viewer pointer (for restoration)
+    QWidget* getEmbeddedPDFViewer() const { return m_embeddedPDFViewer; }
 
 signals:
     // File events
@@ -49,13 +56,18 @@ signals:
     void pcbClosed();
     void errorOccurred(const QString &error);
     
-    // Split view signals removed
+    // Split view signals (same as PDF viewer)
+    void requestCurrentPDFViewer();
+    void releasePDFViewer();
+    void splitViewActivated();
+    void splitViewDeactivated();
 
 public slots:
     // Update functions
     void updateViewer();
     
-    // Split view slot removed
+    // Split view slot
+    void onSplitWindowClicked();
 
     // Ensure viewport and camera are synced after activation/tab switch
     void ensureViewportSync();
@@ -86,14 +98,20 @@ private:
     QWidget *m_viewerContainer;
     QTimer *m_updateTimer;
     
-    // Split view components removed
+    // Split view components (same structure as PDF viewer)
+    QSplitter *m_splitter;
+    QWidget *m_leftPanel;
+    QWidget *m_rightPanel;
+    QToolBar *m_leftToolbar;
+    QToolBar *m_rightToolbar;
+    QWidget *m_embeddedPDFViewer;
 
     // State variables
     bool m_viewerInitialized;
     bool m_pcbLoaded;
     bool m_usingFallback;
     bool m_toolbarVisible;
-    // Split view state removed
+    bool m_isSplitView;
     QString m_currentFilePath;
     
     // Update management

@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QSplitter>
 #include <QToolBar>
 #include <QAction>
 #include <QLineEdit>
@@ -41,14 +42,41 @@ public:
      */
     bool loadPDF(const QString& filePath);
 
-    // Split view functionality removed
+    /**
+     * Load a PDF file into the right panel (for split view)
+     * @param filePath Path to the PDF file
+     * @return true if loaded successfully
+     */
+    bool loadRightPanelPDF(const QString& filePath);
+
+    /**
+     * Clear/unload the PDF from the right panel
+     */
+    void clearRightPanelPDF();
+
+    /**
+     * Embed a PCB viewer widget in the right panel (for split view)
+     * @param pcbWidget The PCB viewer widget to embed
+     */
+    void embedPCBViewerInRightPanel(QWidget* pcbWidget);
+    
+    /**
+     * Remove the embedded PCB viewer from the right panel
+     */
+    void removePCBViewerFromRightPanel();
+
+    // Access embedded viewer pointer (for restoration)
+    QWidget* getEmbeddedPCBViewer() const { return m_embeddedPCBViewer; }
 
     /**
      * Check if a PDF is currently loaded
      */
     bool isPDFLoaded() const;
 
-    // Right panel PDF state removed
+    /**
+     * Check if a PDF is currently loaded in the right panel
+     */
+    bool isRightPanelPDFLoaded() const;
 
     /**
      * Get the current page count
@@ -105,7 +133,17 @@ signals:
     // Emitted when zoom level changes
     void zoomChanged(double zoomLevel);
 
-    // Split view signals removed
+    // Emitted when split view is activated and needs the current PCB viewer
+    void requestCurrentPCBViewer();
+    
+    // Emitted when split view is deactivated and PCB viewer should be returned
+    void releasePCBViewer();
+    
+    // Emitted when split view is activated (tree view should be hidden)
+    void splitViewActivated();
+    
+    // Emitted when split view is deactivated (tree view should be shown)
+    void splitViewDeactivated();
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -119,7 +157,7 @@ private slots:
     void onPageInputChanged();
     void onSearchInputChanged();
     void checkForSelectedText();
-    // Split view action removed
+    void onSlipTabClicked();
 
 protected:
     // Event handling to clear page input focus when clicking elsewhere
@@ -141,12 +179,22 @@ private:
     QToolBar* m_toolbar;
     QWidget* m_viewerContainer;
     
-    // Split view components removed
+    // Split view components
+    QSplitter* m_splitter;
+    QWidget* m_leftViewerContainer;
+    QWidget* m_rightViewerContainer;
+    QLabel* m_rightPlaceholderLabel;
+    QWidget* m_embeddedPCBViewer;  // The PCB viewer widget embedded in right panel
+    bool m_isSplitView;
     
-    // Dual toolbars removed
+    // Dual toolbar support
+    QToolBar* m_leftToolbar;
+    QToolBar* m_rightToolbar;
+    QWidget* m_leftPanel;    // Contains left toolbar + left viewer
+    QWidget* m_rightPanel;   // Contains right toolbar + right viewer
     
     // Toolbar actions (shared/main toolbar)
-    // Slip/split action removed
+    QAction* m_actionSlipTab;
     QAction* m_actionRotateLeft;
     QAction* m_actionRotateRight;
     QAction* m_actionPreviousPage;
@@ -156,7 +204,25 @@ private:
     QAction* m_actionFindPrevious;
     QAction* m_actionFindNext;
     
-    // Panel-specific actions removed
+    // Left panel toolbar actions (for split view)
+    QAction* m_leftActionRotateLeft;
+    QAction* m_leftActionRotateRight;
+    QAction* m_leftActionPreviousPage;
+    QAction* m_leftActionNextPage;
+    QAction* m_leftActionZoomIn;
+    QAction* m_leftActionZoomOut;
+    QAction* m_leftActionFindPrevious;
+    QAction* m_leftActionFindNext;
+    
+    // Right panel toolbar actions (for split view)
+    QAction* m_rightActionRotateLeft;
+    QAction* m_rightActionRotateRight;
+    QAction* m_rightActionPreviousPage;
+    QAction* m_rightActionNextPage;
+    QAction* m_rightActionZoomIn;
+    QAction* m_rightActionZoomOut;
+    QAction* m_rightActionFindPrevious;
+    QAction* m_rightActionFindNext;
     
     // Page navigation widgets (shared/main toolbar)
     QLabel* m_pageLabel;
@@ -167,7 +233,19 @@ private:
     QLabel* m_searchLabel;
     QLineEdit* m_searchInput;
     
-    // Split view navigation widgets removed
+    // Left panel navigation widgets
+    QLabel* m_leftPageLabel;
+    QLineEdit* m_leftPageInput;
+    QLabel* m_leftTotalPagesLabel;
+    QLabel* m_leftSearchLabel;
+    QLineEdit* m_leftSearchInput;
+    
+    // Right panel navigation widgets  
+    QLabel* m_rightPageLabel;
+    QLineEdit* m_rightPageInput;
+    QLabel* m_rightTotalPagesLabel;
+    QLabel* m_rightSearchLabel;
+    QLineEdit* m_rightSearchInput;
     
     // Update timer for the embedded viewer
     QTimer* m_updateTimer;
@@ -176,7 +254,7 @@ private:
     // State tracking
     bool m_viewerInitialized;
     bool m_pdfLoaded;              // Left panel PDF loaded state
-    // Right panel PDF state removed
+    bool m_rightPdfLoaded;         // Right panel PDF loaded state
     bool m_usingFallback;
     bool m_navigationInProgress;  // Flag to track when programmatic navigation is happening
     QString m_currentFilePath;

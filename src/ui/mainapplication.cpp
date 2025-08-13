@@ -426,7 +426,73 @@ void MainApplication::openPDFInTab(const QString &filePath)
         statusBar()->showMessage(QString("PDF Zoom: %1%").arg(static_cast<int>(zoomLevel * 100)));
     });
     
-    // Split view removed: embedding and tree view toggle connections omitted
+    // Connect PCB viewer embedding signals
+    connect(pdfViewer, &PDFViewerWidget::requestCurrentPCBViewer, this, [this, pdfViewer]() {
+        qDebug() << "MainApplication: PDF viewer requesting PCB viewer for split view";
+
+        // Preferred: the explicitly selected PCB tab (independent of which row is active)
+        int selPcb = m_tabWidget->getSelectedIndex(DualTabWidget::PCB_TAB);
+        if (selPcb >= 0 && selPcb < m_tabWidget->count(DualTabWidget::PCB_TAB)) {
+            if (QWidget* pcbWidget = m_tabWidget->widget(selPcb, DualTabWidget::PCB_TAB)) {
+                qDebug() << "MainApplication: Using selected PCB tab index" << selPcb;
+                pdfViewer->embedPCBViewerInRightPanel(pcbWidget);
+                return;
+            }
+        }
+
+        // Fallback: use currently active PCB if any
+        if (m_tabWidget->getCurrentTabType() == DualTabWidget::PCB_TAB) {
+            if (QWidget* activeWidget = m_tabWidget->getActiveWidget()) {
+                qDebug() << "MainApplication: Using currently active PCB viewer (fallback)";
+                pdfViewer->embedPCBViewerInRightPanel(activeWidget);
+                return;
+            }
+        }
+
+        // Last resort: first available PCB tab
+        int pcbTabCount = m_tabWidget->count(DualTabWidget::PCB_TAB);
+        if (pcbTabCount > 0) {
+            if (QWidget* pcbWidget = m_tabWidget->widget(0, DualTabWidget::PCB_TAB)) {
+                qDebug() << "MainApplication: Using first available PCB viewer (fallback)";
+                pdfViewer->embedPCBViewerInRightPanel(pcbWidget);
+                return;
+            }
+        }
+
+        qDebug() << "MainApplication: No PCB viewer available to embed";
+    });
+    
+    connect(pdfViewer, &PDFViewerWidget::releasePCBViewer, this, [this, pdfViewer]() {
+        qDebug() << "MainApplication: Releasing PCB viewer from PDF viewer";
+        // Ensure the embedded PCB widget is reattached to the PCB content area
+        QWidget* pcbWidget = pdfViewer->getEmbeddedPCBViewer();
+        if (pcbWidget) {
+            m_tabWidget->ensureContentWidgetPresent(pcbWidget, DualTabWidget::PCB_TAB);
+            pcbWidget->show();
+            pcbWidget->updateGeometry();
+            pcbWidget->update();
+            // Activate the PCB tab that owns this widget for consistency
+            for (int i = 0; i < m_tabWidget->count(DualTabWidget::PCB_TAB); ++i) {
+                if (m_tabWidget->widget(i, DualTabWidget::PCB_TAB) == pcbWidget) {
+                    m_tabWidget->setCurrentIndex(i, DualTabWidget::PCB_TAB);
+                    break;
+                }
+            }
+        }
+    });
+    
+    // Connect split view state change signals for tree view management
+    connect(pdfViewer, &PDFViewerWidget::splitViewActivated, this, [this]() {
+        qDebug() << "MainApplication: Split view activated - hiding tree view";
+        setTreeViewVisible(false);
+        statusBar()->showMessage("Split view mode - Tree view hidden");
+    });
+    
+    connect(pdfViewer, &PDFViewerWidget::splitViewDeactivated, this, [this]() {
+        qDebug() << "MainApplication: Split view deactivated - showing tree view";
+        setTreeViewVisible(true);
+        statusBar()->showMessage("Normal view mode - Tree view restored");
+    });
     
     // Add PDF viewer to PDF tab row (will fail with -1 if limit race condition)
     QString tabName = fileInfo.fileName();
@@ -529,7 +595,73 @@ void MainApplication::openPCBInTab(const QString &filePath)
         QMessageBox::warning(this, "PCB Error", error);
     });
     
-    // Split view removed: embedding and tree view toggle connections omitted
+    // Connect PCB viewer split view signals (same as PDF viewer)
+    connect(pcbViewer, &PCBViewerWidget::requestCurrentPDFViewer, this, [this, pcbViewer]() {
+        qDebug() << "MainApplication: PCB viewer requesting PDF viewer for split view";
+
+        // Preferred: the explicitly selected PDF tab
+        int selPdf = m_tabWidget->getSelectedIndex(DualTabWidget::PDF_TAB);
+        if (selPdf >= 0 && selPdf < m_tabWidget->count(DualTabWidget::PDF_TAB)) {
+            if (QWidget* pdfWidget = m_tabWidget->widget(selPdf, DualTabWidget::PDF_TAB)) {
+                qDebug() << "MainApplication: Using selected PDF tab index" << selPdf;
+                pcbViewer->embedPDFViewerInRightPanel(pdfWidget);
+                return;
+            }
+        }
+
+        // Fallback: use currently active PDF if any
+        if (m_tabWidget->getCurrentTabType() == DualTabWidget::PDF_TAB) {
+            if (QWidget* activeWidget = m_tabWidget->getActiveWidget()) {
+                qDebug() << "MainApplication: Using currently active PDF viewer (fallback)";
+                pcbViewer->embedPDFViewerInRightPanel(activeWidget);
+                return;
+            }
+        }
+
+        // Last resort: first available PDF tab
+        int pdfTabCount = m_tabWidget->count(DualTabWidget::PDF_TAB);
+        if (pdfTabCount > 0) {
+            if (QWidget* pdfWidget = m_tabWidget->widget(0, DualTabWidget::PDF_TAB)) {
+                qDebug() << "MainApplication: Using first available PDF viewer (fallback)";
+                pcbViewer->embedPDFViewerInRightPanel(pdfWidget);
+                return;
+            }
+        }
+
+        qDebug() << "MainApplication: No PDF viewer available to embed";
+    });
+    
+    connect(pcbViewer, &PCBViewerWidget::releasePDFViewer, this, [this, pcbViewer]() {
+        qDebug() << "MainApplication: Releasing PDF viewer from PCB viewer";
+        // Ensure the embedded PDF widget is reattached to the PDF content area
+        QWidget* pdfWidget = pcbViewer->getEmbeddedPDFViewer();
+        if (pdfWidget) {
+            m_tabWidget->ensureContentWidgetPresent(pdfWidget, DualTabWidget::PDF_TAB);
+            pdfWidget->show();
+            pdfWidget->updateGeometry();
+            pdfWidget->update();
+            // Activate the PDF tab that owns this widget for consistency
+            for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
+                if (m_tabWidget->widget(i, DualTabWidget::PDF_TAB) == pdfWidget) {
+                    m_tabWidget->setCurrentIndex(i, DualTabWidget::PDF_TAB);
+                    break;
+                }
+            }
+        }
+    });
+    
+    // Connect split view state change signals for tree view management
+    connect(pcbViewer, &PCBViewerWidget::splitViewActivated, this, [this]() {
+        qDebug() << "MainApplication: PCB split view activated - hiding tree view";
+        setTreeViewVisible(false);
+        statusBar()->showMessage("PCB Split view mode - Tree view hidden");
+    });
+    
+    connect(pcbViewer, &PCBViewerWidget::splitViewDeactivated, this, [this]() {
+        qDebug() << "MainApplication: PCB split view deactivated - showing tree view";
+        setTreeViewVisible(true);
+        statusBar()->showMessage("Normal view mode - Tree view restored");
+    });
     
     // Add PCB viewer to PCB tab row
     QString tabName = fileInfo.fileName();
@@ -601,8 +733,8 @@ void MainApplication::onTabChangedByType(int index, DualTabWidget::TabType type)
 {
     qDebug() << "=== Tab Changed to Index:" << index << "Type:" << (type == DualTabWidget::PDF_TAB ? "PDF" : "PCB") << "===";
     
-    // Light isolation: just ensure other toolbars hidden (avoid hiding GL widgets to prevent context glitches)
-    hideAllViewerToolbars();
+    // Use aggressive toolbar isolation
+    forceToolbarIsolation();
     
     // If no valid tab is selected, return
     if (index < 0 || index >= m_tabWidget->count(type)) {
@@ -627,9 +759,27 @@ void MainApplication::onTabChangedByType(int index, DualTabWidget::TabType type)
     currentWidget->raise();
     currentWidget->activateWindow();
     
-    // Removed sleep; unnecessary and could stall UI
+    // Small delay before showing toolbar
+    QThread::msleep(50);
     
-    // Split view removed: no cross-embedded viewers to restore
+    // Before activating, ensure any cross-embedded viewer from the other type is restored
+    // If switching to PDF, make sure any PCB widget previously embedded is back in PCB area
+    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
+        if (auto pdf = qobject_cast<PDFViewerWidget*>(m_tabWidget->widget(i, DualTabWidget::PDF_TAB))) {
+            QWidget* pcb = pdf->getEmbeddedPCBViewer();
+            if (pcb) {
+                m_tabWidget->ensureContentWidgetPresent(pcb, DualTabWidget::PCB_TAB);
+            }
+        }
+    }
+    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PCB_TAB); ++i) {
+        if (auto pcb = qobject_cast<PCBViewerWidget*>(m_tabWidget->widget(i, DualTabWidget::PCB_TAB))) {
+            QWidget* pdf = pcb->getEmbeddedPDFViewer();
+            if (pdf) {
+                m_tabWidget->ensureContentWidgetPresent(pdf, DualTabWidget::PDF_TAB);
+            }
+        }
+    }
 
     // Show appropriate toolbar based on widget type
     if (type == DualTabWidget::PDF_TAB) {
@@ -702,8 +852,12 @@ void MainApplication::hideAllViewerToolbars()
         
         if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(widget)) {
             qDebug() << "Hiding PDF viewer for tab:" << tabName;
-            // No toolbar currently; do NOT hide the OpenGL child window to avoid corrupted buffer on restore
-            // Just ensure geometry up to date
+            
+            // Force hide the PDF viewer widget
+            pdfViewer->setVisible(false); // Hide entire widget
+            pdfViewer->lower(); // Send to back
+            
+            // Force layout update
             pdfViewer->updateGeometry();
             pdfViewer->update();
             
@@ -721,8 +875,12 @@ void MainApplication::hideAllViewerToolbars()
         if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(widget)) {
             qDebug() << "Hiding PCB viewer toolbar for tab:" << tabName;
             
-            // Hide only the toolbar; keep GL widget visible to preserve context
+            // Force hide with multiple methods
             pcbViewer->setToolbarVisible(false);
+            pcbViewer->setVisible(false); // Temporarily hide entire widget
+            pcbViewer->lower(); // Send to back
+            
+            // Force layout update
             pcbViewer->updateGeometry();
             pcbViewer->update();
             
@@ -771,9 +929,71 @@ void MainApplication::debugToolbarStates()
 
 void MainApplication::forceToolbarIsolation()
 {
-    // Simplified: legacy aggressive isolation removed to prevent GL corruption.
-    // Retained for backward compatibility if future selective isolation needed.
+    qDebug() << "=== Force Toolbar Isolation ===";
+    
+    // Step 1: Hide ALL widgets completely from both tab rows
+    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
+        QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PDF_TAB);
+        if (widget) {
+            widget->hide();
+            widget->setEnabled(false);
+            widget->clearFocus();
+        }
+    }
+    
+    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PCB_TAB); ++i) {
+        QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PCB_TAB);
+        if (widget) {
+            widget->hide();
+            widget->setEnabled(false);
+            widget->clearFocus();
+        }
+    }
+    
+    // Step 2: Force complete event processing
+    QApplication::processEvents();
+    QApplication::processEvents();
+    QThread::msleep(20); // Longer delay
+    
+    // Step 3: Force aggressive toolbar hiding
     hideAllViewerToolbars();
+    
+    // Step 4: Force complete event processing again
+    QApplication::processEvents();
+    QApplication::processEvents();
+    
+    // Step 5: Show the currently active widget based on which tab row is active
+    DualTabWidget::TabType activeType = m_tabWidget->getCurrentTabType();
+    
+    if (activeType == DualTabWidget::PDF_TAB) {
+        int currentIndex = m_tabWidget->currentIndex(DualTabWidget::PDF_TAB);
+        if (currentIndex >= 0 && currentIndex < m_tabWidget->count(DualTabWidget::PDF_TAB)) {
+            QWidget *currentWidget = m_tabWidget->widget(currentIndex, DualTabWidget::PDF_TAB);
+            if (currentWidget) {
+                currentWidget->show();
+                currentWidget->setEnabled(true);
+                currentWidget->raise();
+                currentWidget->activateWindow();
+            }
+        }
+    } else if (activeType == DualTabWidget::PCB_TAB) {
+        int currentIndex = m_tabWidget->currentIndex(DualTabWidget::PCB_TAB);
+        if (currentIndex >= 0 && currentIndex < m_tabWidget->count(DualTabWidget::PCB_TAB)) {
+            QWidget *currentWidget = m_tabWidget->widget(currentIndex, DualTabWidget::PCB_TAB);
+            if (currentWidget) {
+                currentWidget->show();
+                currentWidget->setEnabled(true);
+                currentWidget->raise();
+                currentWidget->activateWindow();
+            }
+        }
+    }
+    
+    // Final event processing
+    QApplication::processEvents();
+    QApplication::processEvents();
+    
+    qDebug() << "=== Toolbar Isolation Complete ===";
 }
 
 /*
