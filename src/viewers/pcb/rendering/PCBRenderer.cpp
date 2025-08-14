@@ -1339,6 +1339,9 @@ bool PCBRenderer::HandleMouseClick(float screen_x, float screen_y, int window_wi
             if (selected_pin_index == static_cast<int>(i)) {
                 selected_pin_index = -1;
             } else {
+                // Clear navigation highlights so manual selection is visible
+                highlighted_net.clear();
+                highlighted_part_index = -1;
                 selected_pin_index = static_cast<int>(i);
             }
             return true;
