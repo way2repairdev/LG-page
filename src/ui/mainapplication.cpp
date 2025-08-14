@@ -445,7 +445,8 @@ void MainApplication::openPDFInTab(const QString &filePath)
     // Load the PDF after the widget is properly initialized
     QTimer::singleShot(100, this, [this, pdfViewer, filePath, tabIndex, fileInfo]() {
         // Try to load the PDF after the widget is properly initialized
-        if (!pdfViewer->loadPDF(filePath)) {
+    pdfViewer->requestLoad(filePath); // Phase 1 async scaffold
+    if (false && !pdfViewer->loadPDF(filePath)) { // legacy path disabled
             // If loading fails, remove the tab and show error
             if (tabIndex < m_tabWidget->count(DualTabWidget::PDF_TAB)) {
                 m_tabWidget->removeTab(tabIndex, DualTabWidget::PDF_TAB);
@@ -542,7 +543,8 @@ void MainApplication::openPCBInTab(const QString &filePath)
     // Load the PCB after the widget is properly initialized
     QTimer::singleShot(100, this, [this, pcbViewer, filePath, tabIndex, fileInfo]() {
         // Try to load the PCB after the widget is properly initialized
-        if (!pcbViewer->loadPCB(filePath)) {
+    pcbViewer->requestLoad(filePath); // Phase 1 async scaffold
+    if (false && !pcbViewer->loadPCB(filePath)) { // legacy path disabled
             // If loading fails, remove the tab and show error
             if (tabIndex < m_tabWidget->count(DualTabWidget::PCB_TAB)) {
                 m_tabWidget->removeTab(tabIndex, DualTabWidget::PCB_TAB);
@@ -602,6 +604,19 @@ void MainApplication::onTabChangedByType(int index, DualTabWidget::TabType type)
     qDebug() << "=== Tab Changed to Index:" << index << "Type:" << (type == DualTabWidget::PDF_TAB ? "PDF" : "PCB") << "===";
     
     // Light isolation: just ensure other toolbars hidden (avoid hiding GL widgets to prevent context glitches)
+    // Additionally, throttle PDF viewers in inactive tabs to cut GPU usage.
+    for (int t = 0; t < m_tabWidget->count(DualTabWidget::PDF_TAB); ++t) {
+        if (QWidget *w = m_tabWidget->widget(t, DualTabWidget::PDF_TAB)) {
+            if (auto pdf = qobject_cast<PDFViewerWidget*>(w)) {
+                // If not the newly selected tab, hide (stops its timer in hideEvent)
+                if (!(type == DualTabWidget::PDF_TAB && t == index)) {
+                    pdf->hide();
+                } else {
+                    pdf->show();
+                }
+            }
+        }
+    }
     hideAllViewerToolbars();
     
     // If no valid tab is selected, return

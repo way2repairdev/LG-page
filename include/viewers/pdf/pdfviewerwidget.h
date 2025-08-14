@@ -9,9 +9,13 @@
 #include <QLineEdit>
 #include <QLabel>
 #include <QEvent>
+#include <QFutureWatcher>
+#include <QtConcurrent/QtConcurrent>
+#include "viewers/pdf/PDFPreviewLoader.h"
 #include <memory>
 
 class PDFViewerEmbedder;
+// PDFPreviewResult defined in PDFPreviewLoader.h
 
 /**
  * PDFViewerWidget - High-performance PDF viewer widget using embedded native renderer
@@ -40,6 +44,9 @@ public:
      * @return true if loaded successfully
      */
     bool loadPDF(const QString& filePath);
+    // Asynchronous Phase 1 wrapper (non-blocking pre-read + deferred real load)
+    void requestLoad(const QString &filePath);
+    void cancelLoad();
 
     // Split view functionality removed
 
@@ -95,6 +102,8 @@ public slots:
 signals:
     // Emitted when PDF is successfully loaded
     void pdfLoaded(const QString& filePath);
+    void loadCancelled();
+    void firstPreviewReady(const QImage &image); // placeholder for progressive loading
     
     // Emitted when there's an error loading or rendering
     void errorOccurred(const QString& error);
@@ -193,6 +202,15 @@ private:
     
     // Constants
     static constexpr int UPDATE_INTERVAL_MS = 16; // ~60 FPS
+
+    // Async scaffolding state (Phase 1)
+    int m_currentLoadId = 0;
+    bool m_cancelRequested = false;
+    QFutureWatcher<bool> *m_loadWatcher = nullptr;
+    QFutureWatcher<PDFPreviewResult> *m_previewWatcher = nullptr; // Phase 2 preview
+    class LoadingOverlay *m_loadingOverlay = nullptr;
+    QString m_pendingFilePath;
+    QLabel *m_previewLabel = nullptr; // first page preview
 };
 
 #endif // PDFVIEWERWIDGET_H

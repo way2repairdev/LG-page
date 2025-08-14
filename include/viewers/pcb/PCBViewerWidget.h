@@ -8,6 +8,7 @@
 #include <QComboBox>
 #include <QPushButton>
 #include <memory>
+#include <QFutureWatcher>
 
 // Forward declarations
 class PCBViewerEmbedder;
@@ -34,6 +35,8 @@ public:
 
     // File operations
     bool loadPCB(const QString &filePath);
+    void requestLoad(const QString &filePath); // Phase 1 async wrapper
+    void cancelLoad();
     void closePCB();
     bool isPCBLoaded() const;
     QString getCurrentFilePath() const;
@@ -50,6 +53,7 @@ signals:
     void pcbLoaded(const QString &filePath);
     void pcbClosed();
     void errorOccurred(const QString &error);
+    void loadCancelled();
     
     // Split view signals removed
 
@@ -117,6 +121,12 @@ private:
     bool m_toolbarVisible;
     // Split view state removed
     QString m_currentFilePath;
+    // Async scaffolding
+    int m_currentLoadId = 0;
+    bool m_cancelRequested = false;
+    QFutureWatcher<bool> *m_loadWatcher = nullptr;
+    class LoadingOverlay *m_loadingOverlay = nullptr;
+    QString m_pendingFilePath;
     
     // Update management
     bool m_needsUpdate;

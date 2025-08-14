@@ -131,7 +131,9 @@ set(UI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/mainwindow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/mainapplication.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/dualtabwidget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/LoadingOverlay.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/ui/pdfviewerwidget.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/core/PDFPreviewLoader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/core/PDFViewerEmbedder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/rendering/OpenGLPipelineManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/ui/pcbviewerwidget.cpp
@@ -181,7 +183,9 @@ set(UI_HEADERS
     ${INCLUDE_DIR}/ui/mainwindow.h
     ${INCLUDE_DIR}/ui/mainapplication.h
     ${INCLUDE_DIR}/ui/dualtabwidget.h
+    ${INCLUDE_DIR}/ui/LoadingOverlay.h
     ${INCLUDE_DIR}/viewers/pdf/pdfviewerwidget.h
+    ${INCLUDE_DIR}/viewers/pdf/PDFPreviewLoader.h
     ${INCLUDE_DIR}/viewers/pdf/PDFViewerEmbedder.h
     ${INCLUDE_DIR}/viewers/pdf/OpenGLPipelineManager.h
     ${INCLUDE_DIR}/viewers/pcb/PCBViewerWidget.h

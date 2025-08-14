@@ -1467,8 +1467,17 @@ void PDFViewerEmbedder::regenerateTextures()
     m_currentTextureBytes = 0;
     m_budgetDownscaleApplied = false;
     
-    // Regenerate all textures using ACTUAL page dimensions (not window-fitted)
-    for (int i = 0; i < pageCount; ++i) {
+    // Determine visible range to restrict regeneration to only needed pages + margin
+    int firstVisible=-1, lastVisible=-1;
+    if (m_scrollState) {
+        GetVisiblePageRange(*m_scrollState, m_pageHeights, firstVisible, lastVisible);
+    }
+    if (firstVisible < 0 || lastVisible < 0) { firstVisible = 0; lastVisible = std::min(pageCount-1, 7); }
+    int regenStart = std::max(0, firstVisible - m_preloadPageMargin);
+    int regenEnd   = std::min(pageCount-1, lastVisible + m_preloadPageMargin);
+
+    // Regenerate only visible + margin textures using ACTUAL page dimensions (not window-fitted)
+    for (int i = regenStart; i <= regenEnd; ++i) {
         // Get the ACTUAL page dimensions from PDF (not window-fitted)
         double originalPageWidth, originalPageHeight;
         m_renderer->GetOriginalPageSize(i, originalPageWidth, originalPageHeight);
@@ -1534,6 +1543,7 @@ void PDFViewerEmbedder::regenerateTextures()
         m_pageWidths[i] = static_cast<int>(originalPageWidth);
         m_pageHeights[i] = static_cast<int>(originalPageHeight);
     }
+    // Pages outside (regenStart, regenEnd) remain as placeholders until scrolled into view
     
     // Update scroll state
     UpdateScrollState(*m_scrollState, (float)m_windowHeight, m_pageHeights);
@@ -1550,9 +1560,11 @@ void PDFViewerEmbedder::regenerateVisibleTextures()
     int pageCount = m_renderer->GetPageCount();
     int firstVisible, lastVisible;
     GetVisiblePageRange(*m_scrollState, m_pageHeights, firstVisible, lastVisible);
+    int regenStart = std::max(0, firstVisible - m_preloadPageMargin);
+    int regenEnd   = std::min(pageCount-1, lastVisible + m_preloadPageMargin);
     
-    // Only regenerate textures for visible pages using ACTUAL page dimensions
-    for (int i = firstVisible; i <= lastVisible && i < pageCount; ++i) {
+    // Only regenerate textures for visible+margin pages using ACTUAL page dimensions
+    for (int i = regenStart; i <= regenEnd && i < pageCount; ++i) {
         if (m_textures[i]) {
             glDeleteTextures(1, &m_textures[i]);
         }
@@ -1603,7 +1615,7 @@ void PDFViewerEmbedder::regenerateVisibleTextures()
     // Allow very small textures at low zoom to avoid upscaling blur
         
         // Render at calculated size using actual page dimensions (no window fitting)
-        FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, textureWidth, textureHeight);
+    FPDF_BITMAP bmp = m_renderer->RenderPageToBitmap(i, textureWidth, textureHeight);
         if (!bmp) {
             m_textures[i] = 0; // placeholder will show
         } else {
@@ -1710,6 +1722,8 @@ void PDFViewerEmbedder::handleBackgroundRendering()
     frameCounter++;
     
     if (frameCounter % 5 == 0 && !m_needsFullRegeneration && !m_needsVisibleRegeneration) {
+    // If we're already at/over 90% budget, skip background refinement to avoid pressure
+    if (m_memoryBudgetBytes>0 && m_currentTextureBytes > (size_t)(m_memoryBudgetBytes * 0.9)) return;
         int pageCount = m_renderer->GetPageCount();
         int firstVisible, lastVisible;
         GetVisiblePageRange(*m_scrollState, m_pageHeights, firstVisible, lastVisible);
@@ -1790,13 +1804,16 @@ unsigned int PDFViewerEmbedder::createTextureFromPDFBitmap(void* buffer, int wid
     GLuint textureID;
     glGenTextures(1, &textureID);
     glBindTexture(GL_TEXTURE_2D, textureID);
-    // Use linear filtering + mipmaps to avoid harsh pixel blocks at low zoom
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    if (m_enableMipmaps) {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    } else {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    }
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, buffer);
-    glGenerateMipmap(GL_TEXTURE_2D);
+    if (m_enableMipmaps) glGenerateMipmap(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
     return textureID;
 }

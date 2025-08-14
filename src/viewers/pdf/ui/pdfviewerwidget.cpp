@@ -1,6 +1,7 @@
 // Clean single-pane PDFViewerWidget implementation (split view removed)
 #include "viewers/pdf/pdfviewerwidget.h"
 #include "viewers/pdf/PDFViewerEmbedder.h"
+#include "ui/LoadingOverlay.h"
 
 #include <QResizeEvent>
 #include <QPaintEvent>
@@ -16,6 +17,10 @@
 #include <QAction>
 #include <QMouseEvent>
 #include <QDebug>
+#include <QtConcurrent/QtConcurrent>
+#include <QFutureWatcher>
+#include <QElapsedTimer>
+#include "viewers/pdf/PDFPreviewLoader.h"
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -48,6 +53,15 @@ PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     , m_navigationInProgress(false)
 {
     setupUI();
+    // Configure performance defaults (tighter memory + no mipmaps + minimal preload)
+    if (m_pdfEmbedder) {
+        m_pdfEmbedder->setMemoryBudgetMB(128);      // Lower per-tab budget to reduce aggregate GPU usage
+        m_pdfEmbedder->setTextureMipmapsEnabled(false); // We already disabled globally; ensure explicit
+        m_pdfEmbedder->setPreloadPageMargin(0);     // Only visible pages until user scrolls
+    }
+    // Create loading overlay
+    m_loadingOverlay = new LoadingOverlay(this);
+    connect(m_loadingOverlay, &LoadingOverlay::cancelRequested, this, &PDFViewerWidget::cancelLoad);
     m_updateTimer->setInterval(UPDATE_INTERVAL_MS);
     connect(m_updateTimer, &QTimer::timeout, this, &PDFViewerWidget::updateViewer);
     connect(m_updateTimer, &QTimer::timeout, this, &PDFViewerWidget::checkForSelectedText);
@@ -203,6 +217,13 @@ void PDFViewerWidget::setupViewerArea()
     m_viewerContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_viewerContainer->setStyleSheet("QWidget{background:#ffffff;border:1px solid #cccccc;}");
     m_viewerContainer->installEventFilter(this);
+    // Preview label overlay
+    if (!m_previewLabel) {
+        m_previewLabel = new QLabel(m_viewerContainer);
+        m_previewLabel->setAlignment(Qt::AlignCenter);
+        m_previewLabel->setStyleSheet("QLabel{background:#ffffff;}");
+        m_previewLabel->hide();
+    }
 }
 
 void PDFViewerWidget::setupIndividualToolbar(QToolBar*, bool)
@@ -234,6 +255,64 @@ bool PDFViewerWidget::loadPDF(const QString &filePath)
     syncToolbarStates();
     updateStatusInfo();
     return true;
+}
+
+void PDFViewerWidget::requestLoad(const QString &filePath)
+{
+    cancelLoad();
+    m_pendingFilePath = filePath;
+    m_cancelRequested = false;
+    ++m_currentLoadId;
+    int loadId = m_currentLoadId;
+    if (m_loadingOverlay) m_loadingOverlay->showOverlay(QString("Loading %1...").arg(QFileInfo(filePath).fileName()));
+
+    if (!m_previewWatcher) {
+        m_previewWatcher = new QFutureWatcher<PDFPreviewResult>(this);
+        connect(m_previewWatcher, &QFutureWatcher<PDFPreviewResult>::finished, this, [this]() {
+            PDFPreviewResult res = m_previewWatcher->result();
+            int id = m_previewWatcher->property("loadId").toInt();
+            if (m_cancelRequested || id != m_currentLoadId) {
+                if (m_loadingOverlay) m_loadingOverlay->hideOverlay();
+                emit loadCancelled();
+                return;
+            }
+            if (!res.success) {
+                if (m_loadingOverlay) m_loadingOverlay->hideOverlay();
+                emit errorOccurred(res.error.isEmpty() ? QString("Failed to load preview: %1").arg(m_pendingFilePath) : res.error);
+                return;
+            }
+            if (m_previewLabel) {
+                QPixmap pm = QPixmap::fromImage(res.firstPage);
+                if (!pm.isNull()) {
+                    m_previewLabel->setPixmap(pm.scaled(m_viewerContainer->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+                    m_previewLabel->show();
+                }
+            }
+            emit firstPreviewReady(res.firstPage);
+            if (m_loadingOverlay) m_loadingOverlay->setMessage("Optimizing viewer...");
+            QTimer::singleShot(0, this, [this, id]() {
+                if (m_cancelRequested || id != m_currentLoadId) return;
+                bool loaded = loadPDF(m_pendingFilePath);
+                if (m_loadingOverlay) m_loadingOverlay->hideOverlay();
+                if (!loaded) {
+                    emit errorOccurred(QString("Failed to load %1").arg(m_pendingFilePath));
+                } else {
+                    if (m_previewLabel) m_previewLabel->hide();
+                }
+            });
+        });
+    }
+    QFuture<PDFPreviewResult> fut = QtConcurrent::run(LoadPdfFirstPagePreview, filePath, 1024);
+    m_previewWatcher->setProperty("loadId", loadId);
+    m_previewWatcher->setFuture(fut);
+}
+
+void PDFViewerWidget::cancelLoad()
+{
+    if (m_previewWatcher && m_previewWatcher->isRunning()) m_cancelRequested = true;
+    if (m_loadWatcher && m_loadWatcher->isRunning()) m_cancelRequested = true;
+    if (m_loadingOverlay && m_loadingOverlay->isVisible()) m_loadingOverlay->hideOverlay();
+    if (m_previewLabel && m_previewLabel->isVisible()) m_previewLabel->hide();
 }
 
 void PDFViewerWidget::initializePDFViewer()

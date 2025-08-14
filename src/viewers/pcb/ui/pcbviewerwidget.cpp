@@ -1,5 +1,8 @@
 #include "viewers/pcb/PCBViewerWidget.h"
 #include "viewers/pcb/PCBViewerEmbedder.h"
+#include "ui/LoadingOverlay.h"
+#include <QtConcurrent/QtConcurrent>
+#include <QFutureWatcher>
 
 #include <QResizeEvent>
 #include <QPaintEvent>
@@ -61,6 +64,8 @@ PCBViewerWidget::PCBViewerWidget(QWidget *parent)
     // Setup UI
     setupUI();
     connectSignals();
+    m_loadingOverlay = new LoadingOverlay(this);
+    connect(m_loadingOverlay, &LoadingOverlay::cancelRequested, this, &PCBViewerWidget::cancelLoad);
     
     // Initialize the PCB viewer
     initializePCBViewer();
@@ -127,6 +132,54 @@ bool PCBViewerWidget::loadPCB(const QString &filePath)
     }
     
     return success;
+}
+
+void PCBViewerWidget::requestLoad(const QString &filePath)
+{
+    cancelLoad();
+    m_pendingFilePath = filePath;
+    m_cancelRequested = false;
+    ++m_currentLoadId;
+    int loadId = m_currentLoadId;
+    if (m_loadingOverlay) m_loadingOverlay->showOverlay(QString("Loading %1...").arg(QFileInfo(filePath).fileName()));
+
+    if (!m_loadWatcher) {
+        m_loadWatcher = new QFutureWatcher<bool>(this);
+        connect(m_loadWatcher, &QFutureWatcher<bool>::finished, this, [this]() {
+            bool ok = m_loadWatcher->result();
+            int id = m_loadWatcher->property("loadId").toInt();
+            if (m_cancelRequested || id != m_currentLoadId) {
+                if (m_loadingOverlay) m_loadingOverlay->hideOverlay();
+                emit loadCancelled();
+                return;
+            }
+            if (ok) {
+                bool loaded = loadPCB(m_pendingFilePath); // synchronous Phase 1
+                if (m_loadingOverlay) m_loadingOverlay->hideOverlay();
+                if (!loaded) emit errorOccurred(QString("Failed to load %1").arg(m_pendingFilePath));
+            } else {
+                if (m_loadingOverlay) m_loadingOverlay->hideOverlay();
+                emit errorOccurred(QString("Failed to pre-read %1").arg(m_pendingFilePath));
+            }
+        });
+    }
+
+    QFuture<bool> fut = QtConcurrent::run([filePath]() {
+        QFile f(filePath);
+        if (!f.open(QIODevice::ReadOnly)) return false;
+        f.read(512 * 1024); // first 512 KB
+        return true;
+    });
+    m_loadWatcher->setProperty("loadId", loadId);
+    m_loadWatcher->setFuture(fut);
+}
+
+void PCBViewerWidget::cancelLoad()
+{
+    if (m_loadWatcher && m_loadWatcher->isRunning()) {
+        m_cancelRequested = true;
+    }
+    if (m_loadingOverlay && m_loadingOverlay->isVisible()) m_loadingOverlay->hideOverlay();
 }
 
 void PCBViewerWidget::closePCB()

@@ -120,6 +120,18 @@ public:
      */
     void setFocus();
 
+    // --- Performance / memory tuning APIs ---
+    // Enable/disable mipmap generation for full-quality page textures (saves ~33% memory when off).
+    void setTextureMipmapsEnabled(bool enabled) { m_enableMipmaps = enabled; }
+    bool mipmapsEnabled() const { return m_enableMipmaps; }
+    // Set how many pages beyond the visible range are eagerly rendered (on each side).
+    // 0 = only visible pages. Higher numbers improve scroll smoothness at cost of memory.
+    void setPreloadPageMargin(int margin) { m_preloadPageMargin = std::max(0, margin); }
+    int preloadPageMargin() const { return m_preloadPageMargin; }
+    // Adjust memory budget (in megabytes) for all page textures in this viewer.
+    void setMemoryBudgetMB(size_t mb) { m_memoryBudgetBytes = mb * 1024ull * 1024ull; }
+    size_t memoryBudgetMB() const { return m_memoryBudgetBytes / 1024ull / 1024ull; }
+
 private:
     // Core components from your existing viewer
     GLFWwindow* m_glfwWindow;
@@ -148,6 +160,8 @@ private:
     size_t m_memoryBudgetBytes = 256ull * 1024ull * 1024ull; // 256 MB default budget for all page textures in this viewer
     size_t m_currentTextureBytes = 0;                         // Tracked allocated texture bytes
     bool   m_budgetDownscaleApplied = false;                  // Flag to indicate textures were downscaled due to budget
+    bool   m_enableMipmaps = false;                           // Disable by default for memory savings
+    int    m_preloadPageMargin = 1;                           // Eagerly render 1 page before/after visible by default
     
     // Viewer state
     bool m_initialized;
