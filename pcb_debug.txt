@@ -2720,3 +2720,491 @@
 [PCB-DEBUG] Rotated PCB view left (CCW)
 [PCB-DEBUG] PCB widget focus out
 [PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI with split view support
+[PCB-DEBUG] Setting up PCB viewer Qt toolbar with PDF viewer styling
+[PCB-DEBUG] Rotation actions added to PCB toolbar
+[PCB-DEBUG] Split window action removed (feature deprecated)
+[PCB-DEBUG] PCB Qt toolbar setup completed with PDF viewer styling
+[PCB-DEBUG] PCB viewer UI setup completed (single-pane)
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1503x947
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/iPhone/iPhone14Pro_ProMAX/Schematic and boardview/iPhone14 Pro_ProMAX AP PCB layer 820-02588-10.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI with split view support
+[PCB-DEBUG] Setting up PCB viewer Qt toolbar with PDF viewer styling
+[PCB-DEBUG] Rotation actions added to PCB toolbar
+[PCB-DEBUG] Split window action removed (feature deprecated)
+[PCB-DEBUG] PCB Qt toolbar setup completed with PDF viewer styling
+[PCB-DEBUG] PCB viewer UI setup completed (single-pane)
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/iPhone/iPhone14Pro_ProMAX/Schematic and boardview/iPhone14 Pro_ProMAX BB PCB layer 820-02672-12.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] Flipped PCB view horizontally
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI with split view support
+[PCB-DEBUG] Setting up PCB viewer Qt toolbar with PDF viewer styling
+[PCB-DEBUG] Rotation actions added to PCB toolbar
+[PCB-DEBUG] Split window action removed (feature deprecated)
+[PCB-DEBUG] PCB Qt toolbar setup completed with PDF viewer styling
+[PCB-DEBUG] PCB viewer UI setup completed (single-pane)
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1503x947
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/iPhone/iPhone13ProMAX/Schematic and boardview/iPhone13ProMax AP YiDianTong 820-02400-06.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI with split view support
+[PCB-DEBUG] Setting up PCB viewer Qt toolbar with PDF viewer styling
+[PCB-DEBUG] Rotation actions added to PCB toolbar
+[PCB-DEBUG] Split window action removed (feature deprecated)
+[PCB-DEBUG] PCB Qt toolbar setup completed with PDF viewer styling
+[PCB-DEBUG] PCB viewer UI setup completed (single-pane)
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/iPhone/iPhone13ProMAX/Schematic and boardview/iPhone13ProMax BB Boardview 820-02401-09.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI with split view support
+[PCB-DEBUG] Setting up PCB viewer Qt toolbar with PDF viewer styling
+[PCB-DEBUG] Rotation actions added to PCB toolbar
+[PCB-DEBUG] Split window action removed (feature deprecated)
+[PCB-DEBUG] PCB Qt toolbar setup completed with PDF viewer styling
+[PCB-DEBUG] PCB viewer UI setup completed (single-pane)
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1503x947
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/iPhone15Pro_ProMax AP+BB Boardview.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Flipped PCB view vertically
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI with split view support
+[PCB-DEBUG] Setting up PCB viewer Qt toolbar with PDF viewer styling
+[PCB-DEBUG] Zoom and rotation/flip actions added to PCB toolbar
+[PCB-DEBUG] Split window action removed (feature deprecated)
+[PCB-DEBUG] PCB Qt toolbar setup completed with PDF viewer styling
+[PCB-DEBUG] PCB viewer UI setup completed (single-pane)
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1503x947
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/iPhone/iPhone15_15 Plus/Schematic and boardview/iPhone15_15 Plus AP+BB Boardview.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom In action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom Out action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] Zoom To Fit action
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event

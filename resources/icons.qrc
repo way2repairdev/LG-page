@@ -11,5 +11,8 @@
         <file>images/icons/search_next.svg</file>
         <file>images/icons/rotate_right.svg</file>
         <file>images/icons/rotate_left.svg</file>
+    <file>images/icons/zoom_fit.svg</file>
+    <file>images/icons/flip_horizontal.svg</file>
+    <file>images/icons/flip_vertical.svg</file>
     </qresource>
 </RCC>

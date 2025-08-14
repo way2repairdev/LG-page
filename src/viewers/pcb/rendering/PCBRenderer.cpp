@@ -230,6 +230,16 @@ void PCBRenderer::RotateRight() {
               ImGui::GetIO().DisplaySize.y > 0 ? (int)ImGui::GetIO().DisplaySize.y : 600);
 }
 
+void PCBRenderer::ToggleFlipHorizontal() {
+    if (!pcb_data) return;
+    camera.flip_horizontal = !camera.flip_horizontal;
+}
+
+void PCBRenderer::ToggleFlipVertical() {
+    if (!pcb_data) return;
+    camera.flip_vertical = !camera.flip_vertical;
+}
+
 void PCBRenderer::ZoomToFit(int window_width, int window_height) {
     if (!pcb_data) return;
     
@@ -1476,28 +1486,37 @@ void PCBRenderer::WorldToScreen(float world_x, float world_y, float& screen_x, f
 }
 
 void PCBRenderer::ApplyRotation(float& x, float& y, bool inverse) const {
-    if (camera.rotation_steps == 0) return;
-    int steps = camera.rotation_steps;
-    if (inverse) steps = (4 - steps) % 4; // inverse rotation
-    float dx = x - board_cx;
-    float dy = y - board_cy;
-    float rx = x, ry = y;
-    switch(steps) {
-        case 1: // 90 CW
-            rx = board_cx + dy;
-            ry = board_cy - dx;
-            break;
-        case 2: // 180
-            rx = board_cx - dx;
-            ry = board_cy - dy;
-            break;
-        case 3: // 270 CW
-            rx = board_cx - dy;
-            ry = board_cy + dx;
-            break;
-        default: break;
+    // Apply rotation first
+    if (camera.rotation_steps != 0) {
+        int steps = camera.rotation_steps;
+        if (inverse) steps = (4 - steps) % 4; // inverse rotation
+        float dx = x - board_cx;
+        float dy = y - board_cy;
+        float rx = x, ry = y;
+        switch(steps) {
+            case 1: // 90 CW
+                rx = board_cx + dy;
+                ry = board_cy - dx;
+                break;
+            case 2: // 180
+                rx = board_cx - dx;
+                ry = board_cy - dy;
+                break;
+            case 3: // 270 CW
+                rx = board_cx - dy;
+                ry = board_cy + dx;
+                break;
+            default: break;
+        }
+        x = rx; y = ry;
     }
-    x = rx; y = ry;
+    // Apply flips (mirror about board center). Same operation for forward/inverse because mirroring is its own inverse.
+    if (camera.flip_horizontal) {
+        x = board_cx * 2.0f - x;
+    }
+    if (camera.flip_vertical) {
+        y = board_cy * 2.0f - y;
+    }
 }
 
 void PCBRenderer::RenderPartNamesOnTop(ImDrawList* draw_list) {

@@ -52,6 +52,11 @@ public:
     void rotateLeft();  // counter-clockwise
     void rotateRight(); // clockwise
     int  getRotationSteps() const; // 0..3
+    // Flips (mirror)
+    void flipHorizontal(); // mirror left-right
+    void flipVertical();   // mirror up-down
+    bool isFlipHorizontal() const;
+    bool isFlipVertical() const;
 
     // Mouse and keyboard input
     void handleMouseMove(int x, int y);

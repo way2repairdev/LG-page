@@ -62,6 +62,11 @@ public slots:
     // Rotation controls
     void rotateLeft();
     void rotateRight();
+    void flipHorizontal();
+    void flipVertical();
+    void zoomIn();
+    void zoomOut();
+    void zoomToFit();
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -88,6 +93,11 @@ private:
     QToolBar *m_toolbar;
     QAction *m_actionRotateLeft{nullptr};
     QAction *m_actionRotateRight{nullptr};
+    QAction *m_actionFlipH{nullptr};
+    QAction *m_actionFlipV{nullptr};
+    QAction *m_actionZoomIn{nullptr};
+    QAction *m_actionZoomOut{nullptr};
+    QAction *m_actionZoomFit{nullptr};
     QWidget *m_viewerContainer;
     QTimer *m_updateTimer;
     

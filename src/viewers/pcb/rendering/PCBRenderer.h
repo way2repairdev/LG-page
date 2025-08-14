@@ -12,6 +12,9 @@ struct Camera {
     float aspect_ratio = 1.0f;
     // View rotation in 90-degree steps (0..3) clockwise. 0 = normal, 1 = 90CW, 2 = 180, 3 = 270CW
     int rotation_steps = 0;
+    // Optional mirroring (flip) flags. Applied after rotation around board center.
+    bool flip_horizontal = false; // left-right flip
+    bool flip_vertical   = false; // up-down flip
 };
 
 struct RenderSettings {
@@ -101,6 +104,11 @@ public:
     void RotateLeft();   // 90 degrees counter-clockwise
     void RotateRight();  // 90 degrees clockwise
     int  GetRotationSteps() const { return camera.rotation_steps; }
+    // Flips (mirror). Each toggles the state.
+    void ToggleFlipHorizontal();
+    void ToggleFlipVertical();
+    bool IsFlipHorizontal() const { return camera.flip_horizontal; }
+    bool IsFlipVertical() const { return camera.flip_vertical; }
     
     // Pin selection functionality
     bool HandleMouseClick(float screen_x, float screen_y, int window_width, int window_height);

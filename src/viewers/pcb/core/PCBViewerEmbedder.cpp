@@ -380,6 +380,25 @@ int PCBViewerEmbedder::getRotationSteps() const
     return m_renderer ? m_renderer->GetRotationSteps() : 0;
 }
 
+void PCBViewerEmbedder::flipHorizontal()
+{
+    if (m_renderer) {
+        m_renderer->ToggleFlipHorizontal();
+        onZoomChanged();
+    }
+}
+
+void PCBViewerEmbedder::flipVertical()
+{
+    if (m_renderer) {
+        m_renderer->ToggleFlipVertical();
+        onZoomChanged();
+    }
+}
+
+bool PCBViewerEmbedder::isFlipHorizontal() const { return m_renderer ? m_renderer->IsFlipHorizontal() : false; }
+bool PCBViewerEmbedder::isFlipVertical() const { return m_renderer ? m_renderer->IsFlipVertical() : false; }
+
 void PCBViewerEmbedder::handleMouseMove(int x, int y)
 {
     if (m_renderer) {

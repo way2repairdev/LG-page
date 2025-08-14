@@ -389,6 +389,21 @@ void PCBViewerWidget::setupToolbar()
     
     // Split view removed: no split window action
     // Rotation actions (match PDF viewer icon style)
+    // Zoom actions first (manual zoom + fit)
+    m_actionZoomIn = m_toolbar->addAction(QIcon(":/icons/images/icons/zoom_in.svg"), "");
+    m_actionZoomIn->setToolTip("Zoom In");
+    connect(m_actionZoomIn, &QAction::triggered, this, &PCBViewerWidget::zoomIn);
+
+    m_actionZoomOut = m_toolbar->addAction(QIcon(":/icons/images/icons/zoom_out.svg"), "");
+    m_actionZoomOut->setToolTip("Zoom Out");
+    connect(m_actionZoomOut, &QAction::triggered, this, &PCBViewerWidget::zoomOut);
+
+    m_actionZoomFit = m_toolbar->addAction(QIcon(":/icons/images/icons/zoom_fit.svg"), "");
+    m_actionZoomFit->setToolTip("Zoom To Fit");
+    connect(m_actionZoomFit, &QAction::triggered, this, &PCBViewerWidget::zoomToFit);
+
+    m_toolbar->addSeparator();
+
     m_actionRotateLeft = m_toolbar->addAction(QIcon(":/icons/images/icons/rotate_left.svg"), "");
     m_actionRotateLeft->setToolTip("Rotate Left");
     connect(m_actionRotateLeft, &QAction::triggered, this, &PCBViewerWidget::rotateLeft);
@@ -397,7 +412,16 @@ void PCBViewerWidget::setupToolbar()
     m_actionRotateRight->setToolTip("Rotate Right");
     connect(m_actionRotateRight, &QAction::triggered, this, &PCBViewerWidget::rotateRight);
 
-    WritePCBDebugToFile("Rotation actions added to PCB toolbar");
+    // Flip actions
+    m_actionFlipH = m_toolbar->addAction(QIcon(":/icons/images/icons/flip_horizontal.svg"), "");
+    m_actionFlipH->setToolTip("Flip Left/Right");
+    connect(m_actionFlipH, &QAction::triggered, this, &PCBViewerWidget::flipHorizontal);
+
+    m_actionFlipV = m_toolbar->addAction(QIcon(":/icons/images/icons/flip_vertical.svg"), "");
+    m_actionFlipV->setToolTip("Flip Up/Down");
+    connect(m_actionFlipV, &QAction::triggered, this, &PCBViewerWidget::flipVertical);
+
+    WritePCBDebugToFile("Zoom and rotation/flip actions added to PCB toolbar");
     WritePCBDebugToFile("Split window action removed (feature deprecated)");
     WritePCBDebugToFile("PCB Qt toolbar setup completed with PDF viewer styling");
 }
@@ -422,6 +446,46 @@ void PCBViewerWidget::rotateRight()
     if (m_pcbEmbedder && m_pcbLoaded) {
         m_pcbEmbedder->rotateRight();
         WritePCBDebugToFile("Rotated PCB view right (CW)");
+    }
+}
+
+void PCBViewerWidget::flipHorizontal()
+{
+    if (m_pcbEmbedder && m_pcbLoaded) {
+        m_pcbEmbedder->flipHorizontal();
+        WritePCBDebugToFile("Flipped PCB view horizontally");
+    }
+}
+
+void PCBViewerWidget::flipVertical()
+{
+    if (m_pcbEmbedder && m_pcbLoaded) {
+        m_pcbEmbedder->flipVertical();
+        WritePCBDebugToFile("Flipped PCB view vertically");
+    }
+}
+
+void PCBViewerWidget::zoomIn()
+{
+    if (m_pcbEmbedder && m_pcbLoaded) {
+        m_pcbEmbedder->zoomIn();
+        WritePCBDebugToFile("Zoom In action");
+    }
+}
+
+void PCBViewerWidget::zoomOut()
+{
+    if (m_pcbEmbedder && m_pcbLoaded) {
+        m_pcbEmbedder->zoomOut();
+        WritePCBDebugToFile("Zoom Out action");
+    }
+}
+
+void PCBViewerWidget::zoomToFit()
+{
+    if (m_pcbEmbedder && m_pcbLoaded) {
+        m_pcbEmbedder->zoomToFit();
+        WritePCBDebugToFile("Zoom To Fit action");
     }
 }
 
