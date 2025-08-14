@@ -67,6 +67,7 @@ public slots:
     void zoomIn();
     void zoomOut();
     void zoomToFit();
+    void toggleDiodeReadings();
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -98,6 +99,7 @@ private:
     QAction *m_actionZoomIn{nullptr};
     QAction *m_actionZoomOut{nullptr};
     QAction *m_actionZoomFit{nullptr};
+    QAction *m_actionToggleDiode{nullptr};
     QWidget *m_viewerContainer;
     QTimer *m_updateTimer;
     

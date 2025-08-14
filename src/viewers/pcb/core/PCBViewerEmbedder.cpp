@@ -399,6 +399,25 @@ void PCBViewerEmbedder::flipVertical()
 bool PCBViewerEmbedder::isFlipHorizontal() const { return m_renderer ? m_renderer->IsFlipHorizontal() : false; }
 bool PCBViewerEmbedder::isFlipVertical() const { return m_renderer ? m_renderer->IsFlipVertical() : false; }
 
+void PCBViewerEmbedder::toggleDiodeReadings()
+{
+    if (m_renderer) {
+        m_renderer->ToggleDiodeReadings();
+    }
+}
+
+void PCBViewerEmbedder::setDiodeReadingsEnabled(bool enabled)
+{
+    if (m_renderer) {
+        m_renderer->SetDiodeReadingsEnabled(enabled);
+    }
+}
+
+bool PCBViewerEmbedder::isDiodeReadingsEnabled() const
+{
+    return m_renderer ? m_renderer->IsDiodeReadingsEnabled() : false;
+}
+
 void PCBViewerEmbedder::handleMouseMove(int x, int y)
 {
     if (m_renderer) {

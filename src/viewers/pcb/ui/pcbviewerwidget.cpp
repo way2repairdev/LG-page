@@ -421,6 +421,14 @@ void PCBViewerWidget::setupToolbar()
     m_actionFlipV->setToolTip("Flip Up/Down");
     connect(m_actionFlipV, &QAction::triggered, this, &PCBViewerWidget::flipVertical);
 
+    m_toolbar->addSeparator();
+    // Diode readings toggle
+    m_actionToggleDiode = m_toolbar->addAction(QIcon(":/icons/images/icons/next.svg"), ""); // TODO: replace with dedicated diode icon
+    m_actionToggleDiode->setCheckable(true);
+    m_actionToggleDiode->setChecked(true);
+    m_actionToggleDiode->setToolTip("Toggle Diode Readings");
+    connect(m_actionToggleDiode, &QAction::triggered, this, &PCBViewerWidget::toggleDiodeReadings);
+
     WritePCBDebugToFile("Zoom and rotation/flip actions added to PCB toolbar");
     WritePCBDebugToFile("Split window action removed (feature deprecated)");
     WritePCBDebugToFile("PCB Qt toolbar setup completed with PDF viewer styling");
@@ -462,6 +470,15 @@ void PCBViewerWidget::flipVertical()
     if (m_pcbEmbedder && m_pcbLoaded) {
         m_pcbEmbedder->flipVertical();
         WritePCBDebugToFile("Flipped PCB view vertically");
+    }
+}
+
+void PCBViewerWidget::toggleDiodeReadings()
+{
+    if (m_pcbEmbedder && m_pcbLoaded) {
+        m_pcbEmbedder->toggleDiodeReadings();
+        bool enabled = m_pcbEmbedder->isDiodeReadingsEnabled();
+        if (m_actionToggleDiode) m_actionToggleDiode->setChecked(enabled);
     }
 }
 

@@ -57,6 +57,10 @@ public:
     void flipVertical();   // mirror up-down
     bool isFlipHorizontal() const;
     bool isFlipVertical() const;
+    // Diode readings visibility
+    void toggleDiodeReadings();
+    void setDiodeReadingsEnabled(bool enabled);
+    bool isDiodeReadingsEnabled() const;
 
     // Mouse and keyboard input
     void handleMouseMove(int x, int y);

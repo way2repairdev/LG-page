@@ -23,6 +23,7 @@ struct RenderSettings {
     bool show_outline = true;
     bool show_part_outlines = true;
     bool show_nets = false;
+    bool show_diode_readings = true; // control displaying diode readings in pin text overlay
     
     float part_alpha = 1.0f;
     float pin_alpha = 1.0f;
@@ -109,6 +110,10 @@ public:
     void ToggleFlipVertical();
     bool IsFlipHorizontal() const { return camera.flip_horizontal; }
     bool IsFlipVertical() const { return camera.flip_vertical; }
+    // Diode readings visibility
+    void ToggleDiodeReadings() { settings.show_diode_readings = !settings.show_diode_readings; }
+    void SetDiodeReadingsEnabled(bool enabled) { settings.show_diode_readings = enabled; }
+    bool IsDiodeReadingsEnabled() const { return settings.show_diode_readings; }
     
     // Pin selection functionality
     bool HandleMouseClick(float screen_x, float screen_y, int window_width, int window_height);

@@ -1858,12 +1858,12 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
         // Check if texts fit within the pin
         bool show_pin_text = !pin_lines.empty() && pin_text_height <= max_text_height;
         bool show_net_text = !net_lines.empty() && net_text_height <= max_text_height;
-        bool show_diode_text = !diode_lines.empty() && diode_text_height <= max_text_height;
+    bool show_diode_text = settings.show_diode_readings && !diode_lines.empty() && diode_text_height <= max_text_height;
         
         // If we have multiple texts, check if they fit stacked vertically
         // Priority: diode reading (top), pin number (middle), net name (bottom)
         float text_spacing = 2.0f;
-        if (show_diode_text && show_pin_text && show_net_text) {
+    if (show_diode_text && show_pin_text && show_net_text) {
             float total_text_height = diode_text_height + pin_text_height + net_text_height + 2 * text_spacing;
             if (total_text_height > max_text_height) {
                 show_net_text = false; // Drop net text first
@@ -1935,7 +1935,7 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
                 current_y += ImGui::GetTextLineHeight();
             }
         }
-        else if (show_diode_text && show_pin_text) {
+    else if (show_diode_text && show_pin_text) {
             // Diode and pin texts - stack them vertically: diode (top), pin (bottom)
             float text_spacing = 2.0f;
             float total_text_height = diode_text_height + pin_text_height + text_spacing;
@@ -1983,7 +1983,7 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
                 current_y += ImGui::GetTextLineHeight();
             }
         }
-        else if (show_diode_text) {
+    else if (show_diode_text) {
             // Only diode reading - center it
             float current_y = y - diode_text_height * 0.5f;
             for (const auto& line : diode_lines) {
