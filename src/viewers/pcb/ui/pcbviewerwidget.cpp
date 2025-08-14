@@ -14,6 +14,7 @@
 #include <QStyle>
 #include <QSizePolicy>
 #include <QVBoxLayout>
+// QWidgetAction header may not be available in current include paths; we'll use addWidget helpers instead.
 
 // Enhanced debug logging for PCBViewerWidget
 void WritePCBDebugToFile(const QString& message) {
@@ -111,6 +112,7 @@ bool PCBViewerWidget::loadPCB(const QString &filePath)
     if (success) {
         m_pcbLoaded = true;
         m_currentFilePath = filePath;
+    populateNetAndComponentList();
         
         // Start update timer if not already running
         if (!m_updateTimer->isActive()) {
@@ -402,7 +404,7 @@ void PCBViewerWidget::setupToolbar()
     m_actionZoomFit->setToolTip("Zoom To Fit");
     connect(m_actionZoomFit, &QAction::triggered, this, &PCBViewerWidget::zoomToFit);
 
-    m_toolbar->addSeparator();
+    // (Net selection UI moved to after diode toggle)
 
     m_actionRotateLeft = m_toolbar->addAction(QIcon(":/icons/images/icons/rotate_left.svg"), "");
     m_actionRotateLeft->setToolTip("Rotate Left");
@@ -429,6 +431,22 @@ void PCBViewerWidget::setupToolbar()
     m_actionToggleDiode->setToolTip("Toggle Diode Readings");
     connect(m_actionToggleDiode, &QAction::triggered, this, &PCBViewerWidget::toggleDiodeReadings);
 
+    // Net / Component selection combo box + search button
+    m_toolbar->addSeparator();
+    m_netCombo = new QComboBox(m_toolbar);
+    m_netCombo->setEditable(true); // user can type either net or component reference
+    m_netCombo->setMinimumWidth(200);
+    m_netCombo->setInsertPolicy(QComboBox::NoInsert);
+    m_netCombo->setToolTip("Type or pick a Net or Component name");
+    m_toolbar->addWidget(m_netCombo);
+    m_netSearchButton = new QPushButton("Go", m_toolbar);
+    m_netSearchButton->setToolTip("Highlight & zoom to Net or Component");
+    m_toolbar->addWidget(m_netSearchButton);
+    connect(m_netSearchButton, &QPushButton::clicked, this, &PCBViewerWidget::onNetSearchClicked);
+    // Auto trigger navigation when user picks from list (but still allow manual typing then Enter/Go)
+    connect(m_netCombo, QOverload<int>::of(&QComboBox::activated), this, &PCBViewerWidget::onNetComboActivated);
+    m_toolbar->addSeparator();
+
     WritePCBDebugToFile("Zoom and rotation/flip actions added to PCB toolbar");
     WritePCBDebugToFile("Split window action removed (feature deprecated)");
     WritePCBDebugToFile("PCB Qt toolbar setup completed with PDF viewer styling");
@@ -437,6 +455,14 @@ void PCBViewerWidget::setupToolbar()
 void PCBViewerWidget::connectSignals()
 {
     WritePCBDebugToFile("Connecting PCB viewer signals");
+    if (m_pcbEmbedder) {
+        // Pin selection callback to sync net combo
+        m_pcbEmbedder->setPinSelectedCallback([this](const std::string &pinName, const std::string &netName){
+            QMetaObject::invokeMethod(this, [this, pinName, netName](){
+                onPinSelectedFromViewer(pinName, netName);
+            });
+        });
+    }
     
     WritePCBDebugToFile("PCB viewer signals connected");
 }
@@ -504,6 +530,81 @@ void PCBViewerWidget::zoomToFit()
         m_pcbEmbedder->zoomToFit();
         WritePCBDebugToFile("Zoom To Fit action");
     }
+}
+
+void PCBViewerWidget::populateNetList() {
+    if (!m_pcbEmbedder || !m_pcbLoaded || !m_netCombo) return;
+    auto nets = m_pcbEmbedder->getNetNames();
+    QString current = m_netCombo->currentText();
+    m_netCombo->blockSignals(true);
+    m_netCombo->clear();
+    m_netCombo->addItem(""); // empty = clear highlight
+    for (const auto &n : nets) m_netCombo->addItem(QString::fromStdString(n));
+    int idx = m_netCombo->findText(current);
+    if (idx >= 0) m_netCombo->setCurrentIndex(idx);
+    m_netCombo->blockSignals(false);
+}
+
+void PCBViewerWidget::populateNetAndComponentList() {
+    if (!m_pcbEmbedder || !m_pcbLoaded || !m_netCombo) return;
+    auto nets = m_pcbEmbedder->getNetNames(); // nets first
+    auto comps = m_pcbEmbedder->getComponentNames();
+    QString current = m_netCombo->currentText();
+    m_netCombo->blockSignals(true);
+    m_netCombo->clear();
+    m_netCombo->addItem("");
+    // Add nets first
+    for (const auto &n : nets) m_netCombo->addItem(QString::fromStdString(n));
+    // Then add components (skip duplicates if same string)
+    for (const auto &c : comps) {
+        if (m_netCombo->findText(QString::fromStdString(c)) < 0)
+            m_netCombo->addItem(QString::fromStdString(c));
+    }
+    int idx = m_netCombo->findText(current);
+    if (idx >= 0) m_netCombo->setCurrentIndex(idx);
+    m_netCombo->blockSignals(false);
+}
+
+void PCBViewerWidget::highlightCurrentNet() {
+    if (!m_pcbEmbedder) return;
+    QString net = m_netCombo ? m_netCombo->currentText() : QString();
+    if (net.isEmpty()) {
+        m_pcbEmbedder->clearHighlights();
+    } else {
+        m_pcbEmbedder->highlightNet(net.toStdString());
+    }
+}
+
+void PCBViewerWidget::onPinSelectedFromViewer(const std::string &pinName, const std::string &netName) {
+    Q_UNUSED(pinName);
+    if (!m_netCombo) return;
+    if (m_netCombo->count() == 0) populateNetAndComponentList();
+    QString qnet = QString::fromStdString(netName);
+    int idx = m_netCombo->findText(qnet);
+    if (idx >= 0) m_netCombo->setCurrentIndex(idx);
+}
+
+void PCBViewerWidget::onNetSearchClicked() {
+    if (!m_pcbEmbedder || !m_netCombo) return;
+    QString text = m_netCombo->currentText().trimmed();
+    if (text.isEmpty()) { m_pcbEmbedder->clearHighlights(); return; }
+    // Determine if matches component
+    auto comps = m_pcbEmbedder->getComponentNames();
+    bool isComp = std::find(comps.begin(), comps.end(), text.toStdString()) != comps.end();
+    if (isComp) {
+        // Clear net highlight, zoom to component
+        m_pcbEmbedder->clearHighlights();
+        m_pcbEmbedder->zoomToComponent(text.toStdString());
+    } else {
+        m_pcbEmbedder->highlightNet(text.toStdString());
+        m_pcbEmbedder->zoomToNet(text.toStdString());
+    }
+}
+
+void PCBViewerWidget::onNetComboActivated(int index) {
+    Q_UNUSED(index);
+    // Reuse the same logic as clicking Go
+    onNetSearchClicked();
 }
 
 // Split view removed: onSplitWindowClicked deleted

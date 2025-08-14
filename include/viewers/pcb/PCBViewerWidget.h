@@ -5,6 +5,8 @@
 #include <QVBoxLayout>
 #include <QToolBar>
 #include <QTimer>
+#include <QComboBox>
+#include <QPushButton>
 #include <memory>
 
 // Forward declarations
@@ -100,6 +102,9 @@ private:
     QAction *m_actionZoomOut{nullptr};
     QAction *m_actionZoomFit{nullptr};
     QAction *m_actionToggleDiode{nullptr};
+    // Net navigation UI
+    QComboBox *m_netCombo{nullptr};
+    QPushButton *m_netSearchButton{nullptr};
     QWidget *m_viewerContainer;
     QTimer *m_updateTimer;
     
@@ -116,4 +121,14 @@ private:
     // Update management
     bool m_needsUpdate;
     bool m_isUpdating;
+
+    // Internal helpers for net navigation
+    void populateNetList();
+    void highlightCurrentNet();
+    void populateNetAndComponentList();
+
+private slots:
+    void onPinSelectedFromViewer(const std::string &pinName, const std::string &netName);
+    void onNetSearchClicked();
+    void onNetComboActivated(int index);
 };

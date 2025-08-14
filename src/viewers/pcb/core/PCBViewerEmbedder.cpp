@@ -23,6 +23,8 @@
 #include <imgui_impl_opengl3.h>
 
 #include <iostream>
+#include <unordered_set>
+#include <algorithm>
 #include <algorithm>
 #include <cmath>
 #include <mutex>
@@ -857,12 +859,19 @@ void PCBViewerEmbedder::framebufferSizeCallback(GLFWwindow* window, int width, i
 
 void PCBViewerEmbedder::highlightNet(const std::string& netName)
 {
-    handleStatus("Net highlighting not yet implemented: " + netName);
+    if (!m_renderer || !m_pcbData) return;
+    if (netName.empty()) { clearHighlights(); return; }
+    m_renderer->SetHighlightedNet(netName);
+    handleStatus("Highlight net: " + netName);
 }
 
 void PCBViewerEmbedder::clearHighlights()
 {
-    handleStatus("Clear highlights not yet implemented");
+    if (m_renderer) {
+        m_renderer->ClearHighlightedNet();
+    m_renderer->ClearHighlightedPart();
+        handleStatus("Clear net highlight");
+    }
 }
 
 void PCBViewerEmbedder::showLayer(const std::string& layerName, bool visible)
@@ -878,6 +887,80 @@ void PCBViewerEmbedder::showAllLayers()
 void PCBViewerEmbedder::hideAllLayers()
 {
     handleStatus("Hide all layers not yet implemented");
+}
+
+std::vector<std::string> PCBViewerEmbedder::getNetNames() const {
+    std::vector<std::string> nets;
+    if (!m_pcbData) return nets;
+    nets.reserve(m_pcbData->pins.size());
+    std::unordered_set<std::string> uniq;
+    for (const auto &p: m_pcbData->pins) {
+        if (p.net.empty() || p.net=="UNCONNECTED") continue;
+        if (uniq.insert(p.net).second) nets.push_back(p.net);
+    }
+    std::sort(nets.begin(), nets.end());
+    return nets;
+}
+
+void PCBViewerEmbedder::zoomToNet(const std::string& netName) {
+    if (!m_renderer || !m_pcbData || netName.empty()) return;
+    float minx=0, miny=0, maxx=0, maxy=0; bool first=true;
+    for (const auto &pin: m_pcbData->pins) {
+        if (pin.net==netName) {
+            float x=pin.pos.x, y=pin.pos.y; // rotation applied later by renderer zoom-to-fit if needed
+            if (first){minx=maxx=x;miny=maxy=y;first=false;} else {minx=std::min(minx,x);maxx=std::max(maxx,x);miny=std::min(miny,y);maxy=std::max(maxy,y);}        }
+    }
+    if (first) return; // not found
+    // Center camera roughly: compute midpoint and set zoom to show bbox
+    float cx=(minx+maxx)*0.5f;
+    float cy=(miny+maxy)*0.5f;
+    // Use existing camera and window size
+    float w = (float)m_windowWidth;
+    float h = (float)m_windowHeight;
+    if (w<=0||h<=0) return;
+    // Estimate needed zoom: project bbox size to screen: zoom = min(w/width, h/height)*0.8
+    float bw = (maxx-minx);
+    float bh = (maxy-miny);
+    float zoomTarget = 1.0f;
+    if (bw>0 && bh>0) {
+        zoomTarget = std::min(w/(bw*1.2f), h/(bh*1.2f));
+    }
+    m_renderer->SetCamera(cx, cy, zoomTarget);
+}
+
+std::vector<std::string> PCBViewerEmbedder::getComponentNames() const {
+    std::vector<std::string> refs;
+    if (!m_pcbData) return refs;
+    refs.reserve(m_pcbData->parts.size());
+    for (const auto &part : m_pcbData->parts) {
+        if (!part.name.empty()) refs.push_back(part.name);
+    }
+    std::sort(refs.begin(), refs.end());
+    return refs;
+}
+
+void PCBViewerEmbedder::zoomToComponent(const std::string &ref) {
+    if (!m_renderer || !m_pcbData) return;
+    // find part by name
+    int partIndex = -1; size_t idx=0;
+    for (const auto &part : m_pcbData->parts) { if (part.name == ref) { partIndex = (int)idx; break;} ++idx; }
+    if (partIndex < 0) return;
+    // compute bbox from pins belonging to part
+    float minx=0,miny=0,maxx=0,maxy=0; bool first=true;
+    for (const auto &pin: m_pcbData->pins) {
+        if ((int)pin.part == partIndex + 1) { // parts 1-indexed
+            float x=pin.pos.x, y=pin.pos.y;
+            if (first){minx=maxx=x;miny=maxy=y;first=false;} else {minx=std::min(minx,x);maxx=std::max(maxx,x);miny=std::min(miny,y);maxy=std::max(maxy,y);}        }
+    }
+    if (first) return; // no pins
+    m_renderer->ClearHighlightedNet();
+    m_renderer->SetHighlightedPart(partIndex);
+    float cx=(minx+maxx)*0.5f;
+    float cy=(miny+maxy)*0.5f;
+    float w=(float)m_windowWidth, h=(float)m_windowHeight;
+    float bw = (maxx-minx); float bh=(maxy-miny);
+    float zoomTarget = 1.0f; if (bw>0 && bh>0) zoomTarget = std::min(w/(bw*1.5f), h/(bh*1.5f));
+    m_renderer->SetCamera(cx, cy, zoomTarget);
 }
 
 std::vector<std::string> PCBViewerEmbedder::getLayerNames() const

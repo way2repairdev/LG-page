@@ -114,6 +114,14 @@ public:
     void ToggleDiodeReadings() { settings.show_diode_readings = !settings.show_diode_readings; }
     void SetDiodeReadingsEnabled(bool enabled) { settings.show_diode_readings = enabled; }
     bool IsDiodeReadingsEnabled() const { return settings.show_diode_readings; }
+
+    // External net highlighting (independent from selected pin net)
+    void SetHighlightedNet(const std::string &net) { highlighted_net = net; }
+    void ClearHighlightedNet() { highlighted_net.clear(); }
+    const std::string &GetHighlightedNet() const { return highlighted_net; }
+    void SetHighlightedPart(int partIndex) { highlighted_part_index = partIndex; }
+    void ClearHighlightedPart() { highlighted_part_index = -1; }
+    int GetHighlightedPart() const { return highlighted_part_index; }
     
     // Pin selection functionality
     bool HandleMouseClick(float screen_x, float screen_y, int window_width, int window_height);
@@ -202,4 +210,8 @@ private:
     // Cached board center for rotation pivot
     float board_cx = 0.0f;
     float board_cy = 0.0f;
+
+    // Currently externally highlighted net (via dropdown search)
+    std::string highlighted_net;
+    int highlighted_part_index = -1;
 };

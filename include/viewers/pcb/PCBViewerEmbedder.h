@@ -75,6 +75,10 @@ public:
     std::string getSelectedPinInfo() const;
     void highlightNet(const std::string& netName);
     void clearHighlights();
+    std::vector<std::string> getNetNames() const; // unique net names
+    void zoomToNet(const std::string& netName);
+    std::vector<std::string> getComponentNames() const; // part references
+    void zoomToComponent(const std::string &ref);
 
     // Layer management
     void showLayer(const std::string& layerName, bool visible);

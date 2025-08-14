@@ -686,172 +686,123 @@ void PCBRenderer::RenderPartOutlineImGui(ImDrawList* draw_list, float zoom, floa
 }
 
 void PCBRenderer::RenderPartHighlighting(ImDrawList* draw_list, float zoom, float offset_x, float offset_y) {
-    // Render part highlighting on top of everything
-    if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
-        std::string selected_net = pcb_data->pins[selected_pin_index].net;
-        
-        if (!selected_net.empty() && selected_net != "UNCONNECTED") {
-            // Find all parts that have pins on the selected net
-            std::set<unsigned int> parts_to_highlight;
+    if (!pcb_data) return;
+
+    // Determine which parts to highlight:
+    // 1. Explicit component highlight
+    // 2. Highlighted net (all parts having pins on that net)
+    // 3. Selected pin's net (fallback)
+    std::set<unsigned int> parts_to_highlight;
+    if (highlighted_part_index >= 0) {
+        parts_to_highlight.insert(static_cast<unsigned int>(highlighted_part_index + 1)); // pins store 1-based part ids
+    } else {
+        std::string net_to_use;
+        if (!highlighted_net.empty()) {
+            net_to_use = highlighted_net;
+        } else if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
+            net_to_use = pcb_data->pins[selected_pin_index].net;
+        }
+        if (!net_to_use.empty() && net_to_use != "UNCONNECTED") {
             for (const auto& pin : pcb_data->pins) {
-                if (pin.net == selected_net && pin.part > 0) {
-                    parts_to_highlight.insert(pin.part);
-                }
-            }
-            
-            // Highlight each part that has pins on the selected net
-            for (unsigned int highlighted_part : parts_to_highlight) {
-                // Collect all pins belonging to this part with their geometry info
-                struct PinGeometryInfo {
-                    BRDPoint pos;
-                    float extent_left, extent_right, extent_bottom, extent_top;
-                };
-                std::vector<PinGeometryInfo> part_pins_info;
-                
-                for (const auto& pin : pcb_data->pins) {
-                    if (pin.part == highlighted_part) {
-                        PinGeometryInfo info;
-                        info.pos = pin.pos;
-                        
-                        // Default extents (symmetric for circles)
-                        float default_extent = 5.0f;
-                        info.extent_left = info.extent_right = info.extent_bottom = info.extent_top = default_extent;
-                        
-                        // Check if this pin has a circle
-                        bool found_geometry = false;
-                        for (const auto& circle : pcb_data->circles) {
-                            if (circle.center.x == pin.pos.x && circle.center.y == pin.pos.y) {
-                                float radius = std::max(default_extent, circle.radius);
-                                info.extent_left = info.extent_right = info.extent_bottom = info.extent_top = radius;
-                                found_geometry = true;
-                                break;
-                            }
-                        }
-                        
-                        // Check if this pin has a rectangle
-                        if (!found_geometry) {
-                            for (const auto& rectangle : pcb_data->rectangles) {
-                                if (rectangle.center.x == pin.pos.x && rectangle.center.y == pin.pos.y) {
-                                    // For rectangles, calculate extents considering rotation
-                                    float half_width = rectangle.width / 2.0f;
-                                    float half_height = rectangle.height / 2.0f;
-                                    
-                                    if (rectangle.rotation == 0.0f) {
-                                        // No rotation - simple case
-                                        info.extent_left = info.extent_right = half_width;
-                                        info.extent_bottom = info.extent_top = half_height;
-                                    } else {
-                                        // With rotation, calculate the maximum extent in each direction
-                                        float rot_rad = rectangle.rotation * 3.14159265f / 180.0f;
-                                        float cos_rot = std::abs(std::cos(rot_rad));
-                                        float sin_rot = std::abs(std::sin(rot_rad));
-                                        
-                                        float extent_x = half_width * cos_rot + half_height * sin_rot;
-                                        float extent_y = half_width * sin_rot + half_height * cos_rot;
-                                        
-                                        info.extent_left = info.extent_right = extent_x;
-                                        info.extent_bottom = info.extent_top = extent_y;
-                                    }
-                                    found_geometry = true;
-                                    break;
-                                }
-                            }
-                        }
-                        
-                        // Check if this pin has an oval
-                        if (!found_geometry) {
-                            for (const auto& oval : pcb_data->ovals) {
-                                if (oval.center.x == pin.pos.x && oval.center.y == pin.pos.y) {
-                                    // For ovals, calculate extents considering rotation
-                                    float half_width = oval.width / 2.0f;
-                                    float half_height = oval.height / 2.0f;
-                                    
-                                    if (oval.rotation == 0.0f) {
-                                        // No rotation - simple case
-                                        info.extent_left = info.extent_right = half_width;
-                                        info.extent_bottom = info.extent_top = half_height;
-                                    } else {
-                                        // With rotation, calculate the maximum extent in each direction
-                                        float rot_rad = oval.rotation * 3.14159265f / 180.0f;
-                                        float cos_rot = std::abs(std::cos(rot_rad));
-                                        float sin_rot = std::abs(std::sin(rot_rad));
-                                        
-                                        float extent_x = half_width * cos_rot + half_height * sin_rot;
-                                        float extent_y = half_width * sin_rot + half_height * cos_rot;
-                                        
-                                        info.extent_left = info.extent_right = extent_x;
-                                        info.extent_bottom = info.extent_top = extent_y;
-                                    }
-                                    found_geometry = true;
-                                    break;
-                                }
-                            }
-                        }
-                        
-                        part_pins_info.push_back(info);
-                    }
-                }
-                
-                if (part_pins_info.size() >= 1) {
-                    // Calculate initial bounding box of the part's pins
-                    float min_x = part_pins_info[0].pos.x, max_x = part_pins_info[0].pos.x;
-                    float min_y = part_pins_info[0].pos.y, max_y = part_pins_info[0].pos.y;
-                    
-                    for (const auto& info : part_pins_info) {
-                        min_x = std::min(min_x, static_cast<float>(info.pos.x));
-                        max_x = std::max(max_x, static_cast<float>(info.pos.x));
-                        min_y = std::min(min_y, static_cast<float>(info.pos.y));
-                        max_y = std::max(max_y, static_cast<float>(info.pos.y));
-                    }
-                    
-                    // Calculate directional margins based on boundary pins with proper geometry
-                    float left_margin = 0.0f, right_margin = 0.0f;
-                    float bottom_margin = 0.0f, top_margin = 0.0f;
-                    
-                    for (const auto& info : part_pins_info) {
-                        // Check if this pin affects the left boundary
-                        if (info.pos.x == min_x) {
-                            left_margin = std::max(left_margin, info.extent_left);
-                        }
-                        // Check if this pin affects the right boundary
-                        if (info.pos.x == max_x) {
-                            right_margin = std::max(right_margin, info.extent_right);
-                        }
-                        // Check if this pin affects the bottom boundary
-                        if (info.pos.y == min_y) {
-                            bottom_margin = std::max(bottom_margin, info.extent_bottom);
-                        }
-                        // Check if this pin affects the top boundary
-                        if (info.pos.y == max_y) {
-                            top_margin = std::max(top_margin, info.extent_top);
-                        }
-                    }
-                    
-                    // Apply directional margins
-                    min_x -= left_margin;
-                    max_x += right_margin;
-                    min_y -= bottom_margin;
-                    max_y += top_margin;
-                    
-                    // Transform to screen coordinates with rotation
-                    float tlx = min_x, tly = max_y;
-                    float brx = max_x, bry = min_y;
-                    ApplyRotation(tlx, tly, false);
-                    ApplyRotation(brx, bry, false);
-                    ImVec2 top_left(tlx * zoom + offset_x, offset_y - tly * zoom);
-                    ImVec2 bottom_right(brx * zoom + offset_x, offset_y - bry * zoom);
-                    
-                    // Draw highlighted bounding box around the part
-                    ImU32 highlight_color = IM_COL32(255, 255, 0, 125); // Semi-transparent yellow
-                    ImU32 highlight_border = IM_COL32(255, 255, 0, 0);  // More opaque yellow border
-                    
-                    // Draw filled rectangle
-                    draw_list->AddRectFilled(top_left, bottom_right, highlight_color);
-                    // Draw border
-                    draw_list->AddRect(top_left, bottom_right, highlight_border, 0.0f, 0, 2.0f);
-                }
+                if (pin.net == net_to_use && pin.part > 0) parts_to_highlight.insert(pin.part);
             }
         }
+    }
+
+    if (parts_to_highlight.empty()) return;
+
+    struct PinExtent { BRDPoint pos; float left, right, bottom, top; };
+
+    for (unsigned int part_id : parts_to_highlight) {
+        std::vector<PinExtent> extents;
+        extents.reserve(32);
+        for (const auto& pin : pcb_data->pins) {
+            if (pin.part != part_id) continue;
+            PinExtent pe{ pin.pos, 5.f, 5.f, 5.f, 5.f }; // default
+            bool found = false;
+            // Circle
+            for (const auto& c : pcb_data->circles) {
+                if (c.center.x == pin.pos.x && c.center.y == pin.pos.y) {
+                    float r = std::max(5.f, c.radius);
+                    pe.left = pe.right = pe.bottom = pe.top = r;
+                    found = true; break;
+                }
+            }
+            // Rectangle
+            if (!found) {
+                for (const auto& rect : pcb_data->rectangles) {
+                    if (rect.center.x == pin.pos.x && rect.center.y == pin.pos.y) {
+                        float hw = rect.width * 0.5f;
+                        float hh = rect.height * 0.5f;
+                        if (rect.rotation == 0.f) {
+                            pe.left = pe.right = hw; pe.bottom = pe.top = hh;
+                        } else {
+                            float rot = rect.rotation * 3.14159265f / 180.f;
+                            float c = std::abs(std::cos(rot));
+                            float s = std::abs(std::sin(rot));
+                            float ex = hw * c + hh * s;
+                            float ey = hw * s + hh * c;
+                            pe.left = pe.right = ex; pe.bottom = pe.top = ey;
+                        }
+                        found = true; break;
+                    }
+                }
+            }
+            // Oval
+            if (!found) {
+                for (const auto& ov : pcb_data->ovals) {
+                    if (ov.center.x == pin.pos.x && ov.center.y == pin.pos.y) {
+                        float hw = ov.width * 0.5f;
+                        float hh = ov.height * 0.5f;
+                        if (ov.rotation == 0.f) {
+                            pe.left = pe.right = hw; pe.bottom = pe.top = hh;
+                        } else {
+                            float rot = ov.rotation * 3.14159265f / 180.f;
+                            float c = std::abs(std::cos(rot));
+                            float s = std::abs(std::sin(rot));
+                            float ex = hw * c + hh * s;
+                            float ey = hw * s + hh * c;
+                            pe.left = pe.right = ex; pe.bottom = pe.top = ey;
+                        }
+                        break; // found geometry
+                    }
+                }
+            }
+            extents.push_back(pe);
+        }
+
+        if (extents.empty()) continue;
+
+        float min_x = extents[0].pos.x, max_x = extents[0].pos.x;
+        float min_y = extents[0].pos.y, max_y = extents[0].pos.y;
+        for (const auto& e : extents) {
+            min_x = std::min(min_x, (float)e.pos.x);
+            max_x = std::max(max_x, (float)e.pos.x);
+            min_y = std::min(min_y, (float)e.pos.y);
+            max_y = std::max(max_y, (float)e.pos.y);
+        }
+
+        float left_margin = 0.f, right_margin = 0.f, bottom_margin = 0.f, top_margin = 0.f;
+        for (const auto& e : extents) {
+            if (e.pos.x == min_x) left_margin = std::max(left_margin, e.left);
+            if (e.pos.x == max_x) right_margin = std::max(right_margin, e.right);
+            if (e.pos.y == min_y) bottom_margin = std::max(bottom_margin, e.bottom);
+            if (e.pos.y == max_y) top_margin = std::max(top_margin, e.top);
+        }
+
+        min_x -= left_margin; max_x += right_margin; min_y -= bottom_margin; max_y += top_margin;
+
+        float tlx = min_x, tly = max_y; // note Y inversion later
+        float brx = max_x, bry = min_y;
+        ApplyRotation(tlx, tly, false);
+        ApplyRotation(brx, bry, false);
+        ImVec2 top_left(tlx * zoom + offset_x, offset_y - tly * zoom);
+        ImVec2 bottom_right(brx * zoom + offset_x, offset_y - bry * zoom);
+
+        ImU32 fill_col = IM_COL32(255, 255, 0, 125);
+        ImU32 border_col = IM_COL32(255, 255, 0, 255);
+        draw_list->AddRectFilled(top_left, bottom_right, fill_col);
+        draw_list->AddRect(top_left, bottom_right, border_col, 0.f, 0, 2.f);
     }
 }
 
@@ -862,7 +813,9 @@ void PCBRenderer::RenderCirclePinsImGui(ImDrawList* draw_list, float zoom, float
     
     // Pre-calculate selected net for highlighting (avoid string operations in loop)
     std::string selected_net;
-    if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
+    if (!highlighted_net.empty()) {
+        selected_net = highlighted_net; // external highlight overrides
+    } else if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
         selected_net = pcb_data->pins[selected_pin_index].net;
     }
     
@@ -941,7 +894,9 @@ void PCBRenderer::RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, fl
     
     // Pre-calculate selected net for highlighting (avoid string operations in loop)
     std::string selected_net;
-    if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
+    if (!highlighted_net.empty()) {
+        selected_net = highlighted_net;
+    } else if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
         selected_net = pcb_data->pins[selected_pin_index].net;
     }
     
@@ -1060,7 +1015,9 @@ void PCBRenderer::RenderOvalPinsImGui(ImDrawList* draw_list, float zoom, float o
     
     // Pre-calculate selected net for highlighting (avoid string operations in loop)
     std::string selected_net;
-    if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
+    if (!highlighted_net.empty()) {
+        selected_net = highlighted_net;
+    } else if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
         selected_net = pcb_data->pins[selected_pin_index].net;
     }
     
@@ -1333,6 +1290,9 @@ bool PCBRenderer::HandleMouseClick(float screen_x, float screen_y, int window_wi
                 if (selected_pin_index == static_cast<int>(i)) {
                     selected_pin_index = -1;
                 } else {
+                    // Clear navigation highlights so manual selection is visible
+                    highlighted_net.clear();
+                    highlighted_part_index = -1;
                     selected_pin_index = static_cast<int>(i);
                 }
                 return true;
@@ -1356,6 +1316,8 @@ bool PCBRenderer::HandleMouseClick(float screen_x, float screen_y, int window_wi
                 if (selected_pin_index == static_cast<int>(i)) {
                     selected_pin_index = -1;
                 } else {
+                    highlighted_net.clear();
+                    highlighted_part_index = -1;
                     selected_pin_index = static_cast<int>(i);
                 }
                 return true;
