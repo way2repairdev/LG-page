@@ -14,5 +14,7 @@
     <file>images/icons/zoom_fit.svg</file>
     <file>images/icons/flip_horizontal.svg</file>
     <file>images/icons/flip_vertical.svg</file>
+    <file>images/icons/PDF_icon.svg</file>
+    <file>images/icons/PCB_icon.svg</file>
     </qresource>
 </RCC>

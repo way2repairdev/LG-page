@@ -1101,7 +1101,15 @@ QIcon MainApplication::getFileIcon(const QString &filePath)
     } else if (isOfficeFile(extension)) {
         return style()->standardIcon(QStyle::SP_FileDialogDetailedView);
     } else if (extension == "pdf") {
+        // Custom PDF icon from resources (added PDF_icon.svg)
+        QIcon pdfIcon(":/icons/images/icons/PDF_icon.svg");
+        if (!pdfIcon.isNull()) return pdfIcon;
         return style()->standardIcon(QStyle::SP_FileDialogListView);
+    } else if (extension == "pcb" || extension == "xzz" || extension == "xzzpcb") {
+        // Custom PCB icon
+        QIcon pcbIcon(":/icons/images/icons/PCB_icon.svg");
+        if (!pcbIcon.isNull()) return pcbIcon;
+        return style()->standardIcon(QStyle::SP_FileIcon);
     } else if (extension == "txt" || extension == "log" || extension == "md") {
         return style()->standardIcon(QStyle::SP_FileIcon);
     } else {
