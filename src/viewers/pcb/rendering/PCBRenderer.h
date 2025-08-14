@@ -10,6 +10,8 @@ struct Camera {
     float y = 0.0f;
     float zoom = 1.0f;
     float aspect_ratio = 1.0f;
+    // View rotation in 90-degree steps (0..3) clockwise. 0 = normal, 1 = 90CW, 2 = 180, 3 = 270CW
+    int rotation_steps = 0;
 };
 
 struct RenderSettings {
@@ -95,6 +97,10 @@ public:
     void ZoomToFit(int window_width, int window_height);
     void Pan(float dx, float dy);
     void Zoom(float factor, float center_x = 0.0f, float center_y = 0.0f);
+    // Rotation (90-degree increments). Automatically re-fit view to keep entire board visible.
+    void RotateLeft();   // 90 degrees counter-clockwise
+    void RotateRight();  // 90 degrees clockwise
+    int  GetRotationSteps() const { return camera.rotation_steps; }
     
     // Pin selection functionality
     bool HandleMouseClick(float screen_x, float screen_y, int window_width, int window_height);
@@ -173,10 +179,14 @@ private:
                       int window_width, int window_height);
     void ScreenToWorld(float screen_x, float screen_y, float& world_x, float& world_y,
                       int window_width, int window_height);
+    void ApplyRotation(float& x, float& y, bool inverse) const; // forward (world->rotated) or inverse
     
     // Utility
     void SetProjectionMatrix(int window_width, int window_height);
     void DrawLine(float x1, float y1, float x2, float y2, float r, float g, float b, float a = 1.0f);
     void DrawRect(float x, float y, float width, float height, float r, float g, float b, float a = 1.0f);
     void DrawCircle(float x, float y, float radius, float r, float g, float b, float a = 1.0f);
+    // Cached board center for rotation pivot
+    float board_cx = 0.0f;
+    float board_cy = 0.0f;
 };

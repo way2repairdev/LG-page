@@ -388,6 +388,16 @@ void PCBViewerWidget::setupToolbar()
     );
     
     // Split view removed: no split window action
+    // Rotation actions (match PDF viewer icon style)
+    m_actionRotateLeft = m_toolbar->addAction(QIcon(":/icons/images/icons/rotate_left.svg"), "");
+    m_actionRotateLeft->setToolTip("Rotate Left");
+    connect(m_actionRotateLeft, &QAction::triggered, this, &PCBViewerWidget::rotateLeft);
+
+    m_actionRotateRight = m_toolbar->addAction(QIcon(":/icons/images/icons/rotate_right.svg"), "");
+    m_actionRotateRight->setToolTip("Rotate Right");
+    connect(m_actionRotateRight, &QAction::triggered, this, &PCBViewerWidget::rotateRight);
+
+    WritePCBDebugToFile("Rotation actions added to PCB toolbar");
     WritePCBDebugToFile("Split window action removed (feature deprecated)");
     WritePCBDebugToFile("PCB Qt toolbar setup completed with PDF viewer styling");
 }
@@ -397,6 +407,22 @@ void PCBViewerWidget::connectSignals()
     WritePCBDebugToFile("Connecting PCB viewer signals");
     
     WritePCBDebugToFile("PCB viewer signals connected");
+}
+
+void PCBViewerWidget::rotateLeft()
+{
+    if (m_pcbEmbedder && m_pcbLoaded) {
+        m_pcbEmbedder->rotateLeft();
+        WritePCBDebugToFile("Rotated PCB view left (CCW)");
+    }
+}
+
+void PCBViewerWidget::rotateRight()
+{
+    if (m_pcbEmbedder && m_pcbLoaded) {
+        m_pcbEmbedder->rotateRight();
+        WritePCBDebugToFile("Rotated PCB view right (CW)");
+    }
 }
 
 // Split view removed: onSplitWindowClicked deleted

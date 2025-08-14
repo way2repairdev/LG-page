@@ -98,6 +98,12 @@ void PCBRenderer::SetPCBData(std::shared_ptr<BRDFileBase> data) {
         
         // Build performance optimization cache
         BuildPinGeometryCache();
+
+    // Cache board center for rotation pivot
+    BRDPoint min_point, max_point;
+    pcb_data->GetBoundingBox(min_point, max_point);
+    board_cx = static_cast<float>((min_point.x + max_point.x) * 0.5);
+    board_cy = static_cast<float>((min_point.y + max_point.y) * 0.5);
     }
 }
 
@@ -208,6 +214,22 @@ void PCBRenderer::Zoom(float factor, float center_x, float center_y) {
     }
 }
 
+void PCBRenderer::RotateLeft() {
+    // Counter-clockwise rotation = 270 CW: decrement steps
+    if (!pcb_data) return;
+    camera.rotation_steps = (camera.rotation_steps + 3) % 4; // -1 mod 4
+    // Re-fit to ensure full visibility due to aspect swap
+    ZoomToFit(ImGui::GetIO().DisplaySize.x > 0 ? (int)ImGui::GetIO().DisplaySize.x : 800,
+              ImGui::GetIO().DisplaySize.y > 0 ? (int)ImGui::GetIO().DisplaySize.y : 600);
+}
+
+void PCBRenderer::RotateRight() {
+    if (!pcb_data) return;
+    camera.rotation_steps = (camera.rotation_steps + 1) % 4;
+    ZoomToFit(ImGui::GetIO().DisplaySize.x > 0 ? (int)ImGui::GetIO().DisplaySize.x : 800,
+              ImGui::GetIO().DisplaySize.y > 0 ? (int)ImGui::GetIO().DisplaySize.y : 600);
+}
+
 void PCBRenderer::ZoomToFit(int window_width, int window_height) {
     if (!pcb_data) return;
     
@@ -220,8 +242,12 @@ void PCBRenderer::ZoomToFit(int window_width, int window_height) {
     if (pcb_width <= 0 || pcb_height <= 0) return;
     
     // Calculate zoom to fit with margin
-    float zoom_x = window_width / (pcb_width * 1.2f);
-    float zoom_y = window_height / (pcb_height * 1.2f);
+    // Swap width/height when rotated by 90 or 270 degrees
+    bool swap_wh = (camera.rotation_steps % 2) == 1;
+    float effective_width  = swap_wh ? pcb_height : pcb_width;
+    float effective_height = swap_wh ? pcb_width  : pcb_height;
+    float zoom_x = window_width / (effective_width * 1.2f);
+    float zoom_y = window_height / (effective_height * 1.2f);
     camera.zoom = std::min(zoom_x, zoom_y);
     
     // Center the view
@@ -601,9 +627,13 @@ void PCBRenderer::RenderOutlineImGui(ImDrawList* draw_list, float zoom, float of
     float line_thickness = std::max(1.0f, std::min(4.0f, zoom * 2.0f));  // Thicker when zoomed in
     
     for (const auto& segment : pcb_data->outline_segments) {
-        // Transform coordinates from PCB space to screen space with Y-axis mirroring
-        ImVec2 p1(segment.first.x * zoom + offset_x, offset_y - segment.first.y * zoom);
-        ImVec2 p2(segment.second.x * zoom + offset_x, offset_y - segment.second.y * zoom);
+        // Apply global rotation first
+        float x1 = segment.first.x, y1 = segment.first.y;
+        float x2 = segment.second.x, y2 = segment.second.y;
+        ApplyRotation(x1, y1, false);
+        ApplyRotation(x2, y2, false);
+        ImVec2 p1(x1 * zoom + offset_x, offset_y - y1 * zoom);
+        ImVec2 p2(x2 * zoom + offset_x, offset_y - y2 * zoom);
         
         // Draw outline segment
         draw_list->AddLine(p1, p2, outline_color, line_thickness);
@@ -631,9 +661,12 @@ void PCBRenderer::RenderPartOutlineImGui(ImDrawList* draw_list, float zoom, floa
     float line_thickness = std::max(0.5f, std::min(2.0f, zoom * 1.5f));
     
     for (const auto& segment : pcb_data->part_outline_segments) {
-        // Transform coordinates from PCB space to screen space with Y-axis mirroring
-        ImVec2 p1(segment.first.x * zoom + offset_x, offset_y - segment.first.y * zoom);
-        ImVec2 p2(segment.second.x * zoom + offset_x, offset_y - segment.second.y * zoom);
+        float x1 = segment.first.x, y1 = segment.first.y;
+        float x2 = segment.second.x, y2 = segment.second.y;
+        ApplyRotation(x1, y1, false);
+        ApplyRotation(x2, y2, false);
+        ImVec2 p1(x1 * zoom + offset_x, offset_y - y1 * zoom);
+        ImVec2 p2(x2 * zoom + offset_x, offset_y - y2 * zoom);
         
         // Draw part outline segment
         draw_list->AddLine(p1, p2, part_outline_color, line_thickness);
@@ -790,9 +823,13 @@ void PCBRenderer::RenderPartHighlighting(ImDrawList* draw_list, float zoom, floa
                     min_y -= bottom_margin;
                     max_y += top_margin;
                     
-                    // Transform to screen coordinates
-                    ImVec2 top_left(min_x * zoom + offset_x, offset_y - max_y * zoom);
-                    ImVec2 bottom_right(max_x * zoom + offset_x, offset_y - min_y * zoom);
+                    // Transform to screen coordinates with rotation
+                    float tlx = min_x, tly = max_y;
+                    float brx = max_x, bry = min_y;
+                    ApplyRotation(tlx, tly, false);
+                    ApplyRotation(brx, bry, false);
+                    ImVec2 top_left(tlx * zoom + offset_x, offset_y - tly * zoom);
+                    ImVec2 bottom_right(brx * zoom + offset_x, offset_y - bry * zoom);
                     
                     // Draw highlighted bounding box around the part
                     ImU32 highlight_color = IM_COL32(255, 255, 0, 125); // Semi-transparent yellow
@@ -828,9 +865,11 @@ void PCBRenderer::RenderCirclePinsImGui(ImDrawList* draw_list, float zoom, float
             continue;
         }
         
-        // Transform circle center coordinates to screen space with Y-axis mirroring
-        float x = circle.center.x * zoom + offset_x;
-        float y = offset_y - circle.center.y * zoom;  // Mirror Y-axis
+    // Apply global rotation to circle center
+    float wx = circle.center.x, wy = circle.center.y;
+    ApplyRotation(wx, wy, false);
+    float x = wx * zoom + offset_x;
+    float y = offset_y - wy * zoom;  // Mirror Y-axis
         
         // Scale radius by zoom factor
         float radius = circle.radius * zoom;
@@ -906,17 +945,11 @@ void PCBRenderer::RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, fl
             continue;
         }
         
-        // Transform rectangle center coordinates to screen space with Y-axis mirroring
-        float center_x = rectangle.center.x * zoom + offset_x;
-        float center_y = offset_y - rectangle.center.y * zoom;  // Mirror Y-axis
+    // Scale dimensions by zoom factor (store original half sizes in world units first)
+    float half_width_world = rectangle.width * 0.5f;
+    float half_height_world = rectangle.height * 0.5f;
         
-        // Scale dimensions by zoom factor
-        float width = rectangle.width * zoom;
-        float height = rectangle.height * zoom;
-        
-        // Ensure minimum visibility
-        if (width < 2.0f) width = 2.0f;
-        if (height < 2.0f) height = 2.0f;
+    // Minimum visibility handled after projection; keep world sizes intact here
         
         // Check if this rectangle corresponds to a pin with cached data for color override
         float r = rectangle.r, g = rectangle.g, b = rectangle.b, a = rectangle.a;
@@ -951,61 +984,62 @@ void PCBRenderer::RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, fl
             (int)(a * 255)
         );
         
-        if (rectangle.rotation == 0.0f) {
-            // No rotation - simple axis-aligned rectangle
-            float half_width = width / 2.0f;
-            float half_height = height / 2.0f;
-            
-            ImVec2 top_left(center_x - half_width, center_y - half_height);
-            ImVec2 bottom_right(center_x + half_width, center_y + half_height);
-            
-            draw_list->AddRectFilled(top_left, bottom_right, fill_color);
-            
-            // Optional: Add outline for better visibility
-            ImU32 outline_color = IM_COL32(
-                (int)(r * 180), 
-                (int)(g * 180), 
-                (int)(b * 180), 
-                255
-            );
-            draw_list->AddRect(top_left, bottom_right, outline_color, 0.0f, 0, 1.0f);
-        } else {
-            // Rotated rectangle - draw as quad with rotation
-            float half_width = width / 2.0f;
-            float half_height = height / 2.0f;
-            
-            // Convert rotation to radians
-            float rot_rad = rectangle.rotation * 3.14159265f / 180.0f;
-            float cos_rot = std::cos(rot_rad);
-            float sin_rot = std::sin(rot_rad);
-            
-            // Calculate the four corners of the rotated rectangle
-            ImVec2 corners[4];
-            
-            // Corner offsets before rotation
-            float dx1 = -half_width, dy1 = -half_height; // Top-left
-            float dx2 = half_width,  dy2 = -half_height; // Top-right
-            float dx3 = half_width,  dy3 = half_height;  // Bottom-right
-            float dx4 = -half_width, dy4 = half_height;  // Bottom-left
-            
-            // Apply rotation and translation
-            corners[0] = ImVec2(center_x + dx1 * cos_rot - dy1 * sin_rot, center_y + dx1 * sin_rot + dy1 * cos_rot);
-            corners[1] = ImVec2(center_x + dx2 * cos_rot - dy2 * sin_rot, center_y + dx2 * sin_rot + dy2 * cos_rot);
-            corners[2] = ImVec2(center_x + dx3 * cos_rot - dy3 * sin_rot, center_y + dx3 * sin_rot + dy3 * cos_rot);
-            corners[3] = ImVec2(center_x + dx4 * cos_rot - dy4 * sin_rot, center_y + dx4 * sin_rot + dy4 * cos_rot);
-            
-            // Draw the quad as two triangles
-            draw_list->AddQuadFilled(corners[0], corners[1], corners[2], corners[3], fill_color);
-            
-            // Optional: Add outline for better visibility
-            ImU32 outline_color = IM_COL32(
-                (int)(r * 180), 
-                (int)(g * 180), 
-                (int)(b * 180), 
-                255
-            );
-            draw_list->AddQuad(corners[0], corners[1], corners[2], corners[3], outline_color, 1.0f);
+        // Compute rectangle corner world coordinates first (applying its own rotation), then apply global board rotation per corner
+        float rot_rad = rectangle.rotation * 3.14159265f / 180.0f;
+        float cos_rot = std::cos(rot_rad);
+        float sin_rot = std::sin(rot_rad);
+
+        struct Corner { float x; float y; } worldCorners[4];
+        // Local (pre-rectangle-rotation) offsets
+        float dx[4] = {-half_width_world,  half_width_world,  half_width_world, -half_width_world};
+        float dy[4] = {-half_height_world, -half_height_world, half_height_world,  half_height_world};
+
+        for (int c = 0; c < 4; ++c) {
+            // Apply the rectangle's own rotation about its center
+            float lx = dx[c];
+            float ly = dy[c];
+            float rx = lx * cos_rot - ly * sin_rot;
+            float ry = lx * sin_rot + ly * cos_rot;
+            // World coordinates before board rotation
+            worldCorners[c].x = rectangle.center.x + rx;
+            worldCorners[c].y = rectangle.center.y + ry;
+            // Apply board/global rotation in-place
+            ApplyRotation(worldCorners[c].x, worldCorners[c].y, false);
         }
+
+        // Project to screen
+        ImVec2 corners[4];
+        for (int c = 0; c < 4; ++c) {
+            float sx = worldCorners[c].x * zoom + offset_x;
+            float sy = offset_y - worldCorners[c].y * zoom;
+            corners[c] = ImVec2(sx, sy);
+        }
+
+        // Optionally enforce minimum pixel size by early exit if collapsed
+        // (skip if projected area extremely small)
+        float bbox_min_x = corners[0].x, bbox_max_x = corners[0].x;
+        float bbox_min_y = corners[0].y, bbox_max_y = corners[0].y;
+        for (int c = 1; c < 4; ++c) {
+            bbox_min_x = std::min(bbox_min_x, corners[c].x);
+            bbox_max_x = std::max(bbox_max_x, corners[c].x);
+            bbox_min_y = std::min(bbox_min_y, corners[c].y);
+            bbox_max_y = std::max(bbox_max_y, corners[c].y);
+        }
+        if ((bbox_max_x - bbox_min_x) < 1.0f || (bbox_max_y - bbox_min_y) < 1.0f) {
+            continue; // too small to render meaningfully
+        }
+
+        // Draw filled quad
+        draw_list->AddQuadFilled(corners[0], corners[1], corners[2], corners[3], fill_color);
+
+        // Outline
+        ImU32 outline_color = IM_COL32(
+            (int)(r * 180),
+            (int)(g * 180),
+            (int)(b * 180),
+            255
+        );
+        draw_list->AddQuad(corners[0], corners[1], corners[2], corners[3], outline_color, 1.0f);
     }
 }
 
@@ -1030,17 +1064,9 @@ void PCBRenderer::RenderOvalPinsImGui(ImDrawList* draw_list, float zoom, float o
             continue;
         }
         
-        // Transform oval center coordinates to screen space with Y-axis mirroring
-        float center_x = oval.center.x * zoom + offset_x;
-        float center_y = offset_y - oval.center.y * zoom;  // Mirror Y-axis
-        
-        // Scale dimensions by zoom factor
-        float width = oval.width * zoom;
-        float height = oval.height * zoom;
-        
-        // Ensure minimum visibility
-        if (width < 2.0f) width = 2.0f;
-        if (height < 2.0f) height = 2.0f;
+    // Precompute world half dimensions for local shape generation
+    float half_w_world = oval.width * 0.5f;
+    float half_h_world = oval.height * 0.5f;
         
         // Check if this oval corresponds to a pin with cached data for color override
         float r = oval.r, g = oval.g, b = oval.b, a = oval.a;
@@ -1067,106 +1093,71 @@ void PCBRenderer::RenderOvalPinsImGui(ImDrawList* draw_list, float zoom, float o
             }
         }
         
-        // Convert color components to ImU32 format (0-255 range)
-        ImU32 fill_color = IM_COL32(
-            (int)(r * 255), 
-            (int)(g * 255), 
-            (int)(b * 255), 
-            (int)(a * 255)
-        );
-        
-        // Stadium shape: rectangle with semicircular ends
-        // The radius of the semicircles is half the smaller dimension
-        float radius = std::min(width, height) / 2.0f;
-        
-        // Convert rotation to radians
-        float rot_rad = oval.rotation * 3.14159265f / 180.0f;
-        float cos_rot = std::cos(rot_rad);
-        float sin_rot = std::sin(rot_rad);
-        
-        // Create stadium shape points
-        std::vector<ImVec2> stadium_points;
-        const int semicircle_segments = 12; // Segments per semicircle
-        
-        if (width > height) {
-            // Horizontal stadium: longer in width
-            float rect_width = width - 2.0f * radius;  // Width of central rectangle
-            float rect_height = height;
-            
-            // Left semicircle (from bottom to top)
-            for (int i = 0; i <= semicircle_segments; ++i) {
-                float angle = 3.14159265f * 0.5f + 3.14159265f * i / semicircle_segments; // π/2 to 3π/2
-                float x_local = -rect_width / 2.0f + radius * std::cos(angle);
-                float y_local = radius * std::sin(angle);
-                
-                // Apply rotation
-                float x_rotated = x_local * cos_rot - y_local * sin_rot;
-                float y_rotated = x_local * sin_rot + y_local * cos_rot;
-                
-                stadium_points.push_back(ImVec2(center_x + x_rotated, center_y + y_rotated));
+        // Pin local rotation
+        float rot_pin = oval.rotation * 3.14159265f / 180.0f;
+        float cos_pin = std::cos(rot_pin);
+        float sin_pin = std::sin(rot_pin);
+
+        // Determine orientation (horizontal vs vertical capsule)
+        bool horizontal = half_w_world >= half_h_world;
+        float radius = std::min(half_w_world, half_h_world);
+        float body_half_len = (horizontal ? half_w_world : half_h_world) - radius;
+        const int arc_segments = 12;
+
+        std::vector<ImVec2> pts;
+
+        auto emitPointLocal = [&](float lx, float ly) {
+            // Apply pin-local rotation
+            float rx = lx * cos_pin - ly * sin_pin;
+            float ry = lx * sin_pin + ly * cos_pin;
+            // Add center
+            float wx = oval.center.x + rx;
+            float wy = oval.center.y + ry;
+            // Apply global board rotation
+            ApplyRotation(wx, wy, false);
+            // Project to screen
+            float sx = wx * zoom + offset_x;
+            float sy = offset_y - wy * zoom;
+            pts.emplace_back(sx, sy);
+        };
+
+        if (horizontal) {
+            // Left arc (top to bottom)
+            for (int i = 0; i <= arc_segments; ++i) {
+                float ang = 3.14159265f * 0.5f + 3.14159265f * (float)i / arc_segments; // 90 -> 270
+                float lx = -body_half_len + radius * std::cos(ang);
+                float ly = radius * std::sin(ang);
+                emitPointLocal(lx, ly);
             }
-            
-            // Right semicircle (from top to bottom)
-            for (int i = 0; i <= semicircle_segments; ++i) {
-                float angle = 3.14159265f * 1.5f + 3.14159265f * i / semicircle_segments; // 3π/2 to 5π/2
-                float x_local = rect_width / 2.0f + radius * std::cos(angle);
-                float y_local = radius * std::sin(angle);
-                
-                // Apply rotation
-                float x_rotated = x_local * cos_rot - y_local * sin_rot;
-                float y_rotated = x_local * sin_rot + y_local * cos_rot;
-                
-                stadium_points.push_back(ImVec2(center_x + x_rotated, center_y + y_rotated));
+            // Right arc (bottom to top)
+            for (int i = 0; i <= arc_segments; ++i) {
+                float ang = 3.14159265f * 1.5f + 3.14159265f * (float)i / arc_segments; // 270 -> 450
+                float lx = body_half_len + radius * std::cos(ang);
+                float ly = radius * std::sin(ang);
+                emitPointLocal(lx, ly);
             }
         } else {
-            // Vertical stadium: longer in height
-            float rect_width = width;
-            float rect_height = height - 2.0f * radius;  // Height of central rectangle
-            
-            // Bottom semicircle (from left to right)
-            for (int i = 0; i <= semicircle_segments; ++i) {
-                float angle = 3.14159265f + 3.14159265f * i / semicircle_segments; // π to 2π
-                float x_local = radius * std::cos(angle);
-                float y_local = -rect_height / 2.0f + radius * std::sin(angle);
-                
-                // Apply rotation
-                float x_rotated = x_local * cos_rot - y_local * sin_rot;
-                float y_rotated = x_local * sin_rot + y_local * cos_rot;
-                
-                stadium_points.push_back(ImVec2(center_x + x_rotated, center_y + y_rotated));
+            // Bottom arc (left to right)
+            for (int i = 0; i <= arc_segments; ++i) {
+                float ang = 3.14159265f + 3.14159265f * (float)i / arc_segments; // 180 -> 360
+                float lx = radius * std::cos(ang);
+                float ly = -body_half_len + radius * std::sin(ang);
+                emitPointLocal(lx, ly);
             }
-            
-            // Top semicircle (from right to left)
-            for (int i = 0; i <= semicircle_segments; ++i) {
-                float angle = 2.0f * 3.14159265f + 3.14159265f * i / semicircle_segments; // 2π to 3π
-                float x_local = radius * std::cos(angle);
-                float y_local = rect_height / 2.0f + radius * std::sin(angle);
-                
-                // Apply rotation
-                float x_rotated = x_local * cos_rot - y_local * sin_rot;
-                float y_rotated = x_local * sin_rot + y_local * cos_rot;
-                
-                stadium_points.push_back(ImVec2(center_x + x_rotated, center_y + y_rotated));
+            // Top arc (right to left)
+            for (int i = 0; i <= arc_segments; ++i) {
+                float ang = 2.0f * 3.14159265f + 3.14159265f * (float)i / arc_segments; // 360 -> 540
+                float lx = radius * std::cos(ang);
+                float ly = body_half_len + radius * std::sin(ang);
+                emitPointLocal(lx, ly);
             }
         }
-        
-        // Draw filled stadium shape using convex polygon
-        if (stadium_points.size() >= 3) {
-            draw_list->AddConvexPolyFilled(stadium_points.data(), stadium_points.size(), fill_color);
-            
-            // Optional: Add outline for better visibility
-            ImU32 outline_color = IM_COL32(
-                (int)(r * 180), 
-                (int)(g * 180), 
-                (int)(b * 180), 
-                255
-            );
-            
-            // Draw outline by connecting consecutive points
-            for (size_t i = 0; i < stadium_points.size(); ++i) {
-                size_t next_i = (i + 1) % stadium_points.size();
-                draw_list->AddLine(stadium_points[i], stadium_points[next_i], outline_color, 1.0f);
-            }
+
+        if (pts.size() >= 3) {
+            ImU32 fill_color = IM_COL32((int)(r * 255),(int)(g * 255),(int)(b * 255),(int)(a * 255));
+            draw_list->AddConvexPolyFilled(pts.data(), (int)pts.size(), fill_color);
+            ImU32 outline_color = IM_COL32((int)(r * 180),(int)(g * 180),(int)(b * 180),255);
+            draw_list->AddPolyline(pts.data(), (int)pts.size(), outline_color, ImDrawFlags_Closed, 1.0f);
         }
     }
 }
@@ -1276,9 +1267,11 @@ void PCBRenderer::BuildPinGeometryCache() {
 }
 
 bool PCBRenderer::IsElementVisible(float x, float y, float radius, float zoom, float offset_x, float offset_y, int window_width, int window_height) {
-    // Transform to screen coordinates
-    float screen_x = x * zoom + offset_x;
-    float screen_y = offset_y - y * zoom;
+    // Apply global rotation to element position before projecting
+    float rx = x, ry = y;
+    ApplyRotation(rx, ry, false);
+    float screen_x = rx * zoom + offset_x;
+    float screen_y = offset_y - ry * zoom;
     float screen_radius = radius * zoom;
     
     // Add some margin for smooth culling
@@ -1466,16 +1459,45 @@ int PCBRenderer::GetHoveredPin(float screen_x, float screen_y, int window_width,
 // Coordinate conversion methods
 void PCBRenderer::ScreenToWorld(float screen_x, float screen_y, float& world_x, float& world_y,
                                int window_width, int window_height) {
-    // Convert screen coordinates to world coordinates using camera transform
-    world_x = camera.x + (screen_x - window_width * 0.5f) / camera.zoom;
-    world_y = camera.y + (window_height * 0.5f - screen_y) / camera.zoom;
+    // Convert to unrotated world first
+    float xr = camera.x + (screen_x - window_width * 0.5f) / camera.zoom;
+    float yr = camera.y + (window_height * 0.5f - screen_y) / camera.zoom;
+    // Inverse rotation around board center
+    world_x = xr; world_y = yr;
+    ApplyRotation(world_x, world_y, true);
 }
 
 void PCBRenderer::WorldToScreen(float world_x, float world_y, float& screen_x, float& screen_y,
                                int window_width, int window_height) {
-    // Convert world coordinates to screen coordinates using camera transform
-    screen_x = (world_x - camera.x) * camera.zoom + window_width * 0.5f;
-    screen_y = window_height * 0.5f - (world_y - camera.y) * camera.zoom;
+    float xr = world_x, yr = world_y;
+    ApplyRotation(xr, yr, false);
+    screen_x = (xr - camera.x) * camera.zoom + window_width * 0.5f;
+    screen_y = window_height * 0.5f - (yr - camera.y) * camera.zoom;
+}
+
+void PCBRenderer::ApplyRotation(float& x, float& y, bool inverse) const {
+    if (camera.rotation_steps == 0) return;
+    int steps = camera.rotation_steps;
+    if (inverse) steps = (4 - steps) % 4; // inverse rotation
+    float dx = x - board_cx;
+    float dy = y - board_cy;
+    float rx = x, ry = y;
+    switch(steps) {
+        case 1: // 90 CW
+            rx = board_cx + dy;
+            ry = board_cy - dx;
+            break;
+        case 2: // 180
+            rx = board_cx - dx;
+            ry = board_cy - dy;
+            break;
+        case 3: // 270 CW
+            rx = board_cx - dy;
+            ry = board_cy + dx;
+            break;
+        default: break;
+    }
+    x = rx; y = ry;
 }
 
 void PCBRenderer::RenderPartNamesOnTop(ImDrawList* draw_list) {
@@ -1540,6 +1562,7 @@ void PCBRenderer::CollectPartNamesForRendering(float zoom, float offset_x, float
             // Use part bounds if no pins
             float center_x = (part.p1.x + part.p2.x) * 0.5f;
             float center_y = (part.p1.y + part.p2.y) * 0.5f;
+            ApplyRotation(center_x, center_y, false);
             
             // Transform to screen coordinates
             float screen_x = center_x * zoom + offset_x;
@@ -1565,10 +1588,14 @@ void PCBRenderer::CollectPartNamesForRendering(float zoom, float offset_x, float
             info.background_color = IM_COL32(0, 0, 0, 128); // Semi-transparent black background
             
             // Set clipping bounds (use part bounds)
-            float min_x = part.p1.x * zoom + offset_x;
-            float max_x = part.p2.x * zoom + offset_x;
-            float min_y = offset_y - part.p2.y * zoom;
-            float max_y = offset_y - part.p1.y * zoom;
+            float bbminx = part.p1.x, bbminy = part.p1.y;
+            float bbmaxx = part.p2.x, bbmaxy = part.p2.y;
+            ApplyRotation(bbminx, bbminy, false);
+            ApplyRotation(bbmaxx, bbmaxy, false);
+            float min_x = bbminx * zoom + offset_x;
+            float max_x = bbmaxx * zoom + offset_x;
+            float min_y = offset_y - bbmaxy * zoom;
+            float max_y = offset_y - bbminy * zoom;
             
             info.clip_min = ImVec2(min_x, min_y);
             info.clip_max = ImVec2(max_x, max_y);
@@ -1580,12 +1607,18 @@ void PCBRenderer::CollectPartNamesForRendering(float zoom, float offset_x, float
         // Calculate part bounds from pins
         float min_x = part_pins[0].pos.x, max_x = part_pins[0].pos.x;
         float min_y = part_pins[0].pos.y, max_y = part_pins[0].pos.y;
+        ApplyRotation(min_x, min_y, false); // rotate initial
+        ApplyRotation(max_x, max_y, false);
+        if (min_x > max_x) std::swap(min_x, max_x);
+        if (min_y > max_y) std::swap(min_y, max_y);
         
         for (const auto& pin : part_pins) {
-            min_x = std::min(min_x, static_cast<float>(pin.pos.x));
-            max_x = std::max(max_x, static_cast<float>(pin.pos.x));
-            min_y = std::min(min_y, static_cast<float>(pin.pos.y));
-            max_y = std::max(max_y, static_cast<float>(pin.pos.y));
+            float px = pin.pos.x, py = pin.pos.y;
+            ApplyRotation(px, py, false);
+            min_x = std::min(min_x, px);
+            max_x = std::max(max_x, px);
+            min_y = std::min(min_y, py);
+            max_y = std::max(max_y, py);
         }
 
         // Add some margin around the pins
@@ -1662,9 +1695,12 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
             continue;
         }
         
-        // Transform pin coordinates to screen space with Y-axis mirroring
-        float x = pin.pos.x * zoom + offset_x;
-        float y = offset_y - pin.pos.y * zoom;
+    // Transform pin coordinates applying global rotation, then to screen space (Y-axis mirrored)
+    float px = pin.pos.x;
+    float py = pin.pos.y;
+    ApplyRotation(px, py, false);
+    float x = px * zoom + offset_x;
+    float y = offset_y - py * zoom;
         
         // Calculate pin dimensions using cached geometry data
         float pin_width = 0.0f, pin_height = 0.0f;
@@ -1733,10 +1769,7 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
             continue;
         }
         
-        // Calculate base text sizes
-        ImVec2 pin_text_size = ImGui::CalcTextSize(pin_number.c_str());
-        ImVec2 net_text_size = net_name.empty() ? ImVec2(0,0) : ImGui::CalcTextSize(net_name.c_str());
-        ImVec2 diode_text_size = diode_reading.empty() ? ImVec2(0,0) : ImGui::CalcTextSize(diode_reading.c_str());
+    // (Removed unused base text size calculations; dynamic line wrapping below recalculates sizes as needed)
         
         // Calculate maximum text dimensions that fit in pin area (with margin)
         float max_text_width = pin_width * 0.95f;   // Use ~95% of pin width for text

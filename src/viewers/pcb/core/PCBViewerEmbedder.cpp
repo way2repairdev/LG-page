@@ -359,6 +359,27 @@ void PCBViewerEmbedder::zoom(float factor, float centerX, float centerY)
     }
 }
 
+void PCBViewerEmbedder::rotateLeft()
+{
+    if (m_renderer) {
+        m_renderer->RotateLeft();
+        onZoomChanged(); // zoom may have been refitted
+    }
+}
+
+void PCBViewerEmbedder::rotateRight()
+{
+    if (m_renderer) {
+        m_renderer->RotateRight();
+        onZoomChanged();
+    }
+}
+
+int PCBViewerEmbedder::getRotationSteps() const
+{
+    return m_renderer ? m_renderer->GetRotationSteps() : 0;
+}
+
 void PCBViewerEmbedder::handleMouseMove(int x, int y)
 {
     if (m_renderer) {

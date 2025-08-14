@@ -59,6 +59,9 @@ public slots:
 
     // Ensure viewport and camera are synced after activation/tab switch
     void ensureViewportSync();
+    // Rotation controls
+    void rotateLeft();
+    void rotateRight();
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -83,6 +86,8 @@ private:
     // UI components
     QVBoxLayout *m_mainLayout;
     QToolBar *m_toolbar;
+    QAction *m_actionRotateLeft{nullptr};
+    QAction *m_actionRotateRight{nullptr};
     QWidget *m_viewerContainer;
     QTimer *m_updateTimer;
     

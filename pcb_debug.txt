@@ -2410,3 +2410,313 @@
 [PCB-DEBUG] PCB widget hide event
 [PCB-DEBUG] PCB widget focus out
 [PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI with split view support
+[PCB-DEBUG] Setting up PCB viewer Qt toolbar with PDF viewer styling
+[PCB-DEBUG] Rotation actions added to PCB toolbar
+[PCB-DEBUG] Split window action removed (feature deprecated)
+[PCB-DEBUG] PCB Qt toolbar setup completed with PDF viewer styling
+[PCB-DEBUG] PCB viewer UI setup completed (single-pane)
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1503x947
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/iPhone/iPhone5 & Earlier/iPhone5C/iPhone5C boardview.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI with split view support
+[PCB-DEBUG] Setting up PCB viewer Qt toolbar with PDF viewer styling
+[PCB-DEBUG] Rotation actions added to PCB toolbar
+[PCB-DEBUG] Split window action removed (feature deprecated)
+[PCB-DEBUG] PCB Qt toolbar setup completed with PDF viewer styling
+[PCB-DEBUG] PCB viewer UI setup completed (single-pane)
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1503x947
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/iPhone/iPhone14_14Plus/Schematic and boardview/iPhone14_14Plus AP YiDianTong820-02680-17.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI with split view support
+[PCB-DEBUG] Setting up PCB viewer Qt toolbar with PDF viewer styling
+[PCB-DEBUG] Rotation actions added to PCB toolbar
+[PCB-DEBUG] Split window action removed (feature deprecated)
+[PCB-DEBUG] PCB Qt toolbar setup completed with PDF viewer styling
+[PCB-DEBUG] PCB viewer UI setup completed (single-pane)
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/iPhone/iPhone13ProMAX/Schematic and boardview/iPhone13ProMax BB Boardview 820-02401-09.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI with split view support
+[PCB-DEBUG] Setting up PCB viewer Qt toolbar with PDF viewer styling
+[PCB-DEBUG] Rotation actions added to PCB toolbar
+[PCB-DEBUG] Split window action removed (feature deprecated)
+[PCB-DEBUG] PCB Qt toolbar setup completed with PDF viewer styling
+[PCB-DEBUG] PCB viewer UI setup completed (single-pane)
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/iPhone/iPhone13ProMAX/Schematic and boardview/iPhone13ProMax AP Boardview 820-02400-06.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] PCB widget resized to 1512x906
+[PCB-DEBUG] PCB widget resized to 1629x906
+[PCB-DEBUG] PCB widget resized to 1903x906
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] PCB widget resized to 1383x797
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] PCB widget resized to 1903x906
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] PCB widget resized to 1908x906
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] PCB widget resized to 1903x906
+[PCB-DEBUG] PCB widget resized to 1653x906
+[PCB-DEBUG] PCB widget resized to 1647x906
+[PCB-DEBUG] PCB widget resized to 1639x906
+[PCB-DEBUG] PCB widget resized to 1625x906
+[PCB-DEBUG] PCB widget resized to 1606x906
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event
+[PCB-DEBUG] PCBViewerWidget constructor started
+[PCB-DEBUG] Setting up PCB viewer UI with split view support
+[PCB-DEBUG] Setting up PCB viewer Qt toolbar with PDF viewer styling
+[PCB-DEBUG] Rotation actions added to PCB toolbar
+[PCB-DEBUG] Split window action removed (feature deprecated)
+[PCB-DEBUG] PCB Qt toolbar setup completed with PDF viewer styling
+[PCB-DEBUG] PCB viewer UI setup completed (single-pane)
+[PCB-DEBUG] Connecting PCB viewer signals
+[PCB-DEBUG] PCB viewer signals connected
+[PCB-DEBUG] Initializing PCB viewer
+[PCB-DEBUG] ImGui UI disabled - using external Qt toolbar only
+[PCB-DEBUG] PCB viewer initialized successfully
+[PCB-DEBUG] PCBViewerWidget constructor completed
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget resized to 1503x947
+[PCB-DEBUG] PCB widget show event
+[PCB-DEBUG] Setting PCB toolbar visible: false
+[PCB-DEBUG] PCB widget focus in
+[PCB-DEBUG] Setting PCB toolbar visible: true
+[PCB-DEBUG] PCB widget resized to 1503x906
+[PCB-DEBUG] Loading PCB file: C:/W2R_Schematics/iPhone/iPhone15ProMax(USA)/Schematic and boardview/iPhone15ProMax(USA) AP+BB YiDianTong.pcb
+[PCB-DEBUG] PCB file loaded successfully
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view right (CW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] Rotated PCB view left (CCW)
+[PCB-DEBUG] PCB widget focus out
+[PCB-DEBUG] PCB widget hide event

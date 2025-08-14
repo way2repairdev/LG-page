@@ -48,6 +48,10 @@ public:
     void resetView();
     void pan(float deltaX, float deltaY);
     void zoom(float factor, float centerX = -1, float centerY = -1);
+    // Rotation (90° steps)
+    void rotateLeft();  // counter-clockwise
+    void rotateRight(); // clockwise
+    int  getRotationSteps() const; // 0..3
 
     // Mouse and keyboard input
     void handleMouseMove(int x, int y);
