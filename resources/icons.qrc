@@ -18,5 +18,11 @@
     <file>images/icons/PCB_icon.svg</file>
     <file>images/icons/find_component.svg</file>
     <file>images/icons/find_net.svg</file>
+    <file>images/icons/folder_closed.svg</file>
+    <file>images/icons/folder_open.svg</file>
+    <file>images/icons/tree_branch_closed.svg</file>
+    <file>images/icons/tree_branch_open.svg</file>
+    <file>images/icons/tree_branch_closed_light.svg</file>
+    <file>images/icons/tree_branch_open_light.svg</file>
     </qresource>
 </RCC>

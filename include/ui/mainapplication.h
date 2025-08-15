@@ -15,6 +15,9 @@
 #include <QTextEdit>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QStyledItemDelegate>
+#include <QPointer>
+#include <QTimer>
 #include <QSplitter>
 #include <QDateTime>
 #include <QTabWidget>
@@ -82,6 +85,9 @@ public slots:
     void toggleTreeView();
     void toggleFullScreenPDF();
 
+protected:
+    void changeEvent(QEvent *event) override; // Re-apply theme on palette changes
+
 private:
     UserSession m_userSession;
     DatabaseManager *m_dbManager;
@@ -108,6 +114,7 @@ private:
     void setupKeyboardShortcuts();
     void setupTreeView();
     void setupTabWidget();  // Changed from setupContentArea
+    void applyTreeViewTheme(); // Apply adaptive dark/light stylesheet to tree view
     void updateUserInfo();
     void loadLocalFiles();  // Changed from loadFileList
     void loadLocalFileContent(const QString &filePath);  // Changed from loadFileContent
@@ -150,5 +157,50 @@ private:
 signals:
     void logoutRequested();
 };
+
+// --- Smooth hover enhancement (no new file created) ---
+class SmoothTreeDelegate : public QStyledItemDelegate {
+    Q_OBJECT
+public:
+    SmoothTreeDelegate(QObject *parent=nullptr) : QStyledItemDelegate(parent) {}
+    void setColors(const QColor &base, const QColor &hover) { m_base = base; m_hover = hover; }
+    void setHovered(const QModelIndex &idx) {
+        if (idx == m_hovered)
+            return;
+        m_last = m_hovered;
+        m_hovered = idx;
+        m_progress = 0.0;
+    }
+    bool advance() {
+        if (!m_hovered.isValid() && !m_last.isValid()) return false;
+        m_progress = std::min(1.0, m_progress + 0.12); // ease speed
+        if (m_progress >= 1.0 && !m_hovered.isValid()) {
+            m_last = QModelIndex();
+        }
+        return true;
+    }
+    void clearHover() { m_hovered = QModelIndex(); m_progress = 0.0; }
+    void paint(QPainter *p, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+private:
+    QModelIndex m_hovered;
+    QModelIndex m_last;
+    QColor m_base;      // tree background
+    QColor m_hover;     // target hover color
+    double m_progress {0.0}; // 0..1
+};
+
+class SmoothTreeWidget : public QTreeWidget {
+    Q_OBJECT
+public:
+    SmoothTreeWidget(QWidget *parent=nullptr);
+    SmoothTreeDelegate *smoothDelegate() const { return m_delegate; }
+protected:
+    void mouseMoveEvent(QMouseEvent *e) override;
+    void leaveEvent(QEvent *e) override;
+private:
+    SmoothTreeDelegate *m_delegate;
+    QTimer m_animTimer;
+};
+
 
 #endif // MAINAPPLICATION_H

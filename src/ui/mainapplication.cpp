@@ -20,6 +20,9 @@
 #include <QToolTip>
 #include <QCursor>
 #include "toastnotifier.h"
+#include <QPainter>
+#include <QEasingCurve>
+#include <QMouseEvent>
 
 MainApplication::MainApplication(const UserSession &userSession, QWidget *parent)
     : QMainWindow(parent)
@@ -186,54 +189,88 @@ void MainApplication::setupStatusBar()
     m_statusBar->showMessage("Ready");
 }
 
+// --- SmoothTreeDelegate paint implementation ---
+void SmoothTreeDelegate::paint(QPainter *p, const QStyleOptionViewItem &option, const QModelIndex &index) const {
+    QStyleOptionViewItem opt(option);
+    initStyleOption(&opt, index);
+
+    // Determine animation state
+    double t = 0.0;
+    if (index == m_hovered) {
+        t = m_progress; // fade in
+    } else if (index == m_last) {
+        t = 1.0 - m_progress; // fade out
+    }
+    t = std::clamp(t, 0.0, 1.0);
+    // Ease for smoother feel
+    t = QEasingCurve(QEasingCurve::OutCubic).valueForProgress(t);
+
+    QColor baseCol = m_base;
+    QColor hoverCol = m_hover;
+    QColor blended = baseCol;
+    blended.setRedF(baseCol.redF() + (hoverCol.redF() - baseCol.redF()) * t);
+    blended.setGreenF(baseCol.greenF() + (hoverCol.greenF() - baseCol.greenF()) * t);
+    blended.setBlueF(baseCol.blueF() + (hoverCol.blueF() - baseCol.blueF()) * t);
+    blended.setAlphaF(baseCol.alphaF() + (hoverCol.alphaF() - baseCol.alphaF()) * t);
+
+    // Selected state already handled by style sheet; only custom paint hover blend when not selected
+    bool selected = (opt.state & QStyle::State_Selected);
+    if (!selected && t > 0.0) {
+        p->save();
+        p->setRenderHint(QPainter::Antialiasing, false);
+        // Avoid painting over branch toggle region (indentation + 16px icon)
+        const QTreeView *tv = qobject_cast<const QTreeView*>(parent());
+        int indentation = tv ? tv->indentation() : 20;
+        // Compute depth
+        int depth = 0; QModelIndex ancestor = index.parent();
+        while (ancestor.isValid()) { depth++; ancestor = ancestor.parent(); }
+        int iconArea = depth * indentation + 16; // branch indicator + icon width
+        QRect fillRect = opt.rect;
+        fillRect.setX(fillRect.x() + iconArea);
+        if (fillRect.x() < opt.rect.right()) {
+            p->fillRect(fillRect, blended);
+        }
+        p->restore();
+    }
+    // Draw default text/icon
+    QStyledItemDelegate::paint(p, opt, index);
+}
+
+// --- SmoothTreeWidget implementation ---
+SmoothTreeWidget::SmoothTreeWidget(QWidget *parent) : QTreeWidget(parent) {
+    m_delegate = new SmoothTreeDelegate(this);
+    setItemDelegate(m_delegate);
+    setMouseTracking(true);
+    m_animTimer.setInterval(16); // ~60fps
+    connect(&m_animTimer, &QTimer::timeout, this, [this]() {
+        if (m_delegate->advance())
+            viewport()->update();
+        else if (!underMouse())
+            m_animTimer.stop();
+    });
+}
+void SmoothTreeWidget::mouseMoveEvent(QMouseEvent *e) {
+    QTreeWidget::mouseMoveEvent(e);
+    QModelIndex idx = indexAt(e->pos());
+    m_delegate->setHovered(idx);
+    if (!m_animTimer.isActive()) m_animTimer.start();
+    viewport()->update();
+}
+void SmoothTreeWidget::leaveEvent(QEvent *e) {
+    QTreeWidget::leaveEvent(e);
+    m_delegate->setHovered(QModelIndex());
+    if (!m_animTimer.isActive()) m_animTimer.start();
+    viewport()->update();
+}
+
 void MainApplication::setupTreeView()
 {
-    m_treeWidget = new QTreeWidget();
+    m_treeWidget = new SmoothTreeWidget();
     m_treeWidget->setHeaderLabel("Files & Folders");
     m_treeWidget->setMinimumWidth(250);
     m_treeWidget->setMaximumWidth(400);
     
-    // Style the tree widget
-    m_treeWidget->setStyleSheet(
-        "QTreeWidget {"
-        "    border: 1px solid #d4e1f5;"
-        "    border-radius: 6px;"
-        "    background-color: white;"
-        "    font-family: 'Segoe UI', Arial, sans-serif;"
-        "    selection-background-color: #e8f0fe;"
-        "    selection-color: #2c3e50;"
-        "}"
-        "QTreeWidget::item {"
-        "    padding: 4px;"
-        "    border: none;"
-        "}"
-        "QTreeWidget::item:selected {"
-        "    background-color: #4285f4;"
-        "    color: white;"
-        "}"
-        "QTreeWidget::item:hover {"
-        "    background-color: #f0f7ff;"
-        "}"
-        "QTreeWidget::branch:has-siblings:!adjoins-item {"
-        "    border-image: url(vline.png) 0;"
-        "}"
-        "QTreeWidget::branch:has-siblings:adjoins-item {"
-        "    border-image: url(branch-more.png) 0;"
-        "}"
-        "QTreeWidget::branch:!has-children:!has-siblings:adjoins-item {"
-        "    border-image: url(branch-end.png) 0;"
-        "}"
-        "QTreeWidget::branch:has-children:!has-siblings:closed,"
-        "QTreeWidget::branch:closed:has-children:has-siblings {"
-        "    border-image: none;"
-        "    image: url(branch-closed.png);"
-        "}"
-        "QTreeWidget::branch:open:has-children:!has-siblings,"
-        "QTreeWidget::branch:open:has-children:has-siblings {"
-        "    border-image: none;"
-        "    image: url(branch-open.png);"
-        "}"
-    );
+    applyTreeViewTheme();
     
     // Connect signals
     connect(m_treeWidget, &QTreeWidget::itemClicked, this, &MainApplication::onTreeItemClicked);
@@ -242,6 +279,178 @@ void MainApplication::setupTreeView()
     connect(m_treeWidget, &QTreeWidget::itemCollapsed, this, &MainApplication::onTreeItemCollapsed);
     
     // Tree will be populated via local file loading in constructor
+}
+
+void MainApplication::applyTreeViewTheme()
+{
+    if (!m_treeWidget)
+        return;
+
+    // Determine light vs dark based on window background lightness
+    QColor base = palette().color(QPalette::Window);
+    bool dark = base.lightness() < 128; // heuristic
+
+    // Clean Design Palette - Pure White Background
+    QString border        = dark ? "#39424c" : "#e6f0ff";           // Light blue border for premium feel
+    QString bg            = dark ? "#20262c" : "#ffffff";           // Pure white background - no alternating colors
+    QString bgAlt         = dark ? "#262d33" : "#ffffff";           // Same as main background for uniform look
+    QString text          = dark ? "#e2e8ef" : "#1a1a1a";           // Deep black for high contrast and readability
+    QString textDisabled  = dark ? "#7a8794" : "#999999";           // Muted gray for disabled text
+    QString hover         = dark ? "#2d3640" : "#f8fbff";           // Very subtle blue tint on hover
+    QString selectedBg    = dark ? "#2f7dd8" : "#0078d4";           // Microsoft blue for selections
+    QString selectedBgInactive = dark ? "#30485e" : "#e6f2ff";     // Light blue for inactive selection
+    QString selectedText  = "#ffffff";                              // White text on selection
+    QString focusOutline  = dark ? "#4da3ff" : "#0078d4";           // Blue focus outline
+    QString scrollbarGroove = dark ? "#1b2126" : "#f5f5f5";        // Light gray scrollbar track
+    QString scrollbarHandle = dark ? "#3a4753" : "#d0d0d0";        // Medium gray scrollbar handle
+    QString scrollbarHandleHover = dark ? "#4a5a68" : "#b0b0b0";   // Darker gray on hover
+    QString branchClosedIcon = dark ? ":/icons/images/icons/tree_branch_open.svg"   : ":/icons/images/icons/tree_branch_open_light.svg";   // plus symbol (for closed nodes)
+    QString branchOpenIcon   = dark ? ":/icons/images/icons/tree_branch_closed.svg" : ":/icons/images/icons/tree_branch_closed_light.svg"; // minus symbol (for open nodes)
+    QString altRow        = dark ? "#242b31" : "#ffffff";           // Same as main background for uniform appearance
+    
+    // Build clean stylesheet with smaller fonts and uniform background
+    QString style = QString(
+        "QTreeWidget {"
+        "  border: 1px solid %1;"
+        "  border-radius: 8px;"                                     // Slightly larger radius for modern look
+        "  background: %2;"
+        "  font-family: 'Segoe UI', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;" // Premium system fonts
+        "  font-size: 12px;"                                        // Smaller font size for compact appearance
+        "  font-weight: 500;"                                       // Medium weight for all text
+        "  color: %3;"
+        "  outline: none;"
+        "  show-decoration-selected: 1;"
+        "  selection-background-color: %6;"
+        "  gridline-color: transparent;"                            // Remove grid lines for cleaner look
+        "  alternate-background-color: %2;"                         // Same as main background - no alternating colors
+        "}"
+        "QTreeView::item, QTreeWidget::item {"
+        "  padding: 6px 10px;"                                      // Reduced padding for compact look
+        "  margin: 0px;"                                            // No margin for uniform appearance
+        "  border: none;"
+        "  color: %3;"
+        "  font-size: 12px;"                                        // Smaller consistent font size
+        "  font-weight: 500;"                                       // Medium weight for all items (files and folders same)
+        "  min-height: 20px;"                                       // Smaller minimum height
+        "  border-radius: 4px;"                                     // Smaller rounded corners for items
+        "  background: transparent;"                                 // Transparent background by default
+        "}"
+        "QTreeWidget::item:disabled { "
+        "  color: %4; "
+        "  font-weight: 400;"                                       // Normal weight for disabled items
+        "}"
+        "QTreeWidget::item:hover {"
+        "  background: %5;"                                         // Subtle hover effect
+        "  border-radius: 4px;"
+        "}"
+        "QTreeWidget::item:selected {"
+        "  background: %6;"
+        "  color: %7;"
+        "  border-radius: 4px;"
+        "  font-weight: 500;"                                       // Same weight for selected items
+        "}"
+        "QTreeWidget::item:selected:!active {"
+        "  background: %8;"
+        "  color: %3;"
+        "  border-radius: 4px;"
+        "  font-weight: 500;"                                       // Same weight for inactive selection
+        "}"
+        "QTreeWidget::item:focus {"
+        "  outline: none;"
+        "  border-radius: 4px;"
+        "}"
+        "QTreeWidget::item:selected:focus {"
+        "  box-shadow: 0 0 0 1px %11;"                              // Subtle focus outline
+        "  border-radius: 4px;"
+        "}"
+        "QTreeWidget::header {"
+        "  background: %2;"
+        "  border: none;"
+        "  font-weight: 600;"                                       // Bold header text
+        "  font-size: 13px;"                                        // Slightly larger header font
+        "  padding: 6px 10px;"
+        "}"
+        // Clean scrollbar styling
+        "QScrollBar:vertical {"
+        "  background: %12;"
+        "  width: 12px;"                                            // Standard width
+        "  margin: 0;"
+        "  border: none;"
+        "  border-radius: 6px;"
+        "}"
+        "QScrollBar::handle:vertical {"
+        "  background: %13;"
+        "  min-height: 24px;"                                       // Standard handle size
+        "  border-radius: 6px;"
+        "  margin: 1px;"                                            // Small margin for visual separation
+        "}"
+        "QScrollBar::handle:vertical:hover {"
+        "  background: %14;"
+        "}"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+        "QScrollBar:horizontal {"
+        "  background: %12;"
+        "  height: 12px;"
+        "  margin: 0;"
+        "  border: none;"
+        "  border-radius: 6px;"
+        "}"
+        "QScrollBar::handle:horizontal {"
+        "  background: %13;"
+        "  min-width: 24px;"
+        "  border-radius: 6px;"
+        "  margin: 1px;"
+        "}"
+        "QScrollBar::handle:horizontal:hover {"
+        "  background: %14;"
+        "}"
+        "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }"
+        ).arg(border, bg, text, textDisabled, hover, selectedBg, selectedText, selectedBgInactive,
+              branchClosedIcon, branchOpenIcon, focusOutline, scrollbarGroove, scrollbarHandle,
+              scrollbarHandleHover, altRow);
+
+    m_treeWidget->setStyleSheet(style);
+    m_treeWidget->setIndentation(20);                               // Standard indentation
+    m_treeWidget->setIconSize(QSize(16, 16));                       // Standard icon size
+    m_treeWidget->setRootIsDecorated(true);                         // Ensure branch decorations are shown
+    m_treeWidget->setUniformRowHeights(true);                       // Uniform row heights for cleaner look
+    m_treeWidget->setHeaderHidden(false);                           // Show header for professional look
+    m_treeWidget->setAnimated(true);                                // Enable smooth expand/collapse animations
+    
+    // Configure clean styling for uniform appearance
+    if (auto *smooth = qobject_cast<SmoothTreeWidget*>(m_treeWidget)) {
+        QColor baseCol = QColor(bg);
+        QColor hovCol = QColor(hover);
+        hovCol.setAlphaF(0.5);                                      // Subtle hover effect
+        smooth->smoothDelegate()->setColors(baseCol, hovCol);
+    }
+    
+    // Set up clean uniform background - no alternating rows
+    QPalette pal = m_treeWidget->palette();
+    pal.setColor(QPalette::Base, QColor(bg));                       // Pure white background
+    pal.setColor(QPalette::AlternateBase, QColor(bg));              // Same as base - no alternating colors
+    pal.setColor(QPalette::Highlight, QColor(selectedBg));
+    pal.setColor(QPalette::HighlightedText, QColor(selectedText));
+    pal.setColor(QPalette::Text, QColor(text));
+    m_treeWidget->setPalette(pal);
+    m_treeWidget->setAlternatingRowColors(false);                   // Disable alternating row colors for uniform look
+    
+    // Additional clean UI settings
+    m_treeWidget->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_treeWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_treeWidget->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);  // Smooth scrolling
+    m_treeWidget->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    m_treeWidget->setFocusPolicy(Qt::StrongFocus);
+    
+    qDebug() << "Applied clean TreeView theme - Dark mode:" << dark;
+}
+
+void MainApplication::changeEvent(QEvent *event)
+{
+    QMainWindow::changeEvent(event);
+    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::ApplicationPaletteChange) {
+        applyTreeViewTheme();
+    }
 }
 
 void MainApplication::setupTabWidget()
@@ -282,8 +491,8 @@ void MainApplication::loadLocalFiles()
     // Populate tree from directory
     populateTreeFromDirectory(m_rootFolderPath);
     
-    // Expand first level by default
-    m_treeWidget->expandToDepth(0);
+    // Collapse all folders by default for a clean view
+    m_treeWidget->collapseAll();
     
     statusBar()->showMessage(QString("Loaded files from: %1").arg(m_rootFolderPath));
 }
@@ -1056,8 +1265,12 @@ void MainApplication::onTreeItemClicked(QTreeWidgetItem *item, int column)
         // This is a file - just show selection status (don't open on single click)
         statusBar()->showMessage(QString("Selected file: %1 (double-click to open)").arg(itemText));
     } else if (!folderPath.isEmpty()) {
-        // This is a folder - show folder information in status bar
-        statusBar()->showMessage(QString("Selected folder: %1").arg(itemText));
+    // Folder: toggle immediately for faster UX
+    bool willExpand = !item->isExpanded();
+    item->setExpanded(willExpand);
+    statusBar()->showMessage(QString("%1 folder: %2")
+                 .arg(willExpand ? "Expanded" : "Collapsed")
+                 .arg(itemText));
     } else {
         // No specific data, just show the item name
         statusBar()->showMessage(QString("Selected: %1").arg(itemText));
@@ -1200,11 +1413,14 @@ QIcon MainApplication::getFileIcon(const QString &filePath)
 
 QIcon MainApplication::getFolderIcon(bool isOpen)
 {
-    if (isOpen) {
-        return style()->standardIcon(QStyle::SP_DirOpenIcon);
-    } else {
-        return style()->standardIcon(QStyle::SP_DirClosedIcon);
-    }
+    // Choose themed variant (could later switch to dark-specific artwork if added)
+    QString basePath = ":/icons/images/icons/";
+    QString file = isOpen ? "folder_open.svg" : "folder_closed.svg";
+    QIcon icon(basePath + file);
+    if (!icon.isNull())
+        return icon;
+    // Fallback to system icon if resource missing
+    return style()->standardIcon(isOpen ? QStyle::SP_DirOpenIcon : QStyle::SP_DirClosedIcon);
 }
 
 QString MainApplication::getFileExtension(const QString &filePath)
