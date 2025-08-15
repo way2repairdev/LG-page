@@ -19,6 +19,7 @@
 #include <QThread>
 #include <QToolTip>
 #include <QCursor>
+#include "toastnotifier.h"
 
 MainApplication::MainApplication(const UserSession &userSession, QWidget *parent)
     : QMainWindow(parent)
@@ -477,6 +478,8 @@ void MainApplication::openPDFInTab(const QString &filePath)
     m_tabWidget->setTabToolTip(tabIndex, tooltip, DualTabWidget::PDF_TAB);
     
     statusBar()->showMessage(QString("Opened PDF: %1").arg(fileInfo.fileName()));
+    ensureAutoPairing();
+    refreshViewerLinkNames();
 }
 
 void MainApplication::openPCBInTab(const QString &filePath)
@@ -575,6 +578,8 @@ void MainApplication::openPCBInTab(const QString &filePath)
     m_tabWidget->setTabToolTip(tabIndex, tooltip, DualTabWidget::PCB_TAB);
     
     statusBar()->showMessage(QString("Opened PCB: %1").arg(fileInfo.fileName()));
+    ensureAutoPairing();
+    refreshViewerLinkNames();
 }
 
 void MainApplication::onTabCloseRequestedByType(int index, DualTabWidget::TabType type)
@@ -693,7 +698,74 @@ void MainApplication::onTabChangedByType(int index, DualTabWidget::TabType type)
     QApplication::processEvents();
     
     qDebug() << "=== Tab Change Complete ===";
+    refreshViewerLinkNames();
 }
+
+    int MainApplication::linkedPcbForPdf(int pdfIndex) const {
+            for (const auto &l : m_tabLinks) {
+                if (l.pdfIndex == pdfIndex)
+                    return l.pcbIndex;
+            }
+            return -1;
+    }
+    int MainApplication::linkedPdfForPcb(int pcbIndex) const {
+            for (const auto &l : m_tabLinks) {
+                if (l.pcbIndex == pcbIndex)
+                    return l.pdfIndex;
+            }
+            return -1;
+    }
+    void MainApplication::ensureAutoPairing() {
+        int pdfCount = m_tabWidget->count(DualTabWidget::PDF_TAB);
+        int pcbCount = m_tabWidget->count(DualTabWidget::PCB_TAB);
+        for (int p = 0; p < pdfCount; ++p) {
+            if (linkedPcbForPdf(p) >= 0) continue;
+            for (int c = 0; c < pcbCount; ++c) {
+                if (linkedPdfForPcb(c) < 0) { m_tabLinks.push_back({p,c}); break; }
+            }
+        }
+    }
+    void MainApplication::refreshViewerLinkNames() {
+        int pdfCount = m_tabWidget->count(DualTabWidget::PDF_TAB);
+        int pcbCount = m_tabWidget->count(DualTabWidget::PCB_TAB);
+        for (int p=0; p<pdfCount; ++p) {
+            if (auto pdf = qobject_cast<PDFViewerWidget*>(m_tabWidget->widget(p, DualTabWidget::PDF_TAB))) {
+                int pcbIdx = linkedPcbForPdf(p); QString name; if (pcbIdx>=0) name = m_tabWidget->tabText(pcbIdx, DualTabWidget::PCB_TAB); pdf->setLinkedPcbFileName(name);
+                connect(pdf, &PDFViewerWidget::crossSearchRequest, this, &MainApplication::onCrossSearchRequest, Qt::UniqueConnection);
+            }
+        }
+        for (int c=0; c<pcbCount; ++c) {
+            if (auto pcb = qobject_cast<PCBViewerWidget*>(m_tabWidget->widget(c, DualTabWidget::PCB_TAB))) {
+                int pdfIdx = linkedPdfForPcb(c); QString name; if (pdfIdx>=0) name = m_tabWidget->tabText(pdfIdx, DualTabWidget::PDF_TAB); pcb->setLinkedPdfFileName(name);
+                connect(pcb, &PCBViewerWidget::crossSearchRequest, this, &MainApplication::onCrossSearchRequest, Qt::UniqueConnection);
+            }
+        }
+    }
+
+    void MainApplication::onCrossSearchRequest(const QString &term, bool isNet, bool targetIsOther) {
+        Q_UNUSED(targetIsOther);
+        auto pdfSender = qobject_cast<PDFViewerWidget*>(sender());
+        auto pcbSender = qobject_cast<PCBViewerWidget*>(sender());
+        if (pdfSender) {
+            int pdfIdx=-1; int pdfCount=m_tabWidget->count(DualTabWidget::PDF_TAB);
+            for (int i=0;i<pdfCount;++i) if (m_tabWidget->widget(i, DualTabWidget::PDF_TAB)==pdfSender) { pdfIdx=i; break; }
+            int pcbIdx = (pdfIdx>=0)? linkedPcbForPdf(pdfIdx) : -1;
+            if (pcbIdx<0) { ToastNotifier::show(this, "No linked file found"); return; }
+            auto pcbW = qobject_cast<PCBViewerWidget*>(m_tabWidget->widget(pcbIdx, DualTabWidget::PCB_TAB));
+            if (!pcbW) { ToastNotifier::show(this, "No linked file found"); return; }
+            bool ok = isNet ? pcbW->externalSearchNet(term) : pcbW->externalSearchComponent(term);
+            if (!ok) ToastNotifier::show(this, "No matches found"); else m_tabWidget->setCurrentIndex(pcbIdx, DualTabWidget::PCB_TAB);
+        } else if (pcbSender) {
+            int pcbIdx=-1; int pcbCount=m_tabWidget->count(DualTabWidget::PCB_TAB);
+            for (int i=0;i<pcbCount;++i) if (m_tabWidget->widget(i, DualTabWidget::PCB_TAB)==pcbSender) { pcbIdx=i; break; }
+            int pdfIdx = (pcbIdx>=0)? linkedPdfForPcb(pcbIdx) : -1;
+            if (pdfIdx<0) { ToastNotifier::show(this, "No linked file found"); return; }
+            auto pdfW = qobject_cast<PDFViewerWidget*>(m_tabWidget->widget(pdfIdx, DualTabWidget::PDF_TAB));
+            if (!pdfW) { ToastNotifier::show(this, "No linked file found"); return; }
+            bool ok = pdfW->externalFindText(term);
+            if (!ok) ToastNotifier::show(this, "No matches found"); else m_tabWidget->setCurrentIndex(pdfIdx, DualTabWidget::PDF_TAB);
+        }
+    }
 
 // Old onTabChanged method - replaced by onTabChangedByType
 /*

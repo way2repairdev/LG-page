@@ -132,6 +132,7 @@ set(UI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/mainapplication.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/dualtabwidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/LoadingOverlay.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/toastnotifier.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/ui/pdfviewerwidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/core/PDFPreviewLoader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/core/PDFViewerEmbedder.cpp

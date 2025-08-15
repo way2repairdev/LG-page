@@ -77,6 +77,19 @@ public:
      */
     bool isReady() const;
 
+    // Cross-viewer linking helpers
+    void setLinkedPcbFileName(const QString &name) { m_linkedPcbFileName = name; }
+    QString linkedPcbFileName() const { return m_linkedPcbFileName; }
+    void setCrossSearchEnabled(bool enabled) { m_crossSearchEnabled = enabled; }
+
+public slots:
+    // External search invoked from PCB viewer
+    bool externalFindText(const QString &term);
+
+signals:
+    // Cross-search request (PDF -> PCB)
+    void crossSearchRequest(const QString &term, bool isNet, bool targetIsPcb);
+
 public slots:
     // Navigation controls
     void goToPage(int pageNumber);
@@ -195,6 +208,14 @@ private:
     bool m_navigationInProgress;  // Flag to track when programmatic navigation is happening
     QString m_currentFilePath;
     QString m_lastSelectedText;  // Track last selected text to detect changes
+    // Cross-viewer additions
+    QString m_linkedPcbFileName; // display name for context menu labels
+    bool m_crossSearchEnabled { true };
+    QPoint m_rightPressPos;      // track right button press position
+    qint64 m_rightPressTimeMs {0};
+    bool m_rightDragging {false};
+    QString captureCurrentSelection() const; // helper to fetch current selection
+    void showCrossContextMenu(const QPoint &globalPos, const QString &text);
     int m_lastKnownPage = -1;    // Track last page to avoid redundant UI churn
     double m_lastKnownZoom = -1; // Track last zoom level
     QString m_lastSearchTerm;    // Track last executed search term

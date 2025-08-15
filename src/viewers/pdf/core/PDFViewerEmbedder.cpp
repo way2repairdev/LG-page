@@ -1920,6 +1920,13 @@ void PDFViewerEmbedder::cursorPosCallback(GLFWwindow* window, double xpos, doubl
 {
     PDFViewerEmbedder* embedder = static_cast<PDFViewerEmbedder*>(glfwGetWindowUserPointer(window));
     if (embedder) {
+        if (embedder->m_rightPressTime > 0.0 && !embedder->m_rightMoved) {
+            double dx = xpos - embedder->m_rightPressX;
+            double dy = ypos - embedder->m_rightPressY;
+            if ((dx*dx + dy*dy) > (6.0 * 6.0)) {
+                embedder->m_rightMoved = true;
+            }
+        }
         embedder->onCursorPos(xpos, ypos);
     }
 }
@@ -1928,6 +1935,23 @@ void PDFViewerEmbedder::mouseButtonCallback(GLFWwindow* window, int button, int 
 {
     PDFViewerEmbedder* embedder = static_cast<PDFViewerEmbedder*>(glfwGetWindowUserPointer(window));
     if (embedder) {
+        if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+            if (action == GLFW_PRESS) {
+                embedder->m_rightPressTime = glfwGetTime();
+                embedder->m_rightMoved = false;
+                embedder->m_rightPressX = embedder->m_scrollState ? embedder->m_scrollState->lastCursorX : 0.0;
+                embedder->m_rightPressY = embedder->m_scrollState ? embedder->m_scrollState->lastCursorY : 0.0;
+            } else if (action == GLFW_RELEASE) {
+                double dt = glfwGetTime() - embedder->m_rightPressTime;
+                if (embedder->m_rightPressTime > 0.0 && !embedder->m_rightMoved && dt < 0.35) {
+                    std::string sel = embedder->getSelectedText();
+                    if (!sel.empty() && embedder->m_quickRightClickCallback) {
+                        embedder->m_quickRightClickCallback(sel);
+                    }
+                }
+                embedder->m_rightPressTime = 0.0;
+            }
+        }
         embedder->onMouseButton(button, action, mods);
     }
 }
@@ -1998,6 +2022,25 @@ void PDFViewerEmbedder::onCursorPos(double xpos, double ypos)
 
 void PDFViewerEmbedder::onMouseButton(int button, int action, int /*mods*/)
 {
+    // Quick right-click press bookkeeping BEFORE existing logic
+    if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+        if (action == GLFW_PRESS) {
+            m_rightPressTime = glfwGetTime();
+            m_rightMoved = false;
+            m_rightPressX = m_scrollState ? m_scrollState->lastCursorX : 0.0;
+            m_rightPressY = m_scrollState ? m_scrollState->lastCursorY : 0.0;
+        } else if (action == GLFW_RELEASE) {
+            double dt = glfwGetTime() - m_rightPressTime;
+            if (m_rightPressTime > 0.0 && !m_rightMoved && dt < 0.35) {
+                std::string sel = getSelectedText();
+                if (!sel.empty() && m_quickRightClickCallback) {
+                    m_quickRightClickCallback(sel);
+                }
+            }
+            m_rightPressTime = 0.0; // reset regardless
+        }
+    }
+
     if (!m_scrollState) return;
     
     double mouseX = m_scrollState->lastCursorX;

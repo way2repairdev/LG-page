@@ -17,6 +17,8 @@
 #include <QAction>
 #include <QMouseEvent>
 #include <QDebug>
+#include <QMenu>
+#include <QDateTime>
 #include <QtConcurrent/QtConcurrent>
 #include <QFutureWatcher>
 #include <QElapsedTimer>
@@ -338,10 +340,20 @@ void PDFViewerWidget::initializePDFViewer()
     void* hwnd = m_viewerContainer->winId();
 #endif
     if (!m_pdfEmbedder->initialize(hwnd, m_viewerContainer->width(), m_viewerContainer->height())) {
-        emit errorOccurred("Failed to initialize PDF rendering engine");
-        globalInitInProgress = false;
+        emit errorOccurred("Failed to initialize PDF viewer");
         return;
     }
+
+    // Register quick right-click callback for context menu (fallback when native events bypass Qt)
+    m_pdfEmbedder->setQuickRightClickCallback([this](const std::string &sel){
+        if (!m_crossSearchEnabled) return;
+        QString text = QString::fromStdString(sel).trimmed();
+        if (text.isEmpty()) return;
+        QMetaObject::invokeMethod(this, [this, text]() {
+            showCrossContextMenu(QCursor::pos(), text);
+        }, Qt::QueuedConnection);
+    });
+
     m_viewerInitialized = true;
     m_updateTimer->start();
     globalInitInProgress = false;
@@ -619,11 +631,42 @@ void PDFViewerWidget::focusInEvent(QFocusEvent *event)
 
 bool PDFViewerWidget::eventFilter(QObject *watched, QEvent *event)
 {
-    if (watched == m_viewerContainer && event->type() == QEvent::MouseButtonPress) {
-        if (m_pageInput && m_pageInput->hasFocus())
-            m_pageInput->clearFocus();
-        if (m_searchInput && m_searchInput->hasFocus())
-            m_searchInput->clearFocus();
+    if (watched == m_viewerContainer) {
+        if (event->type() == QEvent::MouseButtonPress) {
+            if (m_pageInput && m_pageInput->hasFocus()) m_pageInput->clearFocus();
+            if (m_searchInput && m_searchInput->hasFocus()) m_searchInput->clearFocus();
+            QMouseEvent *me = static_cast<QMouseEvent*>(event);
+            if (me->button() == Qt::RightButton) {
+                m_rightPressPos = me->pos();
+                m_rightPressTimeMs = QDateTime::currentMSecsSinceEpoch();
+                m_rightDragging = false;
+            }
+        } else if (event->type() == QEvent::MouseMove) {
+            if (m_rightPressTimeMs > 0) {
+                QMouseEvent *me = static_cast<QMouseEvent*>(event);
+                if ((me->pos() - m_rightPressPos).manhattanLength() > 6) {
+                    m_rightDragging = true; // treat as pan
+                }
+            }
+        } else if (event->type() == QEvent::MouseButtonRelease) {
+            QMouseEvent *me = static_cast<QMouseEvent*>(event);
+            if (me->button() == Qt::RightButton && m_crossSearchEnabled) {
+                qint64 dt = QDateTime::currentMSecsSinceEpoch() - m_rightPressTimeMs;
+                if (!m_rightDragging && dt < 350) {
+                    // Quick click -> context menu
+                    QString sel = captureCurrentSelection();
+                    if (!sel.isEmpty()) {
+                        showCrossContextMenu(me->globalPos(), sel);
+                        // Prevent further handling (optional) but allow existing panning to stop
+                        return true;
+                    }
+                }
+            }
+            if (me->button() == Qt::RightButton) {
+                m_rightPressTimeMs = 0;
+                m_rightDragging = false;
+            }
+        }
     }
     return QWidget::eventFilter(watched, event);
 }
@@ -662,4 +705,33 @@ void PDFViewerWidget::scheduleDebouncedSearch()
     if (!m_searchDebounceTimer)
         return;
     m_searchDebounceTimer->start();
+}
+
+QString PDFViewerWidget::captureCurrentSelection() const {
+    if (m_pdfEmbedder) {
+        std::string s = m_pdfEmbedder->getSelectedText();
+        return QString::fromStdString(s).trimmed();
+    }
+    return {};
+}
+
+void PDFViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QString &text) {
+    QString target = m_linkedPcbFileName.isEmpty() ? QStringLiteral("Linked PCB") : m_linkedPcbFileName;
+    QMenu menu;
+    QAction *actComp = menu.addAction(QString("Find Components in %1").arg(target));
+    QAction *actNet  = menu.addAction(QString("Find Net in %1").arg(target));
+    QAction *chosen = menu.exec(globalPos);
+    if (!chosen) return;
+    bool isNet = (chosen == actNet);
+    emit crossSearchRequest(text, isNet, true);
+}
+
+bool PDFViewerWidget::externalFindText(const QString &term) {
+    if (!isPDFLoaded() || !m_pdfEmbedder) return false;
+    QString t = term.trimmed();
+    if (t.isEmpty()) return false;
+    m_pdfEmbedder->findText(t.toStdString());
+    // Force immediate navigation to first result
+    m_pdfEmbedder->findNext();
+    return m_pdfEmbedder->countTextOccurrences(t.toStdString()) > 0;
 }

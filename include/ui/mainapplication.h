@@ -22,6 +22,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QTextStream>
+#include <vector>
 
 #include "ui/dualtabwidget.h"
 
@@ -72,6 +73,7 @@ private slots:
     // Dual tab widget slots
     void onTabCloseRequestedByType(int index, DualTabWidget::TabType type);
     void onTabChangedByType(int index, DualTabWidget::TabType type);
+    void onCrossSearchRequest(const QString &term, bool isNet, bool targetIsOther);
     // Server-side slots (commented out for local file loading)
     //void onHttpRequestFinished(QNetworkReply *reply);
     //void onNetworkError(QNetworkReply::NetworkError error);
@@ -114,6 +116,13 @@ private:
     void openPDFInTab(const QString &filePath);
     void openPCBInTab(const QString &filePath);
     void addWelcomeTab();
+    // Cross-linking structure
+    struct TabLink { int pdfIndex; int pcbIndex; };
+    std::vector<TabLink> m_tabLinks; // simple mapping list
+    int linkedPcbForPdf(int pdfIndex) const; // returns pcb index or -1
+    int linkedPdfForPcb(int pcbIndex) const; // returns pdf index or -1
+    void refreshViewerLinkNames();
+    void ensureAutoPairing(); // naive auto pairing for initial implementation
     QIcon getFileIcon(const QString &filePath);
     QIcon getFolderIcon(bool isOpen = false);
     QString getFileExtension(const QString &filePath);

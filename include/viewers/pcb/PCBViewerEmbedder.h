@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <functional>
+#include <functional>
 
 // Forward declarations
 struct GLFWwindow;
@@ -79,6 +80,9 @@ public:
     void zoomToNet(const std::string& netName);
     std::vector<std::string> getComponentNames() const; // part references
     void zoomToComponent(const std::string &ref);
+    // Helpers for cross-viewer context menu (selected pin context)
+    std::string getSelectedPinNet() const;
+    std::string getSelectedPinPart() const;
 
     // Layer management
     void showLayer(const std::string& layerName, bool visible);
@@ -116,6 +120,8 @@ public:
     bool isUsingFallback() const { return m_usingFallback; }
     void enableFallbackMode();
 
+    void setQuickRightClickCallback(const std::function<void(const std::string &part, const std::string &net)> &cb) { m_quickRightClickCallback = cb; }
+
 private:
     // GLFW window management
     GLFWwindow* m_glfwWindow;
@@ -151,6 +157,12 @@ private:
     StatusCallback m_statusCallback;
     PinSelectedCallback m_pinSelectedCallback;
     ZoomCallback m_zoomCallback;
+
+    double m_rcPressTime {0.0};
+    double m_rcPressX {0.0};
+    double m_rcPressY {0.0};
+    bool   m_rcMoved {false};
+    std::function<void(const std::string&, const std::string&)> m_quickRightClickCallback;
 
     // Internal methods
     bool initializeGLFW(void* parentHandle, int width, int height);

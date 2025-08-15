@@ -9,6 +9,7 @@
 #include <atomic>
 
 #include "viewers/pdf/AsyncRender.h"
+#include <functional>
 
 // Forward declarations for your existing PDF viewer components
 class PDFRenderer;
@@ -232,4 +233,14 @@ private:
     void onMouseButton(int button, int action, int mods);
     void onScroll(double xoffset, double yoffset);
     void onKey(int key, int scancode, int action, int mods);
+
+    // --- Quick right-click hook for Qt context menu integration ---
+public:
+    void setQuickRightClickCallback(const std::function<void(const std::string &selectedText)> &cb) { m_quickRightClickCallback = cb; }
+private:
+    double m_rightPressTime {0.0};
+    double m_rightPressX {0.0};
+    double m_rightPressY {0.0};
+    bool   m_rightMoved {false};
+    std::function<void(const std::string&)> m_quickRightClickCallback;
 };

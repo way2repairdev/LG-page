@@ -54,6 +54,8 @@ signals:
     void pcbClosed();
     void errorOccurred(const QString &error);
     void loadCancelled();
+    // Cross-search request (PCB -> PDF)
+    void crossSearchRequest(const QString &term, bool isNet, bool targetIsPdf);
     
     // Split view signals removed
 
@@ -82,6 +84,7 @@ protected:
     void paintEvent(QPaintEvent *event) override;
     void focusInEvent(QFocusEvent *event) override;
     void focusOutEvent(QFocusEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private slots:
     void onPCBViewerError(const QString &error);
@@ -131,6 +134,17 @@ private:
     // Update management
     bool m_needsUpdate;
     bool m_isUpdating;
+    // Cross-viewer context menu state
+    QString m_linkedPdfFileName; // for menu label
+    bool m_crossSearchEnabled { true };
+    QPoint m_rightPressPos; qint64 m_rightPressTimeMs {0}; bool m_rightDragging {false};
+    void showCrossContextMenu(const QPoint &globalPos, const QString &candidate);
+public:
+    void setLinkedPdfFileName(const QString &name) { m_linkedPdfFileName = name; }
+    void setCrossSearchEnabled(bool en) { m_crossSearchEnabled = en; }
+    // External searches invoked from PDF viewer
+    bool externalSearchNet(const QString &net);
+    bool externalSearchComponent(const QString &comp);
 
     // Internal helpers for net navigation
     void populateNetList();

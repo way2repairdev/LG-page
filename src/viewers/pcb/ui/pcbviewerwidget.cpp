@@ -17,6 +17,8 @@
 #include <QStyle>
 #include <QSizePolicy>
 #include <QVBoxLayout>
+#include <QMenu>
+#include <QDateTime>
 // QWidgetAction header may not be available in current include paths; we'll use addWidget helpers instead.
 
 // Enhanced debug logging for PCBViewerWidget
@@ -369,8 +371,19 @@ void PCBViewerWidget::initializePCBViewer()
     
     // Initialize the embedder
     bool success = m_pcbEmbedder->initialize(reinterpret_cast<void*>(windowHandle), containerSize.width(), containerSize.height());
-    
+
     if (success) {
+        // Register quick right-click callback
+        m_pcbEmbedder->setQuickRightClickCallback([this](const std::string &part, const std::string &net){
+            if (!m_crossSearchEnabled) return;
+            QString candidate;
+            if (!part.empty()) candidate = QString::fromStdString(part);
+            else if (!net.empty()) candidate = QString::fromStdString(net);
+            if (candidate.isEmpty()) return;
+            QMetaObject::invokeMethod(this, [this, candidate]() {
+                showCrossContextMenu(QCursor::pos(), candidate);
+            }, Qt::QueuedConnection);
+        });
         m_viewerInitialized = true;
         m_usingFallback = m_pcbEmbedder->isUsingFallback();
         
@@ -398,6 +411,7 @@ void PCBViewerWidget::setupUI()
     m_viewerContainer->setMinimumSize(400, 300);
     m_viewerContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_viewerContainer->setFocusPolicy(Qt::StrongFocus);
+    m_viewerContainer->installEventFilter(this);
     // Add toolbar and viewer container to main layout
     if (m_toolbar) {
         m_mainLayout->addWidget(m_toolbar);
@@ -658,6 +672,78 @@ void PCBViewerWidget::onNetComboActivated(int index) {
     Q_UNUSED(index);
     // Reuse the same logic as clicking Go
     onNetSearchClicked();
+}
+
+bool PCBViewerWidget::eventFilter(QObject *watched, QEvent *event) {
+    if (watched == m_viewerContainer) {
+        if (event->type() == QEvent::MouseButtonPress) {
+            QMouseEvent *me = static_cast<QMouseEvent*>(event);
+            if (me->button() == Qt::RightButton) {
+                m_rightPressPos = me->pos();
+                m_rightPressTimeMs = QDateTime::currentMSecsSinceEpoch();
+                m_rightDragging = false;
+            }
+        } else if (event->type() == QEvent::MouseMove) {
+            if (m_rightPressTimeMs) {
+                QMouseEvent *me = static_cast<QMouseEvent*>(event);
+                if ((me->pos() - m_rightPressPos).manhattanLength() > 6) m_rightDragging = true;
+            }
+        } else if (event->type() == QEvent::MouseButtonRelease) {
+            QMouseEvent *me = static_cast<QMouseEvent*>(event);
+            if (me->button() == Qt::RightButton && m_crossSearchEnabled) {
+                qint64 dt = QDateTime::currentMSecsSinceEpoch() - m_rightPressTimeMs;
+                if (!m_rightDragging && dt < 350) {
+                    QString candidate;
+                    if (m_pcbEmbedder) {
+                        std::string net = m_pcbEmbedder->getSelectedPinNet();
+                        std::string part = m_pcbEmbedder->getSelectedPinPart();
+                        if (!part.empty()) candidate = QString::fromStdString(part);
+                        else if (!net.empty()) candidate = QString::fromStdString(net);
+                    }
+                    if (!candidate.isEmpty()) {
+                        showCrossContextMenu(me->globalPos(), candidate);
+                        return true;
+                    }
+                }
+            }
+            if (me->button() == Qt::RightButton) { m_rightPressTimeMs = 0; m_rightDragging = false; }
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+void PCBViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QString &candidate) {
+    QString target = m_linkedPdfFileName.isEmpty() ? QStringLiteral("Linked PDF") : m_linkedPdfFileName;
+    QMenu menu;
+    QAction *actComp = menu.addAction(QString("Find Components in %1").arg(target));
+    QAction *actNet = menu.addAction(QString("Find Net in %1").arg(target));
+    QAction *chosen = menu.exec(globalPos);
+    if (!chosen) return;
+    bool isNet = (chosen == actNet);
+    emit crossSearchRequest(candidate, isNet, true); // targetIsPdf = true
+}
+
+bool PCBViewerWidget::externalSearchNet(const QString &net) {
+    if (!m_pcbEmbedder || !m_pcbLoaded) return false;
+    QString t = net.trimmed(); if (t.isEmpty()) return false;
+    auto nets = m_pcbEmbedder->getNetNames();
+    bool found = std::find(nets.begin(), nets.end(), t.toStdString()) != nets.end();
+    if (found) {
+        m_pcbEmbedder->highlightNet(t.toStdString());
+        m_pcbEmbedder->zoomToNet(t.toStdString());
+    }
+    return found;
+}
+
+bool PCBViewerWidget::externalSearchComponent(const QString &comp) {
+    if (!m_pcbEmbedder || !m_pcbLoaded) return false;
+    QString t = comp.trimmed(); if (t.isEmpty()) return false;
+    auto comps = m_pcbEmbedder->getComponentNames();
+    bool found = std::find(comps.begin(), comps.end(), t.toStdString()) != comps.end();
+    if (found) {
+        m_pcbEmbedder->zoomToComponent(t.toStdString());
+    }
+    return found;
 }
 
 // Split view removed: onSplitWindowClicked deleted

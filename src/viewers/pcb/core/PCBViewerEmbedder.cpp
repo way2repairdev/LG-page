@@ -519,6 +519,24 @@ void PCBViewerEmbedder::clearSelection()
     }
 }
 
+std::string PCBViewerEmbedder::getSelectedPinNet() const {
+    if (!m_renderer || !m_pcbData) return {};
+    if (!m_renderer->HasSelectedPin()) return {};
+    int idx = m_renderer->GetSelectedPinIndex();
+    if (idx < 0 || idx >= (int)m_pcbData->pins.size()) return {};
+    return m_pcbData->pins[idx].net;
+}
+
+std::string PCBViewerEmbedder::getSelectedPinPart() const {
+    if (!m_renderer || !m_pcbData) return {};
+    if (!m_renderer->HasSelectedPin()) return {};
+    int idx = m_renderer->GetSelectedPinIndex();
+    if (idx < 0 || idx >= (int)m_pcbData->pins.size()) return {};
+    int partIndex = (int)m_pcbData->pins[idx].part - 1; // parts 1-indexed
+    if (partIndex < 0 || partIndex >= (int)m_pcbData->parts.size()) return {};
+    return m_pcbData->parts[partIndex].name;
+}
+
 bool PCBViewerEmbedder::hasSelection() const
 {
     return m_renderer ? m_renderer->HasSelectedPin() : false;
@@ -814,7 +832,28 @@ void PCBViewerEmbedder::mouseButtonCallback(GLFWwindow* window, int button, int 
     if (embedder) {
         double xpos, ypos;
         glfwGetCursorPos(window, &xpos, &ypos);
-        
+
+        // Quick right-click tracking
+        if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+            if (action == GLFW_PRESS) {
+                embedder->m_rcPressTime = glfwGetTime();
+                embedder->m_rcPressX = xpos;
+                embedder->m_rcPressY = ypos;
+                embedder->m_rcMoved = false;
+            } else if (action == GLFW_RELEASE) {
+                double dt = glfwGetTime() - embedder->m_rcPressTime;
+                if (embedder->m_rcPressTime > 0.0 && !embedder->m_rcMoved && dt < 0.35) {
+                    // Provide part or net (prefer part)
+                    std::string part = embedder->getSelectedPinPart();
+                    std::string net  = embedder->getSelectedPinNet();
+                    if ((!part.empty() || !net.empty()) && embedder->m_quickRightClickCallback) {
+                        embedder->m_quickRightClickCallback(part, net);
+                    }
+                }
+                embedder->m_rcPressTime = 0.0;
+            }
+        }
+
         if (action == GLFW_PRESS) {
             embedder->handleMouseClick(static_cast<int>(xpos), static_cast<int>(ypos), button);
         } else if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_RIGHT) {
@@ -827,6 +866,12 @@ void PCBViewerEmbedder::cursorPosCallback(GLFWwindow* window, double xpos, doubl
 {
     PCBViewerEmbedder* embedder = static_cast<PCBViewerEmbedder*>(glfwGetWindowUserPointer(window));
     if (embedder) {
+        // Movement threshold for quick right-click detection
+        if (embedder->m_rcPressTime > 0.0 && !embedder->m_rcMoved) {
+            double dx = xpos - embedder->m_rcPressX;
+            double dy = ypos - embedder->m_rcPressY;
+            if ((dx*dx + dy*dy) > (6.0 * 6.0)) embedder->m_rcMoved = true;
+        }
         embedder->handleMouseMove(static_cast<int>(xpos), static_cast<int>(ypos));
     }
 }
