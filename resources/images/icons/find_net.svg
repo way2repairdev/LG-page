@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="6" cy="6" r="2.5" fill="#1d4ed8" stroke="#143b99"/>
+  <circle cx="18" cy="6" r="2.5" fill="#1d4ed8" stroke="#143b99"/>
+  <circle cx="6" cy="18" r="2.5" fill="#1d4ed8" stroke="#143b99"/>
+  <circle cx="18" cy="18" r="2.5" fill="#1d4ed8" stroke="#143b99"/>
+  <path d="M8.5 6h7M6 8.5v7M18 8.5v7M8.5 18h7" stroke="#2563eb" stroke-width="1.4"/>
+  <title>Find Net</title>
+</svg>

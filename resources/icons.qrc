@@ -16,5 +16,7 @@
     <file>images/icons/flip_vertical.svg</file>
     <file>images/icons/PDF_icon.svg</file>
     <file>images/icons/PCB_icon.svg</file>
+    <file>images/icons/find_component.svg</file>
+    <file>images/icons/find_net.svg</file>
     </qresource>
 </RCC>

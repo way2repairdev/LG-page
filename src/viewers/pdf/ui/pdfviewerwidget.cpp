@@ -717,10 +717,24 @@ QString PDFViewerWidget::captureCurrentSelection() const {
 
 void PDFViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QString &text) {
     QString target = m_linkedPcbFileName.isEmpty() ? QStringLiteral("Linked PCB") : m_linkedPcbFileName;
-    QMenu menu;
-    QAction *actComp = menu.addAction(QString("Find Components in %1").arg(target));
-    QAction *actNet  = menu.addAction(QString("Find Net in %1").arg(target));
+        class ThemedMenu : public QMenu { public: ThemedMenu(QWidget* p=nullptr):QMenu(p) { setWindowFlags(windowFlags()|Qt::NoDropShadowWindowHint); setAttribute(Qt::WA_TranslucentBackground);} void apply(bool dark){ if(dark){ setStyleSheet(
+                "QMenu { background:rgba(30,33,40,0.94); border:1px solid #3d4452; border-radius:8px; padding:6px; font:13px 'Segoe UI'; color:#dfe3ea; }"
+                "QMenu::item { background:transparent; padding:6px 14px; border-radius:5px; }"
+                "QMenu::item:selected { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #2563eb, stop:1 #1d4ed8); color:white; }"
+                "QMenu::separator { height:1px; background:#465061; margin:6px 4px; }" ); }
+            else { setStyleSheet(
+                "QMenu { background:rgba(252,252,253,0.97); border:1px solid #d0d7e2; border-radius:8px; padding:6px; font:13px 'Segoe UI'; color:#2d3744; }"
+                "QMenu::item { background:transparent; padding:6px 14px; border-radius:5px; }"
+                "QMenu::item:selected { background: #1a73e8; color:white; }"
+                "QMenu::separator { height:1px; background:#e1e6ed; margin:6px 4px; }" ); } } }; ThemedMenu menu; bool dark = qApp->palette().color(QPalette::Window).lightness() < 128; menu.apply(dark);
+    QAction *title = menu.addAction(QString("Cross Search → %1").arg(target)); title->setEnabled(false);
+    menu.addSeparator();
+    QAction *actComp = menu.addAction(QIcon(":/icons/images/icons/find_component.svg"), QString("Find Component in %1").arg(target));
+    QAction *actNet  = menu.addAction(QIcon(":/icons/images/icons/find_net.svg"), QString("Find Net in %1").arg(target));
+    menu.addSeparator();
+    QAction *actCancel = menu.addAction("Cancel");
     QAction *chosen = menu.exec(globalPos);
+    if (!chosen || chosen==actCancel || chosen==title) return;
     if (!chosen) return;
     bool isNet = (chosen == actNet);
     emit crossSearchRequest(text, isNet, true);

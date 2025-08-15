@@ -714,27 +714,31 @@ bool PCBViewerWidget::eventFilter(QObject *watched, QEvent *event) {
 
 void PCBViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QString &candidate) {
     QString target = m_linkedPdfFileName.isEmpty() ? QStringLiteral("Linked PDF") : m_linkedPdfFileName;
-    QMenu menu;
-    QAction *actComp = nullptr;
-    QAction *actNet = nullptr;
-    // We have only one string 'candidate' which may be a part OR a net; retrieve fresh values so we can send the correct one.
+        class ThemedMenu : public QMenu { public: ThemedMenu(QWidget* p=nullptr):QMenu(p){ setWindowFlags(windowFlags()|Qt::NoDropShadowWindowHint); setAttribute(Qt::WA_TranslucentBackground);} void apply(bool dark){ if(dark){ setStyleSheet(
+                "QMenu { background:rgba(30,33,40,0.94); border:1px solid #3d4452; border-radius:8px; padding:6px; font:13px 'Segoe UI'; color:#dfe3ea; }"
+                "QMenu::item { background:transparent; padding:6px 14px; border-radius:5px; }"
+                "QMenu::item:selected { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #2563eb, stop:1 #1d4ed8); color:white; }"
+                "QMenu::separator { height:1px; background:#465061; margin:6px 4px; }" ); }
+            else { setStyleSheet(
+                "QMenu { background:rgba(252,252,253,0.97); border:1px solid #d0d7e2; border-radius:8px; padding:6px; font:13px 'Segoe UI'; color:#2d3744; }"
+                "QMenu::item { background:transparent; padding:6px 14px; border-radius:5px; }"
+                "QMenu::item:selected { background: #1a73e8; color:white; }"
+                "QMenu::separator { height:1px; background:#e1e6ed; margin:6px 4px; }" ); } } }; ThemedMenu menu; bool dark = qApp->palette().color(QPalette::Window).lightness() < 128; menu.apply(dark);
     std::string selPart = m_pcbEmbedder ? m_pcbEmbedder->getSelectedPinPart() : std::string();
     std::string selNet  = m_pcbEmbedder ? m_pcbEmbedder->getSelectedPinNet()  : std::string();
-    bool havePart = !selPart.empty();
-    bool haveNet  = !selNet.empty();
-    QString partLabel = havePart ? QString::fromStdString(selPart) : QStringLiteral("(no part)");
-    QString netLabel  = haveNet  ? QString::fromStdString(selNet)  : QStringLiteral("(no net)");
-    actComp = menu.addAction(QString("Find Component '%1' in %2").arg(partLabel, target));
-    actNet  = menu.addAction(QString("Find Net '%1' in %2").arg(netLabel, target));
+    bool havePart = !selPart.empty(); bool haveNet = !selNet.empty();
+    QAction *title = menu.addAction(QString("Cross Search → %1").arg(target)); title->setEnabled(false);
+    menu.addSeparator();
+    QAction *actComp = menu.addAction(QIcon(":/icons/images/icons/find_component.svg"), havePart ? QString("Find Component '%1'").arg(QString::fromStdString(selPart)) : QString("Find Component"));
+    QAction *actNet  = menu.addAction(QIcon(":/icons/images/icons/find_net.svg"), haveNet ? QString("Find Net '%1'").arg(QString::fromStdString(selNet)) : QString("Find Net"));
     if (!havePart) actComp->setEnabled(false);
     if (!haveNet) actNet->setEnabled(false);
+    menu.addSeparator();
+    QAction *actCancel = menu.addAction("Cancel");
     QAction *chosen = menu.exec(globalPos);
-    if (!chosen) return;
-    if (chosen == actComp && havePart) {
-        emit crossSearchRequest(QString::fromStdString(selPart), false, true);
-    } else if (chosen == actNet && haveNet) {
-        emit crossSearchRequest(QString::fromStdString(selNet), true, true);
-    }
+    if (!chosen || chosen==actCancel || chosen==title) return;
+    if (chosen == actComp && havePart) emit crossSearchRequest(QString::fromStdString(selPart), false, true);
+    else if (chosen == actNet && haveNet) emit crossSearchRequest(QString::fromStdString(selNet), true, true);
 }
 
 bool PCBViewerWidget::externalSearchNet(const QString &net) {
