@@ -715,12 +715,26 @@ bool PCBViewerWidget::eventFilter(QObject *watched, QEvent *event) {
 void PCBViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QString &candidate) {
     QString target = m_linkedPdfFileName.isEmpty() ? QStringLiteral("Linked PDF") : m_linkedPdfFileName;
     QMenu menu;
-    QAction *actComp = menu.addAction(QString("Find Components in %1").arg(target));
-    QAction *actNet = menu.addAction(QString("Find Net in %1").arg(target));
+    QAction *actComp = nullptr;
+    QAction *actNet = nullptr;
+    // We have only one string 'candidate' which may be a part OR a net; retrieve fresh values so we can send the correct one.
+    std::string selPart = m_pcbEmbedder ? m_pcbEmbedder->getSelectedPinPart() : std::string();
+    std::string selNet  = m_pcbEmbedder ? m_pcbEmbedder->getSelectedPinNet()  : std::string();
+    bool havePart = !selPart.empty();
+    bool haveNet  = !selNet.empty();
+    QString partLabel = havePart ? QString::fromStdString(selPart) : QStringLiteral("(no part)");
+    QString netLabel  = haveNet  ? QString::fromStdString(selNet)  : QStringLiteral("(no net)");
+    actComp = menu.addAction(QString("Find Component '%1' in %2").arg(partLabel, target));
+    actNet  = menu.addAction(QString("Find Net '%1' in %2").arg(netLabel, target));
+    if (!havePart) actComp->setEnabled(false);
+    if (!haveNet) actNet->setEnabled(false);
     QAction *chosen = menu.exec(globalPos);
     if (!chosen) return;
-    bool isNet = (chosen == actNet);
-    emit crossSearchRequest(candidate, isNet, true); // targetIsPdf = true
+    if (chosen == actComp && havePart) {
+        emit crossSearchRequest(QString::fromStdString(selPart), false, true);
+    } else if (chosen == actNet && haveNet) {
+        emit crossSearchRequest(QString::fromStdString(selNet), true, true);
+    }
 }
 
 bool PCBViewerWidget::externalSearchNet(const QString &net) {
