@@ -464,6 +464,7 @@ void PCBViewerEmbedder::handleMouseClick(int x, int y, int button)
 
 void PCBViewerEmbedder::handleMouseRelease(int x, int y, int button)
 {
+    (void)x; (void)y; // suppress unused warnings
     if (button == 1) { // Right click release - stop panning
         m_mouseDragging = false;
     }
@@ -471,6 +472,7 @@ void PCBViewerEmbedder::handleMouseRelease(int x, int y, int button)
 
 void PCBViewerEmbedder::handleMouseScroll(double xOffset, double yOffset)
 {
+    (void)xOffset; // horizontal unused
     if (m_renderer) {
         // Get real-time mouse position for zoom center - this is important for zoom-to-cursor functionality
         double mouseX, mouseY;
@@ -494,6 +496,7 @@ void PCBViewerEmbedder::handleMouseScroll(double xOffset, double yOffset)
 
 void PCBViewerEmbedder::handleKeyPress(int key, int scancode, int action, int mods)
 {
+    (void)scancode; (void)mods;
     // Handle keyboard shortcuts
     if (action == GLFW_PRESS || action == GLFW_REPEAT) {
         switch (key) {
@@ -828,6 +831,7 @@ void PCBViewerEmbedder::onZoomChanged()
 
 void PCBViewerEmbedder::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 {
+    (void)mods;
     PCBViewerEmbedder* embedder = static_cast<PCBViewerEmbedder*>(glfwGetWindowUserPointer(window));
     if (embedder) {
         double xpos, ypos;
@@ -921,6 +925,7 @@ void PCBViewerEmbedder::clearHighlights()
 
 void PCBViewerEmbedder::showLayer(const std::string& layerName, bool visible)
 {
+    (void)visible;
     handleStatus("Layer control not yet implemented: " + layerName);
 }
 
@@ -998,8 +1003,7 @@ void PCBViewerEmbedder::zoomToComponent(const std::string &ref) {
             if (first){minx=maxx=x;miny=maxy=y;first=false;} else {minx=std::min(minx,x);maxx=std::max(maxx,x);miny=std::min(miny,y);maxy=std::max(maxy,y);}        }
     }
     if (first) return; // no pins
-    m_renderer->ClearHighlightedNet();
-    m_renderer->SetHighlightedPart(partIndex);
+    // camera only; do not implicitly change highlight state here so caller can control clearing
     float cx=(minx+maxx)*0.5f;
     float cy=(miny+maxy)*0.5f;
     float w=(float)m_windowWidth, h=(float)m_windowHeight;
@@ -1008,25 +1012,17 @@ void PCBViewerEmbedder::zoomToComponent(const std::string &ref) {
     m_renderer->SetCamera(cx, cy, zoomTarget);
 }
 
-std::vector<std::string> PCBViewerEmbedder::getLayerNames() const
-{
-    return {"Top Layer", "Bottom Layer", "Outline"};
-}
+std::vector<std::string> PCBViewerEmbedder::getLayerNames() const { return {"Top Layer", "Bottom Layer", "Outline"}; }
+std::vector<std::string> PCBViewerEmbedder::getComponentList() const { std::vector<std::string> components; if (m_pcbData) { for (const auto& part : m_pcbData->parts) components.push_back(part.name);} return components; }
 
 void PCBViewerEmbedder::highlightComponent(const std::string& reference)
 {
-    handleStatus("Component highlighting not yet implemented: " + reference);
-}
-
-std::vector<std::string> PCBViewerEmbedder::getComponentList() const
-{
-    std::vector<std::string> components;
-    if (m_pcbData) {
-        for (const auto& part : m_pcbData->parts) {
-            components.push_back(part.name);
-        }
-    }
-    return components;
+    if (!m_renderer || !m_pcbData || reference.empty()) return;
+    int partIndex=-1; size_t idx=0; for (const auto &part: m_pcbData->parts){ if(part.name==reference){partIndex=(int)idx;break;} ++idx; }
+    if (partIndex<0) return;
+    m_renderer->ClearHighlightedNet();
+    m_renderer->SetHighlightedPart(partIndex);
+    handleStatus("Highlight component: "+reference);
 }
 
 void PCBViewerEmbedder::displayPinHoverInfo()
@@ -1089,7 +1085,7 @@ void PCBViewerEmbedder::displayPinHoverInfo()
                 }
             }
             
-            ImGui::Text("Position: (%.1f, %.1f)", pin.pos.x, pin.pos.y);
+            ImGui::Text("Position: (%d, %d)", pin.pos.x, pin.pos.y);
             ImGui::Text("Part: %d", pin.part);
             
             // Show selection status
@@ -1116,11 +1112,11 @@ void PCBViewerEmbedder::displayPinHoverInfo()
             ImGui::Text("Pin Number: %s", pin.name.c_str());
             ImGui::Text("Net Name: %s", pin.net.empty() ? "UNCONNECTED" : pin.net.c_str());
             ImGui::Text("Serial Number: %s", pin.snum.c_str());
-            ImGui::Text("Position: (%.1f, %.1f)", pin.pos.x, pin.pos.y);
+            ImGui::Text("Position: (%d, %d)", pin.pos.x, pin.pos.y);
             ImGui::Text("Radius: %.1f", pin.radius);
             
-            if (pin.part < static_cast<int>(m_pcbData->parts.size())) {
-                ImGui::Text("Part: %s", m_pcbData->parts[pin.part].name.c_str());
+            if ((int)pin.part < (int)m_pcbData->parts.size()) {
+                ImGui::Text("Part: %s", m_pcbData->parts[(int)pin.part].name.c_str());
             }
             
             if (ImGui::Button("Clear Selection")) {

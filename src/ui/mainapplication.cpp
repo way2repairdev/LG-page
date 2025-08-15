@@ -749,8 +749,12 @@ void MainApplication::onTabChangedByType(int index, DualTabWidget::TabType type)
         if (pdfSender) {
             int pdfIdx=-1; int pdfCount=m_tabWidget->count(DualTabWidget::PDF_TAB);
             for (int i=0;i<pdfCount;++i) if (m_tabWidget->widget(i, DualTabWidget::PDF_TAB)==pdfSender) { pdfIdx=i; break; }
-            int pcbIdx = (pdfIdx>=0)? linkedPcbForPdf(pdfIdx) : -1;
-            if (pcbIdx<0) { ToastNotifier::show(this, "No linked file found"); return; }
+            // Dynamic target resolution: prefer currently selected PCB tab (independent row selection), fallback to auto-pair mapping
+            int pcbIdx = m_tabWidget->getSelectedIndex(DualTabWidget::PCB_TAB);
+            if (pcbIdx < 0 || pcbIdx >= m_tabWidget->count(DualTabWidget::PCB_TAB)) {
+                pcbIdx = (pdfIdx>=0)? linkedPcbForPdf(pdfIdx) : -1; // fallback
+            }
+            if (pcbIdx<0) { ToastNotifier::show(this, "Select a PCB tab to target"); return; }
             auto pcbW = qobject_cast<PCBViewerWidget*>(m_tabWidget->widget(pcbIdx, DualTabWidget::PCB_TAB));
             if (!pcbW) { ToastNotifier::show(this, "No linked file found"); return; }
             bool ok = isNet ? pcbW->externalSearchNet(term) : pcbW->externalSearchComponent(term);
@@ -758,8 +762,12 @@ void MainApplication::onTabChangedByType(int index, DualTabWidget::TabType type)
         } else if (pcbSender) {
             int pcbIdx=-1; int pcbCount=m_tabWidget->count(DualTabWidget::PCB_TAB);
             for (int i=0;i<pcbCount;++i) if (m_tabWidget->widget(i, DualTabWidget::PCB_TAB)==pcbSender) { pcbIdx=i; break; }
-            int pdfIdx = (pcbIdx>=0)? linkedPdfForPcb(pcbIdx) : -1;
-            if (pdfIdx<0) { ToastNotifier::show(this, "No linked file found"); return; }
+            // Dynamic target resolution: prefer currently selected PDF tab, fallback to auto-pair mapping
+            int pdfIdx = m_tabWidget->getSelectedIndex(DualTabWidget::PDF_TAB);
+            if (pdfIdx < 0 || pdfIdx >= m_tabWidget->count(DualTabWidget::PDF_TAB)) {
+                pdfIdx = (pcbIdx>=0)? linkedPdfForPcb(pcbIdx) : -1; // fallback
+            }
+            if (pdfIdx<0) { ToastNotifier::show(this, "Select a PDF tab to target"); return; }
             auto pdfW = qobject_cast<PDFViewerWidget*>(m_tabWidget->widget(pdfIdx, DualTabWidget::PDF_TAB));
             if (!pdfW) { ToastNotifier::show(this, "No linked file found"); return; }
             bool ok = pdfW->externalFindText(term);

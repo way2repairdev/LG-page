@@ -741,7 +741,11 @@ bool PCBViewerWidget::externalSearchComponent(const QString &comp) {
     auto comps = m_pcbEmbedder->getComponentNames();
     bool found = std::find(comps.begin(), comps.end(), t.toStdString()) != comps.end();
     if (found) {
-        m_pcbEmbedder->zoomToComponent(t.toStdString());
+    // Clear previous highlights AND any selected pin so no single pin/net glow remains
+    m_pcbEmbedder->clearHighlights();
+    m_pcbEmbedder->clearSelection();
+    m_pcbEmbedder->highlightComponent(t.toStdString());
+    m_pcbEmbedder->zoomToComponent(t.toStdString());
     }
     return found;
 }
