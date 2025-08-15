@@ -483,8 +483,12 @@ void PDFViewerWidget::checkForSelectedText()
         m_searchInput->setText(sel);
         m_searchInput->blockSignals(old);
         m_pdfEmbedder->findText(selStd);
+        // Enable next/previous search buttons now that we have selected text
+        syncToolbarStates();
     } else if (sel.isEmpty()) {
         m_lastSelectedText.clear();
+        // Disable next/previous search buttons when no text is selected
+        syncToolbarStates();
     }
 }
 
