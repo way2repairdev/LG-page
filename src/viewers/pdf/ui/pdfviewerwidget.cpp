@@ -744,8 +744,14 @@ bool PDFViewerWidget::externalFindText(const QString &term) {
     if (!isPDFLoaded() || !m_pdfEmbedder) return false;
     QString t = term.trimmed();
     if (t.isEmpty()) return false;
-    m_pdfEmbedder->findText(t.toStdString());
-    // Force immediate navigation to first result
-    m_pdfEmbedder->findNext();
-    return m_pdfEmbedder->countTextOccurrences(t.toStdString()) > 0;
+    // Always clear previous highlights/state before a cross-tab search
+    m_pdfEmbedder->clearSearchHighlights();
+    bool ok = m_pdfEmbedder->findTextFreshAndFocusFirst(t.toStdString());
+    if (!ok) {
+        // No matches: ensure no stale highlights remain
+        m_pdfEmbedder->clearSearchHighlights();
+        // Optional: emit a lightweight toast via errorOccurred without being intrusive
+        emit errorOccurred(QString("No matches found for '%1'").arg(t));
+    }
+    return ok;
 }

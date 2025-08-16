@@ -116,6 +116,13 @@ public:
     int countTextOccurrences(const std::string& searchTerm) const;
     int getCurrentSearchResultIndex() const;
 
+    // --- Fresh search helpers for cross-viewer integration ---
+    // Clears old highlights/state and performs a brand new search for term,
+    // immediately focusing the first match (if any). Returns true if matches found.
+    bool findTextFreshAndFocusFirst(const std::string& term);
+    // Clears all search highlights/handles/state and triggers a light repaint.
+    void clearSearchHighlights();
+
     /**
      * Set focus to the viewer (for keyboard input)
      */

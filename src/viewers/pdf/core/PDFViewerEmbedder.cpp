@@ -2413,6 +2413,61 @@ int PDFViewerEmbedder::getCurrentSearchResultIndex() const
     return m_scrollState->textSearch.currentResultIndex;
 }
 
+// Fresh search that resets any previous state and focuses first result
+bool PDFViewerEmbedder::findTextFreshAndFocusFirst(const std::string& term)
+{
+    if (!m_scrollState || !m_pdfLoaded) return false;
+
+    // 1) Clear any existing selection/search highlights and cached matches
+    clearSearchHighlights();
+
+    // 2) Set new term and request a fresh search
+    m_scrollState->textSearch.searchTerm = term;
+    m_scrollState->textSearch.needsUpdate = true;
+    m_scrollState->textSearch.searchChanged = true;
+
+    // Perform immediately to have results ready this frame
+    PerformTextSearch(*m_scrollState, m_pageHeights, m_pageWidths);
+
+    // 3) Navigate to first occurrence (if any)
+    if (!m_scrollState->textSearch.results.empty()) {
+        // Reset index then focus first result precisely
+        m_scrollState->textSearch.currentResultIndex = 0;
+        NavigateToSearchResultPrecise(*m_scrollState, m_pageHeights, 0);
+        // Ensure visible textures refresh promptly
+        scheduleVisibleRegeneration(false);
+        return true;
+    } else {
+        // Force redraw so old highlights are not shown
+        m_scrollState->forceRedraw = true;
+        scheduleVisibleRegeneration(false);
+        return false;
+    }
+}
+
+void PDFViewerEmbedder::clearSearchHighlights()
+{
+    if (!m_scrollState) return;
+    // Clear selection box too (avoid lingering selection tint)
+    ClearTextSelection(*m_scrollState);
+    // Reset search state including cached results and any PDFium handle
+    ClearSearchResults(*m_scrollState);
+    m_scrollState->textSearch.searchTerm.clear();
+    m_scrollState->textSearch.currentResultIndex = 0;
+    m_scrollState->textSearch.needsUpdate = false;
+    m_scrollState->textSearch.searchChanged = false;
+
+    // Targeted repaint: only visible pages need redraw to remove overlays
+    int firstVisible=-1, lastVisible=-1;
+    GetVisiblePageRange(*m_scrollState, m_pageHeights, firstVisible, lastVisible);
+    if (firstVisible >= 0 && lastVisible >= firstVisible) {
+        // No need to regenerate textures; overlays are drawn on top. Just force redraw.
+        m_scrollState->forceRedraw = true;
+    } else {
+        m_scrollState->forceRedraw = true;
+    }
+}
+
 // --- Async visible regeneration helpers ---
 void PDFViewerEmbedder::scheduleVisibleRegeneration(bool settled) {
     if (!m_pdfLoaded || !m_asyncQueue) return;
