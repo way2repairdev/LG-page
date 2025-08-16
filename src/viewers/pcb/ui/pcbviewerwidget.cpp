@@ -665,7 +665,9 @@ void PCBViewerWidget::onNetSearchClicked() {
         m_pcbEmbedder->highlightComponent(text.toStdString());
         m_pcbEmbedder->zoomToComponent(text.toStdString());
     } else {
-        // Clear any existing component/pin highlight, then highlight & zoom to net
+    // Clear any existing component/pin highlight, then highlight & zoom to net
+    // Important: clearHighlights() clears both component and net highlights to avoid stale component glow
+    m_pcbEmbedder->clearHighlights();
         m_pcbEmbedder->clearSelection();
         // Note: highlightNet replaces any prior net highlight state internally
         m_pcbEmbedder->highlightNet(text.toStdString());
@@ -706,7 +708,8 @@ bool PCBViewerWidget::eventFilter(QObject *watched, QEvent *event) {
                         else if (!net.empty()) candidate = QString::fromStdString(net);
                     }
                     if (!candidate.isEmpty()) {
-                        showCrossContextMenu(me->globalPos(), candidate);
+                        // Qt 6: use globalPosition() instead of deprecated globalPos()
+                        showCrossContextMenu(me->globalPosition().toPoint(), candidate);
                         return true;
                     }
                 }
@@ -733,6 +736,10 @@ void PCBViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QStrin
     std::string selNet  = m_pcbEmbedder ? m_pcbEmbedder->getSelectedPinNet()  : std::string();
     bool havePart = !selPart.empty(); bool haveNet = !selNet.empty();
     QAction *title = menu.addAction(QString("Cross Search → %1").arg(target)); title->setEnabled(false);
+    if (!candidate.isEmpty()) {
+        QAction *cand = menu.addAction(QString("Candidate: '%1'").arg(candidate));
+        cand->setEnabled(false);
+    }
     menu.addSeparator();
     QAction *actComp = menu.addAction(QIcon(":/icons/images/icons/find_component.svg"), havePart ? QString("Find Component '%1'").arg(QString::fromStdString(selPart)) : QString("Find Component"));
     QAction *actNet  = menu.addAction(QIcon(":/icons/images/icons/find_net.svg"), haveNet ? QString("Find Net '%1'").arg(QString::fromStdString(selNet)) : QString("Find Net"));
@@ -752,6 +759,8 @@ bool PCBViewerWidget::externalSearchNet(const QString &net) {
     auto nets = m_pcbEmbedder->getNetNames();
     bool found = std::find(nets.begin(), nets.end(), t.toStdString()) != nets.end();
     if (found) {
+    // Ensure no previous component highlight remains when switching to a net highlight
+    m_pcbEmbedder->clearHighlights();
     m_pcbEmbedder->clearSelection();
     m_pcbEmbedder->highlightNet(t.toStdString());
         m_pcbEmbedder->zoomToNet(t.toStdString());
