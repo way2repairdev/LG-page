@@ -43,40 +43,73 @@ void DualTabWidget::setupUI()
     // Create PDF tab widget (Row 1)
     m_pdfTabWidget = new QTabWidget();
     m_pdfTabWidget->setTabsClosable(true);
-    // Disable tab dragging/reordering for PDF tabs
+    // Disable tab dragging/reordering for PDF tabs  
     m_pdfTabWidget->setMovable(false);
     
-    // Style PDF tab widget with blue theme (default active styling)
-    m_pdfTabWidget->setStyleSheet(
+    // Enable scrollable tabs when there are too many
+    m_pdfTabWidget->tabBar()->setUsesScrollButtons(true);
+    m_pdfTabWidget->tabBar()->setElideMode(Qt::ElideRight);
+    m_pdfTabWidget->tabBar()->setExpanding(false);    // Style PDF tab widget with blue theme (default active styling)
+    // Professional rectangular tabs with proper borders
+    QString modernTabStyle = 
         "QTabWidget {"
-        "    border: 2px solid #1a73e8;"
-        "    border-radius: 6px;"
-        "    background-color: white;"
+        "    background: #000000 !important;"
+        "    color: #ffffff !important;"
+        "    border: none !important;"
+        "    font-family: 'Segoe UI', Arial, sans-serif !important;"
         "}"
         "QTabWidget::pane {"
-        "    border: 2px solid #1a73e8;"
-        "    border-radius: 6px;"
-        "    background-color: white;"
+        "    border: 1px solid #080303 !important;"
+        "    background: #000000 !important;"
+        "    border-radius: 0px !important;"
+        "    margin-top: 0px !important;"
+        "}"
+        "QTabWidget::tab-bar {"
+        "    left: 0px !important;"
+        "    alignment: left !important;"
+        "}"
+        "QTabBar {"
+        "    qproperty-drawBase: 0 !important;"
+        "    background: #000000 !important;"
+        "    border: none !important;"
+        "    border-bottom: 1px solid #c8c8c8 !important;"
+        "    spacing: 0px !important;"
         "}"
         "QTabBar::tab {"
-        "    background-color: #e8f0fe;"
-        "    border: 1px solid #1a73e8;"
-        "    border-bottom: none;"
-        "    border-radius: 4px 4px 0 0;"
-        "    padding: 8px 12px;"
-        "    margin-right: 2px;"
-        "    color: #1a73e8;"
-        "    font-weight: bold;"
+        "    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2a2a2a, stop:1 #1a1a1a) !important;"
+        "    border: 1px solid #555555 !important;"
+        "    border-bottom: none !important;"
+        "    border-top-left-radius: 6px !important;"
+        "    border-top-right-radius: 6px !important;"
+        "    padding: 5px 20px 5px 20px !important;"
+        "    margin: 0px 2px 0px 0px !important;"
+        "    color: #cccccc !important;"
+        "    font-size: 13px !important;"
+        "    font-weight: 500 !important;"
+        "    font-family: 'Segoe UI', Arial, sans-serif !important;"
+        "    min-width: 130px !important;"
+        "    max-width: 220px !important;"
+        "    height: 10px !important;"
         "}"
         "QTabBar::tab:selected {"
-        "    background-color: #1a73e8;"
-        "    color: white;"
+        "    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #000000, stop:0.3 #1a1a1a, stop:0.7 #0a0a0a, stop:1 #000000) !important;"
+        "    color: #ffffff !important;"
+        "    font-weight: 600 !important;"
+        "    border-color: #777777 !important;"
+        "    border-bottom: 1px solid #333333 !important;"
+        "    margin-bottom: -1px !important;"
+        "    z-index: 10 !important;"
+        "    box-shadow: inset 0 1px 3px rgba(255,255,255,0.1) !important;"
         "}"
         "QTabBar::tab:hover {"
-        "    background-color: #4285f4;"
-        "    color: white;"
+        "    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3a3a3a, stop:1 #2a2a2a) !important;"
+        "    color: #ffffff !important;"
+        "    border-color: #666666 !important;"
         "}"
-    );
+        "QTabBar QToolButton:hover {"
+        "    background: #333333 !important;"
+        "    color: #ffffff !important;"
+        "}";
     
     // Create PCB tab widget (Row 2)  
     m_pcbTabWidget = new QTabWidget();
@@ -84,55 +117,42 @@ void DualTabWidget::setupUI()
     // Disable tab dragging/reordering for PCB tabs
     m_pcbTabWidget->setMovable(false);
     
-    // Style PCB tab widget with green theme (default inactive styling)
-    m_pcbTabWidget->setStyleSheet(
-        "QTabWidget {"
-        "    border: 1px solid #cccccc;"
-        "    border-radius: 6px;"
-        "    background-color: #f8f8f8;"
-        "}"
-        "QTabWidget::pane {"
-        "    border: 1px solid #cccccc;"
-        "    border-radius: 6px;"
-        "    background-color: #f8f8f8;"
-        "}"
-        "QTabBar::tab {"
-        "    background-color: #f0f0f0;"
-        "    border: 1px solid #cccccc;"
-        "    border-bottom: none;"
-        "    border-radius: 4px 4px 0 0;"
-        "    padding: 8px 12px;"
-        "    margin-right: 2px;"
-        "    color: #888888;"
-        "    font-weight: normal;"
-        "}"
-        "QTabBar::tab:selected {"
-        "    background-color: #e0e0e0;"
-        "    color: #666666;"
-        "}"
-        "QTabBar::tab:hover {"
-        "    background-color: #0d7c2a;"
-        "    color: white;"
-        "    border-color: #0d7c2a;"
-        "}"
-    );
+    // Enable scrollable tabs when there are too many
+    m_pcbTabWidget->tabBar()->setUsesScrollButtons(true);
+    m_pcbTabWidget->tabBar()->setElideMode(Qt::ElideRight);
+    m_pcbTabWidget->tabBar()->setExpanding(false);
+    
+    // Apply the modern styling to both tab widgets (tagged for runtime debugging)
+    applyStyleWithTag(m_pdfTabWidget, modernTabStyle, "modernTabStyle-startup");
+    
+    // Style PCB tab widget with the same modern styling
+    applyStyleWithTag(m_pcbTabWidget, modernTabStyle, "modernTabStyle-startup");
+    
+    // Force style refresh to ensure it applies properly
+    forceStyleRefresh();
+    
+    // DEBUG: Test with obvious colors (comment out after testing)
+    // testObviousStyle();
+    
+    // Optional: Debug styling (uncomment to troubleshoot)
+    // debugStyleConflicts();
     
     // Create separate content areas for complete isolation
     m_pdfContentArea = new QStackedWidget();
     m_pdfContentArea->setStyleSheet(
         "QStackedWidget {"
-        "    border: 1px solid #1a73e8;"
-        "    border-radius: 6px;"
-        "    background-color: white;"
+        "    border: 1px solid #e0e0e0;"
+        "    border-radius: 0px;"
+        "    background-color: black;"
         "}"
     );
     
     m_pcbContentArea = new QStackedWidget();
     m_pcbContentArea->setStyleSheet(
         "QStackedWidget {"
-        "    border: 1px solid #0d7c2a;"
-        "    border-radius: 6px;"
-        "    background-color: white;"
+        "    border: 1px solid #e0e0e0;"
+        "    border-radius: 0px;"
+        "    background-color: black;"
         "}"
     );
     
@@ -158,6 +178,15 @@ void DualTabWidget::setupUI()
     hideAllContent();
     updateVisibility();
     updateTabBarStates();
+}
+
+void DualTabWidget::applyStyleWithTag(QWidget* w, const QString &style, const QString &tag)
+{
+    if (!w) return;
+    // Store the tag as a dynamic property for runtime inspection
+    w->setProperty("appliedStyleTag", tag);
+    w->setStyleSheet(style);
+    logDebug(QString("Applied style tag '%1' to widget %2").arg(tag).arg(w->objectName()));
 }
 
 int DualTabWidget::addTab(QWidget *widget, const QString &label, TabType type)
@@ -597,159 +626,98 @@ void DualTabWidget::updateTabBarVisualState()
 {
     logDebug("updateTabBarVisualState() called");
     
-    // Update PDF tab bar styling based on active state
-    if (m_activeTabType == PDF_TAB) {
-        logDebug("Setting PDF tab as visually active, PCB as inactive");
-        // PDF is active - use normal active styling
-        m_pdfTabWidget->setStyleSheet(
-            "QTabWidget {"
-            "    border: 2px solid #1a73e8;"
-            "    border-radius: 6px;"
-            "    background-color: white;"
-            "}"
-            "QTabWidget::pane {"
-            "    border: 2px solid #1a73e8;"
-            "    border-radius: 6px;"
-            "    background-color: white;"
-            "}"
-            "QTabBar::tab {"
-            "    background-color: #e8f0fe;"
-            "    border: 1px solid #1a73e8;"
-            "    border-bottom: none;"
-            "    border-radius: 4px 4px 0 0;"
-            "    padding: 8px 12px;"
-            "    margin-right: 2px;"
-            "    color: #1a73e8;"
-            "    font-weight: bold;"
-            "}"
-            "QTabBar::tab:selected {"
-            "    background-color: #1a73e8;"
-            "    color: white;"
-            "}"
-            "QTabBar::tab:hover {"
-            "    background-color: #4285f4;"
-            "    color: white;"
-            "}"
-        );
-        
-        // PCB is inactive - use dimmed styling but keep clickable
-        m_pcbTabWidget->setStyleSheet(
-            "QTabWidget {"
-            "    border: 1px solid #cccccc;"
-            "    border-radius: 6px;"
-            "    background-color: #f8f8f8;"
-            "}"
-            "QTabWidget::pane {"
-            "    border: 1px solid #cccccc;"
-            "    border-radius: 6px;"
-            "    background-color: #f8f8f8;"
-            "}"
-            "QTabBar::tab {"
-            "    background-color: #f0f0f0;"
-            "    border: 1px solid #cccccc;"
-            "    border-bottom: none;"
-            "    border-radius: 4px 4px 0 0;"
-            "    padding: 8px 12px;"
-            "    margin-right: 2px;"
-            "    color: #888888;"
-            "    font-weight: normal;"
-            "    cursor: pointer;"
-            "}"
-            "QTabBar::tab:selected {"
-            "    background-color: #e0e0e0;"
-            "    color: #666666;"
-            "    cursor: pointer;"
-            "}"
-            "QTabBar::tab:hover {"
-            "    background-color: #0d7c2a;"
-            "    color: white;"
-            "    border-color: #0d7c2a;"
-            "    cursor: pointer !important;"
-            "}"
-        );
-        
-        // Explicitly ensure PCB tab widget can receive events
-        m_pcbTabWidget->setEnabled(true);
-        m_pcbTabWidget->setAttribute(Qt::WA_TranslucentBackground, false);
-        m_pcbTabWidget->setAttribute(Qt::WA_NoMousePropagation, false);
-    } else {
-        logDebug("Setting PCB tab as visually active, PDF as inactive");
-        // PCB is active - use normal active styling
-        m_pcbTabWidget->setStyleSheet(
-            "QTabWidget {"
-            "    border: 2px solid #0d7c2a;"
-            "    border-radius: 6px;"
-            "    background-color: white;"
-            "}"
-            "QTabWidget::pane {"
-            "    border: 2px solid #0d7c2a;"
-            "    border-radius: 6px;"
-            "    background-color: white;"
-            "}"
-            "QTabBar::tab {"
-            "    background-color: #e8f5e8;"
-            "    border: 1px solid #0d7c2a;"
-            "    border-bottom: none;"
-            "    border-radius: 4px 4px 0 0;"
-            "    padding: 8px 12px;"
-            "    margin-right: 2px;"
-            "    color: #0d7c2a;"
-            "    font-weight: bold;"
-            "}"
-            "QTabBar::tab:selected {"
-            "    background-color: #0d7c2a;"
-            "    color: white;"
-            "}"
-            "QTabBar::tab:hover {"
-            "    background-color: #34a853;"
-            "    color: white;"
-            "}"
-        );
-        
-        // PDF is inactive - use dimmed styling but keep clickable  
-        // IMPORTANT: Make sure hover and click events still work
-        m_pdfTabWidget->setStyleSheet(
-            "QTabWidget {"
-            "    border: 1px solid #cccccc;"
-            "    border-radius: 6px;"
-            "    background-color: #f8f8f8;"
-            "}"
-            "QTabWidget::pane {"
-            "    border: 1px solid #cccccc;"
-            "    border-radius: 6px;"
-            "    background-color: #f8f8f8;"
-            "}"
-            "QTabBar::tab {"
-            "    background-color: #f0f0f0;"
-            "    border: 1px solid #cccccc;"
-            "    border-bottom: none;"
-            "    border-radius: 4px 4px 0 0;"
-            "    padding: 8px 12px;"
-            "    margin-right: 2px;"
-            "    color: #888888;"
-            "    font-weight: normal;"
-            "    cursor: pointer;"
-            "}"
-            "QTabBar::tab:selected {"
-            "    background-color: #e0e0e0;"
-            "    color: #666666;"
-            "    cursor: pointer;"
-            "}"
-            "QTabBar::tab:hover {"
-            "    background-color: #1a73e8 !important;"
-            "    color: white !important;"
-            "    border-color: #1a73e8 !important;"
-            "    cursor: pointer !important;"
-            "}"
-        );
-        
-        // Explicitly ensure PDF tab widget can receive events
-        m_pdfTabWidget->setEnabled(true);
-        m_pdfTabWidget->setAttribute(Qt::WA_TranslucentBackground, false);
-        m_pdfTabWidget->setAttribute(Qt::WA_NoMousePropagation, false);
-    }
+    // Professional rectangular tabs with proper borders
+    QString modernTabStyle = 
+        "QTabWidget {"
+        "    background: #000000ff !important;"
+        "    color: #000000ff !important;"
+        "    border: none !important;"
+        "    font-family: 'Segoe UI', Arial, sans-serif !important;"
+        "}"
+        "QTabWidget::pane {"
+        "    border: 1px solid #080303ff !important;"
+        "    background: #000000ff !important;"
+        "    border-radius: 0px !important;"
+        "    margin-top: 0px !important;"
+        "}"
+        "QTabWidget::tab-bar {"
+        "    left: 0px !important;"
+        "    alignment: left !important;"
+        "}"
+        "QTabBar {"
+        "    qproperty-drawBase: 0 !important;"
+        "    background: #0c0808ff !important;"
+        "    border: none !important;"
+        "    border-bottom: 1px solid #c8c8c8 !important;"
+        "    spacing: 0px !important;"
+        "}"
+        "QTabBar::tab {"
+        "    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2a2a2a, stop:1 #1a1a1a) !important;"
+        "    border: 1px solid #555555 !important;"
+        "    border-bottom: none !important;"
+        "    border-top-left-radius: 6px !important;"
+        "    border-top-right-radius: 6px !important;"
+        "    padding: 5px 20px 5px 20px !important;"
+        "    margin: 0px 2px 0px 0px !important;"
+        "    color: #cccccc !important;"
+        "    font-size: 13px !important;"
+        "    font-weight: 500 !important;"
+        "    font-family: 'Segoe UI', Arial, sans-serif !important;"
+        "    min-width: 130px !important;"
+        "    max-width: 220px !important;"
+        "    height: 10px !important;"
+        "}"
+        "QTabBar::tab:hover {"
+        "    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3a3a3a, stop:1 #2a2a2a) !important;"
+        "    color: #ffffff !important;"
+        "    border-color: #666666 !important;"
+        "}"
+        "QTabBar::tab:selected {"
+        "    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #000000, stop:0.3 #1a1a1a, stop:0.7 #0a0a0a, stop:1 #000000) !important;"
+        "    color: #ffffff !important;"
+        "    font-weight: 600 !important;"
+        "    border-color: #777777 !important;"
+        "    border-bottom: 1px solid #333333 !important;"
+        "    margin-bottom: -1px !important;"
+        "    z-index: 10 !important;"
+        "    box-shadow: inset 0 1px 3px rgba(255,255,255,0.1) !important;"
+        "}"
+        "QTabBar::close-button {"
+        "    image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iMTIiIHZpZXdCb3g9IjAgMCAxMiAxMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTkgM0w2IDZMMy4zIDMuMzUiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiLz4KPHBhdGggZD0iTTMgOUw2IDZMOSA5IiBzdHJva2U9IiM5OTk5OTkiIHN0cm9rZS13aWR0aD0iMS41IiBmaWxsPSJub25lIi8+Cjwvc3ZnPgo=) !important;"
+        "    subcontrol-origin: padding !important;"
+        "    subcontrol-position: center right !important;"
+        "    width: 12px !important;"
+        "    height: 12px !important;"
+        "    margin: 2px 6px 2px 2px !important;"
+        "    border-radius: 2px !important;"
+        "}"
+        "QTabBar::close-button:hover {"
+        "    background: #ec0606ff !important;"
+        "    border-radius: 2px !important;"
+        "}"
+        "QTabBar::scroller {"
+        "    width: 20px !important;"
+        "}"
+        "QTabBar QToolButton {"
+        "    background: #f6f6f6 !important;"
+        "    border: 1px solid #e0e0e0 !important;"
+        "    border-radius: 0px !important;"
+        "    margin: 0px !important;"
+        "    color: #666666 !important;"
+        "}"
+        "QTabBar QToolButton:hover {"
+        "    background: #eeeeee !important;"
+        "    color: #333333 !important;"
+        "}";
     
-    logDebug("updateTabBarVisualState() completed");
+    // Apply unified modern styling to both tab widgets
+    applyStyleWithTag(m_pdfTabWidget, modernTabStyle, "modernTabStyle-runtime");
+    applyStyleWithTag(m_pcbTabWidget, modernTabStyle, "modernTabStyle-runtime");
+    
+    // Force style refresh
+    forceStyleRefresh();
+    
+    logDebug("updateTabBarVisualState() completed with browser-style flat tabs");
 }
 
 // Slot methods for tab events
@@ -866,4 +834,63 @@ int DualTabWidget::getSelectedIndex(TabType type) const
 {
     if (type == PDF_TAB) return m_selectedPdfIndex;
     return m_selectedPcbIndex;
+}
+
+// Debug methods for stylesheet conflicts
+void DualTabWidget::debugStyleConflicts()
+{
+    qDebug() << "=== DUALTABWIDGET STYLE DEBUGGING ===";
+    qDebug() << "PDF TabWidget stylesheet:" << m_pdfTabWidget->styleSheet().length() << "characters";
+    qDebug() << "PCB TabWidget stylesheet:" << m_pcbTabWidget->styleSheet().length() << "characters";
+    qDebug() << "This widget stylesheet:" << this->styleSheet().length() << "characters";
+    qDebug() << "=== END STYLE DEBUG ===";
+}
+
+void DualTabWidget::testObviousStyle()
+{
+    // Apply VERY obvious style to test if styling works at all
+    QString testStyle = R"(
+        QTabWidget::pane {
+          
+        }
+        QTabBar::tab {
+         
+        }
+        QTabBar::tab:selected {
+           
+        }
+        QTabBar::tab:hover {
+          
+        }
+    )";
+    
+    applyStyleWithTag(m_pdfTabWidget, testStyle, "testStyle-debug");
+    applyStyleWithTag(m_pcbTabWidget, testStyle, "testStyle-debug");
+    
+    qDebug() << "Applied OBVIOUS test style - should see red/yellow/green colors!";
+    qDebug() << "If you don't see these colors, there's a style conflict!";
+}
+
+void DualTabWidget::clearAllStyles()
+{
+    applyStyleWithTag(m_pdfTabWidget, QString(), "cleared");
+    applyStyleWithTag(m_pcbTabWidget, QString(), "cleared");
+    this->setStyleSheet("");
+    
+    qDebug() << "Cleared all DualTabWidget styles - should show default Qt style";
+}
+
+void DualTabWidget::forceStyleRefresh()
+{
+    // Simple style refresh by re-applying the stylesheet
+    QString pdfStyle = m_pdfTabWidget->styleSheet();
+    QString pcbStyle = m_pcbTabWidget->styleSheet();
+    
+    applyStyleWithTag(m_pdfTabWidget, QString(), "forced-clear");
+    applyStyleWithTag(m_pcbTabWidget, QString(), "forced-clear");
+    
+    applyStyleWithTag(m_pdfTabWidget, pdfStyle, "forced-reapply");
+    applyStyleWithTag(m_pcbTabWidget, pcbStyle, "forced-reapply");
+    
+    qDebug() << "Forced style refresh by re-applying stylesheets";
 }

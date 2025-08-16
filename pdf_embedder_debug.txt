@@ -62,3 +62,19 @@ ZOOM DEBUG: ZoomOut called - Current zoom: 0.94922
 ZOOM DEBUG: ZoomOut completed - New zoom: 0.791017 (delta: 0.833333)
 Page 0 pixel dimensions after zoom: 1961.72 x 1281.45 pixels
 ZOOM DEBUG: ZoomIn called - Current zoom: 0.791017
+ZOOM DEBUG: ZoomOut called - Current zoom: 0.591794
+ZOOM DEBUG: ZoomOut completed - New zoom: 0.493162 (delta: 0.833333)
+Page 0 pixel dimensions after zoom: 415.242 x 293.431 pixels
+ZOOM DEBUG: ZoomIn called - Current zoom: 0.493162
+ZOOM DEBUG: ZoomIn called - Current zoom: 0.591794
+ZOOM DEBUG: ZoomIn called - Current zoom: 0.710153
+ZOOM DEBUG: ZoomIn called - Current zoom: 0.852184
+ZOOM DEBUG: ZoomIn called - Current zoom: 1.02262
+ZOOM DEBUG: ZoomIn called - Current zoom: 1.22714
+ZOOM DEBUG: ZoomIn called - Current zoom: 1.47257
+ZOOM DEBUG: ZoomIn called - Current zoom: 1.76709
+ZOOM DEBUG: ZoomIn called - Current zoom: 2.12051
+ZOOM DEBUG: ZoomIn called - Current zoom: 2.54461
+ZOOM DEBUG: ZoomIn called - Current zoom: 3.05353
+ZOOM DEBUG: ZoomIn called - Current zoom: 3.66423
+ZOOM DEBUG: ZoomIn called - Current zoom: 4.39708

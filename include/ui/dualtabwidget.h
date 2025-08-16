@@ -51,6 +51,15 @@ public:
 
     // Ensure a widget is present in its content area after being reparented externally
     void ensureContentWidgetPresent(QWidget* widget, TabType type);
+    
+    // Debug methods for stylesheet conflicts
+    void debugStyleConflicts();
+    void testObviousStyle();
+    void clearAllStyles();
+    void forceStyleRefresh();
+
+    // Debug helper: apply stylesheet and tag the widget so we can tell at runtime which style was applied
+    void applyStyleWithTag(QWidget* w, const QString &style, const QString &tag);
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
