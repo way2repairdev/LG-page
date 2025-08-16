@@ -654,15 +654,20 @@ void PCBViewerWidget::onPinSelectedFromViewer(const std::string &pinName, const 
 void PCBViewerWidget::onNetSearchClicked() {
     if (!m_pcbEmbedder || !m_netCombo) return;
     QString text = m_netCombo->currentText().trimmed();
-    if (text.isEmpty()) { m_pcbEmbedder->clearHighlights(); return; }
+    if (text.isEmpty()) { m_pcbEmbedder->clearHighlights(); m_pcbEmbedder->clearSelection(); return; }
     // Determine if matches component
     auto comps = m_pcbEmbedder->getComponentNames();
     bool isComp = std::find(comps.begin(), comps.end(), text.toStdString()) != comps.end();
     if (isComp) {
-        // Clear net highlight, zoom to component
+        // Clear any existing net/pin highlights, then highlight & zoom to component
         m_pcbEmbedder->clearHighlights();
+        m_pcbEmbedder->clearSelection();
+        m_pcbEmbedder->highlightComponent(text.toStdString());
         m_pcbEmbedder->zoomToComponent(text.toStdString());
     } else {
+        // Clear any existing component/pin highlight, then highlight & zoom to net
+        m_pcbEmbedder->clearSelection();
+        // Note: highlightNet replaces any prior net highlight state internally
         m_pcbEmbedder->highlightNet(text.toStdString());
         m_pcbEmbedder->zoomToNet(text.toStdString());
     }
@@ -747,7 +752,8 @@ bool PCBViewerWidget::externalSearchNet(const QString &net) {
     auto nets = m_pcbEmbedder->getNetNames();
     bool found = std::find(nets.begin(), nets.end(), t.toStdString()) != nets.end();
     if (found) {
-        m_pcbEmbedder->highlightNet(t.toStdString());
+    m_pcbEmbedder->clearSelection();
+    m_pcbEmbedder->highlightNet(t.toStdString());
         m_pcbEmbedder->zoomToNet(t.toStdString());
     }
     return found;
