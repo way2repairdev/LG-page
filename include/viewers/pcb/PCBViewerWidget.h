@@ -153,6 +153,7 @@ public:
 
 private slots:
     void onPinSelectedFromViewer(const std::string &pinName, const std::string &netName);
+    void onPartSelectedFromViewer(const std::string &partName);
     void onNetSearchClicked();
     void onNetComboActivated(int index);
 };

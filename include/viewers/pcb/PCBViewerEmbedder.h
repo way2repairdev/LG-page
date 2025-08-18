@@ -24,6 +24,7 @@ public:
     using ErrorCallback = std::function<void(const std::string&)>;
     using StatusCallback = std::function<void(const std::string&)>;
     using PinSelectedCallback = std::function<void(const std::string&, const std::string&)>; // pin name, net name
+    using PartSelectedCallback = std::function<void(const std::string&)>; // part name
     using ZoomCallback = std::function<void(double)>; // zoom level
 
     PCBViewerEmbedder();
@@ -104,6 +105,7 @@ public:
     void setErrorCallback(ErrorCallback callback) { m_errorCallback = callback; }
     void setStatusCallback(StatusCallback callback) { m_statusCallback = callback; }
     void setPinSelectedCallback(PinSelectedCallback callback) { m_pinSelectedCallback = callback; }
+    void setPartSelectedCallback(PartSelectedCallback callback) { m_partSelectedCallback = callback; }
     void setZoomCallback(ZoomCallback callback) { m_zoomCallback = callback; }
 
     // Window management
@@ -156,6 +158,7 @@ private:
     ErrorCallback m_errorCallback;
     StatusCallback m_statusCallback;
     PinSelectedCallback m_pinSelectedCallback;
+    PartSelectedCallback m_partSelectedCallback;
     ZoomCallback m_zoomCallback;
 
     double m_rcPressTime {0.0};
@@ -173,6 +176,7 @@ private:
     void handleError(const std::string& error);
     void handleStatus(const std::string& status);
     void onPinSelected(int pinIndex);
+    void onPartSelected(int partIndex);
     void onZoomChanged();
 
     // GLFW callback wrappers

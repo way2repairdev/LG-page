@@ -444,7 +444,7 @@ void PCBViewerEmbedder::handleMouseMove(int x, int y)
 void PCBViewerEmbedder::handleMouseClick(int x, int y, int button)
 {
     if (m_renderer && button == 0) { // Left click
-        // Handle pin selection
+        // Handle pin/part selection
         m_renderer->HandleMouseClick(static_cast<float>(x), static_cast<float>(y),
                                    m_windowWidth, m_windowHeight);
         
@@ -452,6 +452,11 @@ void PCBViewerEmbedder::handleMouseClick(int x, int y, int button)
         if (m_renderer->HasSelectedPin()) {
             int selectedPin = m_renderer->GetSelectedPinIndex();
             onPinSelected(selectedPin);
+        }
+        // Check if a part was highlighted (selected)
+        else if (m_renderer->GetHighlightedPart() >= 0) {
+            int highlightedPart = m_renderer->GetHighlightedPart();
+            onPartSelected(highlightedPart);
         }
     }
     
@@ -817,6 +822,14 @@ void PCBViewerEmbedder::onPinSelected(int pinIndex)
     if (m_pinSelectedCallback && m_pcbData && pinIndex >= 0 && pinIndex < static_cast<int>(m_pcbData->pins.size())) {
         const auto& pin = m_pcbData->pins[pinIndex];
         m_pinSelectedCallback(pin.name, pin.net);
+    }
+}
+
+void PCBViewerEmbedder::onPartSelected(int partIndex)
+{
+    if (m_partSelectedCallback && m_pcbData && partIndex >= 0 && partIndex < static_cast<int>(m_pcbData->parts.size())) {
+        const auto& part = m_pcbData->parts[partIndex];
+        m_partSelectedCallback(part.name);
     }
 }
 

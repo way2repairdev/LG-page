@@ -529,6 +529,13 @@ void PCBViewerWidget::connectSignals()
                 onPinSelectedFromViewer(pinName, netName);
             });
         });
+        
+        // Part selection callback to sync component combo
+        m_pcbEmbedder->setPartSelectedCallback([this](const std::string &partName){
+            QMetaObject::invokeMethod(this, [this, partName](){
+                onPartSelectedFromViewer(partName);
+            });
+        });
     }
     
     WritePCBDebugToFile("PCB viewer signals connected");
@@ -648,6 +655,14 @@ void PCBViewerWidget::onPinSelectedFromViewer(const std::string &pinName, const 
     if (m_netCombo->count() == 0) populateNetAndComponentList();
     QString qnet = QString::fromStdString(netName);
     int idx = m_netCombo->findText(qnet);
+    if (idx >= 0) m_netCombo->setCurrentIndex(idx);
+}
+
+void PCBViewerWidget::onPartSelectedFromViewer(const std::string &partName) {
+    if (!m_netCombo) return;
+    if (m_netCombo->count() == 0) populateNetAndComponentList();
+    QString qpart = QString::fromStdString(partName);
+    int idx = m_netCombo->findText(qpart);
     if (idx >= 0) m_netCombo->setCurrentIndex(idx);
 }
 
