@@ -747,9 +747,19 @@ void PCBViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QStrin
                 "QMenu::item { background:transparent; padding:6px 14px; border-radius:5px; }"
                 "QMenu::item:selected { background: #1a73e8; color:white; }"
                 "QMenu::separator { height:1px; background:#e1e6ed; margin:6px 4px; }" ); } } }; ThemedMenu menu; bool dark = qApp->palette().color(QPalette::Window).lightness() < 128; menu.apply(dark);
+    
+    // Get part and net information from both selected pins and highlighted parts
     std::string selPart = m_pcbEmbedder ? m_pcbEmbedder->getSelectedPinPart() : std::string();
     std::string selNet  = m_pcbEmbedder ? m_pcbEmbedder->getSelectedPinNet()  : std::string();
-    bool havePart = !selPart.empty(); bool haveNet = !selNet.empty();
+    
+    // If no pin is selected, check for highlighted part
+    if (selPart.empty() && m_pcbEmbedder) {
+        selPart = m_pcbEmbedder->getHighlightedPartName();
+    }
+    
+    bool havePart = !selPart.empty(); 
+    bool haveNet = !selNet.empty();
+    
     QAction *title = menu.addAction(QString("Cross Search → %1").arg(target)); title->setEnabled(false);
     if (!candidate.isEmpty()) {
         QAction *cand = menu.addAction(QString("Candidate: '%1'").arg(candidate));

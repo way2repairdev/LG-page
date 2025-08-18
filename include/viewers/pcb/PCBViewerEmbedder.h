@@ -84,6 +84,7 @@ public:
     // Helpers for cross-viewer context menu (selected pin context)
     std::string getSelectedPinNet() const;
     std::string getSelectedPinPart() const;
+    std::string getHighlightedPartName() const;
 
     // Layer management
     void showLayer(const std::string& layerName, bool visible);

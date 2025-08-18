@@ -443,8 +443,8 @@ void PCBViewerEmbedder::handleMouseMove(int x, int y)
 
 void PCBViewerEmbedder::handleMouseClick(int x, int y, int button)
 {
-    if (m_renderer && button == 0) { // Left click
-        // Handle pin/part selection
+    if (m_renderer && (button == 0 || button == 1)) { // Left click or Right click
+        // Handle pin/part selection for both left and right clicks
         m_renderer->HandleMouseClick(static_cast<float>(x), static_cast<float>(y),
                                    m_windowWidth, m_windowHeight);
         
@@ -541,6 +541,13 @@ std::string PCBViewerEmbedder::getSelectedPinPart() const {
     int idx = m_renderer->GetSelectedPinIndex();
     if (idx < 0 || idx >= (int)m_pcbData->pins.size()) return {};
     int partIndex = (int)m_pcbData->pins[idx].part - 1; // parts 1-indexed
+    if (partIndex < 0 || partIndex >= (int)m_pcbData->parts.size()) return {};
+    return m_pcbData->parts[partIndex].name;
+}
+
+std::string PCBViewerEmbedder::getHighlightedPartName() const {
+    if (!m_renderer || !m_pcbData) return {};
+    int partIndex = m_renderer->GetHighlightedPart();
     if (partIndex < 0 || partIndex >= (int)m_pcbData->parts.size()) return {};
     return m_pcbData->parts[partIndex].name;
 }
@@ -857,12 +864,27 @@ void PCBViewerEmbedder::mouseButtonCallback(GLFWwindow* window, int button, int 
                 embedder->m_rcPressX = xpos;
                 embedder->m_rcPressY = ypos;
                 embedder->m_rcMoved = false;
+                
+                // Perform selection immediately on right-click press
+                embedder->handleMouseClick(static_cast<int>(xpos), static_cast<int>(ypos), button);
             } else if (action == GLFW_RELEASE) {
                 double dt = glfwGetTime() - embedder->m_rcPressTime;
                 if (embedder->m_rcPressTime > 0.0 && !embedder->m_rcMoved && dt < 0.35) {
-                    // Provide part or net (prefer part)
-                    std::string part = embedder->getSelectedPinPart();
-                    std::string net  = embedder->getSelectedPinNet();
+                    // Get the part/net info after the right-click selection has been processed
+                    std::string part;
+                    std::string net;
+                    
+                    // Check if a pin is selected first (pins have more specific info)
+                    if (embedder->m_renderer && embedder->m_renderer->HasSelectedPin()) {
+                        part = embedder->getSelectedPinPart();
+                        net = embedder->getSelectedPinNet();
+                    }
+                    // If no pin is selected, check if a part is highlighted
+                    else if (embedder->m_renderer && embedder->m_renderer->GetHighlightedPart() >= 0) {
+                        part = embedder->getHighlightedPartName();
+                        // For highlighted parts, we don't have a specific net, leave empty
+                    }
+                    
                     if ((!part.empty() || !net.empty()) && embedder->m_quickRightClickCallback) {
                         embedder->m_quickRightClickCallback(part, net);
                     }
@@ -871,7 +893,8 @@ void PCBViewerEmbedder::mouseButtonCallback(GLFWwindow* window, int button, int 
             }
         }
 
-        if (action == GLFW_PRESS) {
+        if (action == GLFW_PRESS && button != GLFW_MOUSE_BUTTON_RIGHT) {
+            // Handle left clicks and other buttons (right-click is handled above)
             embedder->handleMouseClick(static_cast<int>(xpos), static_cast<int>(ypos), button);
         } else if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_RIGHT) {
             embedder->m_mouseDragging = false;
