@@ -1336,7 +1336,12 @@ void MainApplication::onTreeItemCollapsed(QTreeWidgetItem *item)
 
 void MainApplication::setupTreeItemAppearance(QTreeWidgetItem *item, const QFileInfo &fileInfo)
 {
-    item->setText(0, fileInfo.fileName());
+    // Set display name - show full name for directories, base name (no extension) for files
+    if (fileInfo.isDir()) {
+        item->setText(0, fileInfo.fileName());
+    } else {
+        item->setText(0, fileInfo.baseName()); // Hide file extension
+    }
     
     if (fileInfo.isDir()) {
         // This is a directory
