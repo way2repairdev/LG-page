@@ -772,7 +772,44 @@ void PCBViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QStrin
     if (!haveNet) actNet->setEnabled(false);
     menu.addSeparator();
     QAction *actCancel = menu.addAction("Cancel");
+
+    // While the menu is open, capture the very next left-click outside the menu
+    // and forward it to the embedded viewer as a selection. This lets users
+    // select another pin/part in a single click (instead of click-to-close, then click-to-select).
+    class OutsideClickForwarder : public QObject {
+    public:
+        OutsideClickForwarder(QMenu *menu, QWidget *viewerContainer, PCBViewerEmbedder *embedder)
+            : m_menu(menu), m_container(viewerContainer), m_embedder(embedder) {}
+    protected:
+        bool eventFilter(QObject *obj, QEvent *event) override {
+            Q_UNUSED(obj);
+            if (!m_menu || !m_menu->isVisible() || !m_container || !m_embedder) return false;
+            if (event->type() == QEvent::MouseButtonPress) {
+                auto *me = static_cast<QMouseEvent*>(event);
+                if (me->button() == Qt::LeftButton) {
+                    // Ignore clicks inside the menu; only handle outside
+                    if (!m_menu->geometry().contains(me->globalPosition().toPoint())) {
+                        QPoint local = m_container->mapFromGlobal(me->globalPosition().toPoint());
+                        if (local.x() >= 0 && local.y() >= 0 && local.x() < m_container->width() && local.y() < m_container->height()) {
+                            // Forward to viewer: update hover first for accuracy, then select
+                            m_embedder->handleMouseMove(local.x(), local.y());
+                            m_embedder->handleMouseClick(local.x(), local.y(), /*GLFW left*/ 0);
+                        }
+                    }
+                }
+            }
+            return false; // don't consume; allow normal closing of the menu
+        }
+    private:
+    QMenu *m_menu {nullptr};
+    QWidget *m_container {nullptr};
+    PCBViewerEmbedder *m_embedder {nullptr};
+    };
+
+    OutsideClickForwarder forwarder(&menu, m_viewerContainer, m_pcbEmbedder.get());
+    qApp->installEventFilter(&forwarder);
     QAction *chosen = menu.exec(globalPos);
+    qApp->removeEventFilter(&forwarder);
     if (!chosen || chosen==actCancel || chosen==title) return;
     if (chosen == actComp && havePart) emit crossSearchRequest(QString::fromStdString(selPart), false, true);
     else if (chosen == actNet && haveNet) emit crossSearchRequest(QString::fromStdString(selNet), true, true);

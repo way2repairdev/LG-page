@@ -864,13 +864,41 @@ void PCBViewerEmbedder::mouseButtonCallback(GLFWwindow* window, int button, int 
                 embedder->m_rcPressX = xpos;
                 embedder->m_rcPressY = ypos;
                 embedder->m_rcMoved = false;
-                
-                // Perform selection immediately on right-click press
-                embedder->handleMouseClick(static_cast<int>(xpos), static_cast<int>(ypos), button);
+                // Start panning on press (right-drag), but DO NOT change selection here.
+                // Avoid clearing an existing left-click selection when user right-clicks on empty space to open context menu.
+                embedder->m_mouseDragging = true;
+                embedder->m_lastMouseX = xpos;
+                embedder->m_lastMouseY = ypos;
             } else if (action == GLFW_RELEASE) {
                 double dt = glfwGetTime() - embedder->m_rcPressTime;
                 if (embedder->m_rcPressTime > 0.0 && !embedder->m_rcMoved && dt < 0.35) {
-                    // Get the part/net info after the right-click selection has been processed
+                    // On quick right-click, prefer using what's under the cursor.
+                    // If a pin is under cursor, select it; else, if a part is under cursor, highlight that part;
+                    // otherwise keep the current selection.
+                    if (embedder->m_renderer) {
+                        int hoveredPin = embedder->m_renderer->GetHoveredPin(
+                            static_cast<float>(xpos), static_cast<float>(ypos),
+                            embedder->m_windowWidth, embedder->m_windowHeight);
+                        if (hoveredPin >= 0) {
+                            const bool hasSel = embedder->m_renderer->HasSelectedPin();
+                            const int  selIdx = hasSel ? embedder->m_renderer->GetSelectedPinIndex() : -1;
+                            // Only trigger a select if hovered differs from current selection; this avoids toggling off.
+                            if (!hasSel || selIdx != hoveredPin) {
+                                embedder->handleMouseClick(static_cast<int>(xpos), static_cast<int>(ypos), GLFW_MOUSE_BUTTON_LEFT);
+                            }
+                        } else {
+                            int partIdx = embedder->m_renderer->HitTestPart(
+                                static_cast<float>(xpos), static_cast<float>(ypos),
+                                embedder->m_windowWidth, embedder->m_windowHeight);
+                            if (partIdx >= 0) {
+                                // Clear pin selection and set highlighted part without toggling via clicks
+                                embedder->m_renderer->ClearSelection();
+                                embedder->m_renderer->SetHighlightedPart(partIdx);
+                            }
+                        }
+                    }
+
+                    // Gather part/net based on the current (possibly updated) selection/highlight
                     std::string part;
                     std::string net;
                     
@@ -890,6 +918,8 @@ void PCBViewerEmbedder::mouseButtonCallback(GLFWwindow* window, int button, int 
                     }
                 }
                 embedder->m_rcPressTime = 0.0;
+                // Stop panning
+                embedder->m_mouseDragging = false;
             }
         }
 
@@ -994,7 +1024,15 @@ void PCBViewerEmbedder::zoomToNet(const std::string& netName) {
     for (const auto &pin: m_pcbData->pins) {
         if (pin.net==netName) {
             float x=pin.pos.x, y=pin.pos.y; // rotation applied later by renderer zoom-to-fit if needed
-            if (first){minx=maxx=x;miny=maxy=y;first=false;} else {minx=std::min(minx,x);maxx=std::max(maxx,x);miny=std::min(miny,y);maxy=std::max(maxy,y);}        }
+            if (first) {
+                minx = maxx = x; miny = maxy = y; first = false;
+            } else {
+                if (x < minx) { minx = x; }
+                if (x > maxx) { maxx = x; }
+                if (y < miny) { miny = y; }
+                if (y > maxy) { maxy = y; }
+            }
+        }
     }
     if (first) return; // not found
     // Center camera roughly: compute midpoint and set zoom to show bbox
@@ -1009,7 +1047,9 @@ void PCBViewerEmbedder::zoomToNet(const std::string& netName) {
     float bh = (maxy-miny);
     float zoomTarget = 1.0f;
     if (bw>0 && bh>0) {
-        zoomTarget = std::min(w/(bw*1.2f), h/(bh*1.2f));
+        float zx = w/(bw*1.2f);
+        float zy = h/(bh*1.2f);
+        zoomTarget = (zx < zy) ? zx : zy;
     }
     m_renderer->SetCamera(cx, cy, zoomTarget);
 }
@@ -1036,7 +1076,14 @@ void PCBViewerEmbedder::zoomToComponent(const std::string &ref) {
     for (const auto &pin: m_pcbData->pins) {
         if ((int)pin.part == partIndex + 1) { // parts 1-indexed
             float x=pin.pos.x, y=pin.pos.y;
-            if (first){minx=maxx=x;miny=maxy=y;first=false;} else {minx=std::min(minx,x);maxx=std::max(maxx,x);miny=std::min(miny,y);maxy=std::max(maxy,y);}        }
+            if (first) { minx=maxx=x; miny=maxy=y; first=false; }
+            else {
+                if (x < minx) { minx = x; }
+                if (x > maxx) { maxx = x; }
+                if (y < miny) { miny = y; }
+                if (y > maxy) { maxy = y; }
+            }
+        }
     }
     if (first) return; // no pins
     // camera only; do not implicitly change highlight state here so caller can control clearing
@@ -1044,7 +1091,7 @@ void PCBViewerEmbedder::zoomToComponent(const std::string &ref) {
     float cy=(miny+maxy)*0.5f;
     float w=(float)m_windowWidth, h=(float)m_windowHeight;
     float bw = (maxx-minx); float bh=(maxy-miny);
-    float zoomTarget = 1.0f; if (bw>0 && bh>0) zoomTarget = std::min(w/(bw*1.5f), h/(bh*1.5f));
+    float zoomTarget = 1.0f; if (bw>0 && bh>0) { float zx=w/(bw*1.5f); float zy=h/(bh*1.5f); zoomTarget = (zx<zy)?zx:zy; }
     m_renderer->SetCamera(cx, cy, zoomTarget);
 }
 

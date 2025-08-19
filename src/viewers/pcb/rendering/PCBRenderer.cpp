@@ -1351,7 +1351,7 @@ bool PCBRenderer::HandleMouseClick(float screen_x, float screen_y, int window_wi
     // If no pin was clicked, check if click is inside any part area
     if (pcb_data && !pcb_data->parts.empty()) {
         for (size_t part_idx = 0; part_idx < pcb_data->parts.size(); ++part_idx) {
-            const auto& part = pcb_data->parts[part_idx];
+            // const auto& part = pcb_data->parts[part_idx]; // unused
             
             // Get all pins for this part to calculate bounds
             std::vector<const BRDPin*> part_pins;
@@ -1371,9 +1371,7 @@ bool PCBRenderer::HandleMouseClick(float screen_x, float screen_y, int window_wi
             for (const auto* pin_ptr : part_pins) {
                 const auto& pin = *pin_ptr;
                 size_t pin_index = pin_ptr - &pcb_data->pins[0]; // Calculate index
-                
-                if (pin_index >= pin_geometry_cache.size()) continue;
-                const auto& cache = pin_geometry_cache[pin_index];
+                // Geometry cache not required for non-destructive bounds here
                 
                 PinExtent pe{ pin.pos, 5.f, 5.f, 5.f, 5.f }; // default
                 bool found = false;
@@ -1421,10 +1419,10 @@ bool PCBRenderer::HandleMouseClick(float screen_x, float screen_y, int window_wi
             float min_x = extents[0].pos.x, max_x = extents[0].pos.x;
             float min_y = extents[0].pos.y, max_y = extents[0].pos.y;
             for (const auto& e : extents) {
-                min_x = std::min(min_x, (float)e.pos.x);
-                max_x = std::max(max_x, (float)e.pos.x);
-                min_y = std::min(min_y, (float)e.pos.y);
-                max_y = std::max(max_y, (float)e.pos.y);
+                if (e.pos.x < min_x) { min_x = e.pos.x; }
+                if (e.pos.x > max_x) { max_x = e.pos.x; }
+                if (e.pos.y < min_y) { min_y = e.pos.y; }
+                if (e.pos.y > max_y) { max_y = e.pos.y; }
             }
             
             // Calculate margins
@@ -1542,6 +1540,109 @@ int PCBRenderer::GetHoveredPin(float screen_x, float screen_y, int window_width,
     }
     
     return -1; // No pin hovered
+}
+
+int PCBRenderer::HitTestPart(float screen_x, float screen_y, int window_width, int window_height) const {
+    if (!pcb_data || pcb_data->parts.empty()) return -1;
+
+    // Convert screen to world (duplicate of ScreenToWorld but const-safe)
+    float world_x = camera.x + (screen_x - window_width * 0.5f) / camera.zoom;
+    float world_y = camera.y + (window_height * 0.5f - screen_y) / camera.zoom;
+    ApplyRotation(world_x, world_y, true);
+
+    for (size_t part_idx = 0; part_idx < pcb_data->parts.size(); ++part_idx) {
+    // const auto &part = pcb_data->parts[part_idx]; // unused
+
+        // Collect pins for this part
+        std::vector<const BRDPin*> part_pins;
+        for (const auto &pin : pcb_data->pins) {
+            if (pin.part == static_cast<unsigned int>(part_idx + 1)) {
+                part_pins.push_back(&pin);
+            }
+        }
+        if (part_pins.empty()) continue;
+
+        struct PinExtent { BRDPoint pos; float left, right, bottom, top; };
+        std::vector<PinExtent> extents; extents.reserve(part_pins.size());
+
+        for (const auto *pin_ptr : part_pins) {
+            const auto &pin = *pin_ptr;
+            // size_t pin_index = pin_ptr - &pcb_data->pins[0]; // index unused here
+
+            PinExtent pe{ pin.pos, 5.f, 5.f, 5.f, 5.f }; // defaults
+            bool found = false;
+
+            // Circle
+            for (const auto &c : pcb_data->circles) {
+                if (c.center.x == pin.pos.x && c.center.y == pin.pos.y) {
+                    float r = std::max(5.f, c.radius);
+                    pe.left = pe.right = pe.bottom = pe.top = r; found = true; break;
+                }
+            }
+
+            // Rectangle
+            if (!found) {
+                for (const auto &rect : pcb_data->rectangles) {
+                    if (rect.center.x == pin.pos.x && rect.center.y == pin.pos.y) {
+                        float hw = rect.width * 0.5f; float hh = rect.height * 0.5f;
+                        if (rect.rotation == 0.f) { pe.left = pe.right = hw; pe.bottom = pe.top = hh; }
+                        else {
+                            float rot = rect.rotation * 3.14159265f / 180.f; float c = std::abs(std::cos(rot)); float s = std::abs(std::sin(rot));
+                            float ex = hw * c + hh * s; float ey = hw * s + hh * c; pe.left = pe.right = ex; pe.bottom = pe.top = ey;
+                        }
+                        found = true; break;
+                    }
+                }
+            }
+
+            // Oval
+            if (!found) {
+                for (const auto &oval : pcb_data->ovals) {
+                    if (oval.center.x == pin.pos.x && oval.center.y == pin.pos.y) {
+                        float hw = oval.width * 0.5f; float hh = oval.height * 0.5f;
+                        if (oval.rotation == 0.f) { pe.left = pe.right = hw; pe.bottom = pe.top = hh; }
+                        else {
+                            float rot = oval.rotation * 3.14159265f / 180.f; float c = std::abs(std::cos(rot)); float s = std::abs(std::sin(rot));
+                            float ex = hw * c + hh * s; float ey = hw * s + hh * c; pe.left = pe.right = ex; pe.bottom = pe.top = ey;
+                        }
+                        found = true; break;
+                    }
+                }
+            }
+
+            extents.push_back(pe);
+        }
+
+        if (extents.empty()) continue;
+
+        float min_x = extents[0].pos.x, max_x = extents[0].pos.x;
+        float min_y = extents[0].pos.y, max_y = extents[0].pos.y;
+        for (const auto &e : extents) {
+            if (e.pos.x < min_x) { min_x = e.pos.x; }
+            if (e.pos.x > max_x) { max_x = e.pos.x; }
+            if (e.pos.y < min_y) { min_y = e.pos.y; }
+            if (e.pos.y > max_y) { max_y = e.pos.y; }
+        }
+
+        float left_margin=0.f,right_margin=0.f,bottom_margin=0.f,top_margin=0.f;
+        for (const auto &e : extents) {
+            if (e.pos.x == min_x) left_margin = std::max(left_margin, e.left);
+            if (e.pos.x == max_x) right_margin = std::max(right_margin, e.right);
+            if (e.pos.y == min_y) bottom_margin = std::max(bottom_margin, e.bottom);
+            if (e.pos.y == max_y) top_margin = std::max(top_margin, e.top);
+        }
+
+        float part_min_x = min_x - left_margin;
+        float part_max_x = max_x + right_margin;
+        float part_min_y = min_y - bottom_margin;
+        float part_max_y = max_y + top_margin;
+
+        if (world_x >= part_min_x && world_x <= part_max_x && world_y >= part_min_y && world_y <= part_max_y) {
+            return static_cast<int>(part_idx);
+        }
+    }
+
+    return -1;
 }
 
 // Coordinate conversion methods

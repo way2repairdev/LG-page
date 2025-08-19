@@ -132,6 +132,8 @@ public:
     // Hover functionality
     int GetHoveredPin(float screen_x, float screen_y, int window_width, int window_height);
     void SetHoveredPin(int pin_index) { hovered_pin_index = pin_index; }
+    // Non-destructive hit-test for parts: returns part index or -1
+    int HitTestPart(float screen_x, float screen_y, int window_width, int window_height) const;
     
     // Settings
     RenderSettings& GetSettings() { return settings; }
