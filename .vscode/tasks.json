@@ -170,6 +170,19 @@
 				"$gcc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "One-off Build",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build",
+				"--target",
+				"Way2RepairLoginSystem"
+			],
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }

@@ -376,12 +376,19 @@ void PCBViewerWidget::initializePCBViewer()
         // Register quick right-click callback
         m_pcbEmbedder->setQuickRightClickCallback([this](const std::string &part, const std::string &net){
             if (!m_crossSearchEnabled) return;
+            // If we just programmatically re-opened a menu due to an outside right-click,
+            // skip this callback once to avoid duplicate menus.
+            if (m_suppressNextEmbedderQuickMenu) { m_suppressNextEmbedderQuickMenu = false; return; }
+            // If a context menu is already active, don't open another one
+            if (m_contextMenuActive) return;
             QString candidate;
             if (!part.empty()) candidate = QString::fromStdString(part);
             else if (!net.empty()) candidate = QString::fromStdString(net);
             if (candidate.isEmpty()) return;
             QMetaObject::invokeMethod(this, [this, candidate]() {
-                showCrossContextMenu(QCursor::pos(), candidate);
+                // Double-check active state on the GUI thread
+                if (!m_contextMenuActive)
+                    showCrossContextMenu(QCursor::pos(), candidate);
             }, Qt::QueuedConnection);
         });
         m_viewerInitialized = true;
@@ -710,25 +717,9 @@ bool PCBViewerWidget::eventFilter(QObject *watched, QEvent *event) {
                 QMouseEvent *me = static_cast<QMouseEvent*>(event);
                 if ((me->pos() - m_rightPressPos).manhattanLength() > 6) m_rightDragging = true;
             }
-        } else if (event->type() == QEvent::MouseButtonRelease) {
+    } else if (event->type() == QEvent::MouseButtonRelease) {
             QMouseEvent *me = static_cast<QMouseEvent*>(event);
-            if (me->button() == Qt::RightButton && m_crossSearchEnabled) {
-                qint64 dt = QDateTime::currentMSecsSinceEpoch() - m_rightPressTimeMs;
-                if (!m_rightDragging && dt < 350) {
-                    QString candidate;
-                    if (m_pcbEmbedder) {
-                        std::string net = m_pcbEmbedder->getSelectedPinNet();
-                        std::string part = m_pcbEmbedder->getSelectedPinPart();
-                        if (!part.empty()) candidate = QString::fromStdString(part);
-                        else if (!net.empty()) candidate = QString::fromStdString(net);
-                    }
-                    if (!candidate.isEmpty()) {
-                        // Qt 6: use globalPosition() instead of deprecated globalPos()
-                        showCrossContextMenu(me->globalPosition().toPoint(), candidate);
-                        return true;
-                    }
-                }
-            }
+        // Remove Qt-side menu opening path to avoid duplicate menus; rely on embedder callback
             if (me->button() == Qt::RightButton) { m_rightPressTimeMs = 0; m_rightDragging = false; }
         }
     }
@@ -736,6 +727,9 @@ bool PCBViewerWidget::eventFilter(QObject *watched, QEvent *event) {
 }
 
 void PCBViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QString &candidate) {
+    // Reentrancy guard: ensure only one menu is active at a time
+    if (m_contextMenuActive) return;
+    m_contextMenuActive = true;
     QString target = m_linkedPdfFileName.isEmpty() ? QStringLiteral("Linked PDF") : m_linkedPdfFileName;
         class ThemedMenu : public QMenu { public: ThemedMenu(QWidget* p=nullptr):QMenu(p){ setWindowFlags(windowFlags()|Qt::NoDropShadowWindowHint); setAttribute(Qt::WA_TranslucentBackground);} void apply(bool dark){ if(dark){ setStyleSheet(
                 "QMenu { background:rgba(30,33,40,0.94); border:1px solid #3d4452; border-radius:8px; padding:6px; font:13px 'Segoe UI'; color:#dfe3ea; }"
@@ -773,27 +767,46 @@ void PCBViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QStrin
     menu.addSeparator();
     QAction *actCancel = menu.addAction("Cancel");
 
-    // While the menu is open, capture the very next left-click outside the menu
+    // While the menu is open, capture the very next outside click (left or right)
     // and forward it to the embedded viewer as a selection. This lets users
     // select another pin/part in a single click (instead of click-to-close, then click-to-select).
     class OutsideClickForwarder : public QObject {
     public:
-        OutsideClickForwarder(QMenu *menu, QWidget *viewerContainer, PCBViewerEmbedder *embedder)
-            : m_menu(menu), m_container(viewerContainer), m_embedder(embedder) {}
+        OutsideClickForwarder(QMenu *menu, QWidget *viewerContainer, PCBViewerEmbedder *embedder, PCBViewerWidget *owner)
+            : m_menu(menu), m_container(viewerContainer), m_embedder(embedder), m_owner(owner) {}
     protected:
         bool eventFilter(QObject *obj, QEvent *event) override {
             Q_UNUSED(obj);
             if (!m_menu || !m_menu->isVisible() || !m_container || !m_embedder) return false;
             if (event->type() == QEvent::MouseButtonPress) {
                 auto *me = static_cast<QMouseEvent*>(event);
-                if (me->button() == Qt::LeftButton) {
+                if (me->button() == Qt::LeftButton || me->button() == Qt::RightButton) {
                     // Ignore clicks inside the menu; only handle outside
                     if (!m_menu->geometry().contains(me->globalPosition().toPoint())) {
                         QPoint local = m_container->mapFromGlobal(me->globalPosition().toPoint());
                         if (local.x() >= 0 && local.y() >= 0 && local.x() < m_container->width() && local.y() < m_container->height()) {
+                            // Clear any previous highlight and selection so we move cleanly to the new target
+                            m_embedder->clearHighlights();
+                            m_embedder->clearSelection();
                             // Forward to viewer: update hover first for accuracy, then select
                             m_embedder->handleMouseMove(local.x(), local.y());
                             m_embedder->handleMouseClick(local.x(), local.y(), /*GLFW left*/ 0);
+                            
+                            // After selection, if a pin was selected, also highlight its parent component
+                            if (m_embedder->hasSelection()) {
+                                std::string partName = m_embedder->getSelectedPinPart();
+                                if (!partName.empty()) {
+                                    m_embedder->highlightComponent(partName);
+                                }
+                            }
+                            
+                            // If it was a right click, open the context menu again for the newly selected target
+                            if (me->button() == Qt::RightButton && m_owner) {
+                                // Record a pending reopen at this position and suppress embedder callback once
+                                m_owner->m_pendingReopenRequested = true;
+                                m_owner->m_pendingReopenGlobalPos = me->globalPosition().toPoint();
+                                m_owner->suppressNextEmbedderMenuOnce();
+                            }
                         }
                     }
                 }
@@ -804,12 +817,23 @@ void PCBViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QStrin
     QMenu *m_menu {nullptr};
     QWidget *m_container {nullptr};
     PCBViewerEmbedder *m_embedder {nullptr};
+    PCBViewerWidget *m_owner {nullptr};
     };
 
-    OutsideClickForwarder forwarder(&menu, m_viewerContainer, m_pcbEmbedder.get());
+    OutsideClickForwarder forwarder(&menu, m_viewerContainer, m_pcbEmbedder.get(), this);
     qApp->installEventFilter(&forwarder);
     QAction *chosen = menu.exec(globalPos);
     qApp->removeEventFilter(&forwarder);
+    m_contextMenuActive = false;
+    // If user right-clicked outside, schedule a reopen now that this menu is closed
+    if (m_pendingReopenRequested) {
+        QPoint reopenPos = m_pendingReopenGlobalPos;
+        m_pendingReopenRequested = false;
+        // Use singleShot to post after current event processing
+        QTimer::singleShot(0, this, [this, reopenPos]() {
+            if (!m_contextMenuActive) showCrossContextMenu(reopenPos, QString());
+        });
+    }
     if (!chosen || chosen==actCancel || chosen==title) return;
     if (chosen == actComp && havePart) emit crossSearchRequest(QString::fromStdString(selPart), false, true);
     else if (chosen == actNet && haveNet) emit crossSearchRequest(QString::fromStdString(selNet), true, true);

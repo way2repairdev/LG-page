@@ -1267,8 +1267,8 @@ bool PCBRenderer::HandleMouseClick(float screen_x, float screen_y, int window_wi
         const auto& pin = pcb_data->pins[i];
         const auto& cache = pin_geometry_cache[i];
         
-        // Skip ground pins and NC pins using cached data - they are not selectable
-        if (cache.is_ground || cache.is_nc) {
+        // Skip only NC pins; allow selecting ground pins
+        if (cache.is_nc) {
             continue;
         }
 
@@ -1481,8 +1481,8 @@ int PCBRenderer::GetHoveredPin(float screen_x, float screen_y, int window_width,
         const auto& pin = pcb_data->pins[i];
         const auto& cache = pin_geometry_cache[i];
         
-        // Skip ground pins and NC pins using cached data - they are not hoverable
-        if (cache.is_ground || cache.is_nc) {
+    // Skip only NC pins; allow hovering ground pins
+    if (cache.is_nc) {
             continue;
         }
 

@@ -139,6 +139,13 @@ private:
     bool m_crossSearchEnabled { true };
     QPoint m_rightPressPos; qint64 m_rightPressTimeMs {0}; bool m_rightDragging {false};
     void showCrossContextMenu(const QPoint &globalPos, const QString &candidate);
+    // Guards to ensure single context menu and suppress duplicate triggers
+    bool m_contextMenuActive { false };            // true while a context menu is open (exec loop active)
+    bool m_suppressNextEmbedderQuickMenu { false }; // one-shot flag to cancel the next embedder quick-right-click callback
+    void suppressNextEmbedderMenuOnce() { m_suppressNextEmbedderQuickMenu = true; }
+    // Deferred reopen when user right-clicks outside current menu
+    bool m_pendingReopenRequested { false };
+    QPoint m_pendingReopenGlobalPos;
 public:
     void setLinkedPdfFileName(const QString &name) { m_linkedPdfFileName = name; }
     void setCrossSearchEnabled(bool en) { m_crossSearchEnabled = en; }
