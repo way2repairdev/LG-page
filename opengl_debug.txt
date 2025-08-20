@@ -17258,3 +17258,57 @@ Library Versions:
 - GLEW Version: 2.2.0
 === End Debug Information ===
 
+=== OpenGL Debug Information ===
+Timestamp: Wed Aug 20 19:34:26 2025
+OpenGL Version: 2.1.0 - Build 8.15.10.2900
+OpenGL Vendor: Intel
+OpenGL Renderer: Intel(R) HD Graphics
+OpenGL Context Version: 2.1
+GLSL Version: 1.20  - Intel Build 8.15.10.2900
+Max Texture Size: 8192
+Max Viewport: 8192x8192
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Intermediate Pipeline (VBO) - Good Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: NO
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: NO
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Wed Aug 20 19:35:42 2025
+OpenGL Version: 2.1.0 - Build 8.15.10.2900
+OpenGL Vendor: Intel
+OpenGL Renderer: Intel(R) HD Graphics
+OpenGL Context Version: 2.1
+GLSL Version: 1.20  - Intel Build 8.15.10.2900
+Max Texture Size: 8192
+Max Viewport: 8192x8192
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Intermediate Pipeline (VBO) - Good Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: NO
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: NO
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+

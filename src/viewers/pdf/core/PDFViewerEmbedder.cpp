@@ -252,14 +252,38 @@ bool PDFViewerEmbedder::loadPDF(const std::string& filePath)
     m_pageHeights.resize(pageCount);
     m_originalPageWidths.resize(pageCount);
     m_originalPageHeights.resize(pageCount);
+    // Prepare page bounding boxes storage
+    std::vector<FS_RECTF> pageBBoxes;
+    pageBBoxes.resize(pageCount);
     
     // Fill with zeros initially
     std::fill(m_textures.begin(), m_textures.end(), 0);
     
-    // Get original page dimensions
+    // Get original page dimensions and page bounding boxes
     for (int i = 0; i < pageCount; ++i) {
         try {
             m_renderer->GetOriginalPageSize(i, m_originalPageWidths[i], m_originalPageHeights[i]);
+            // Also capture the page bounding box (MediaBox ∩ CropBox)
+            FPDF_DOCUMENT document = m_renderer->GetDocument();
+            FPDF_PAGE page = FPDF_LoadPage(document, i);
+            if (page) {
+                FS_RECTF bbox{0,0,0,0};
+                if (FPDF_GetPageBoundingBox(page, &bbox)) {
+                    pageBBoxes[i] = bbox;
+                } else {
+                    // Fallback to full page size at origin
+                    pageBBoxes[i].left = 0.0f;
+                    pageBBoxes[i].top = 0.0f;
+                    pageBBoxes[i].right = (float)m_originalPageWidths[i];
+                    pageBBoxes[i].bottom = (float)m_originalPageHeights[i];
+                }
+                FPDF_ClosePage(page);
+            } else {
+                pageBBoxes[i].left = 0.0f;
+                pageBBoxes[i].top = 0.0f;
+                pageBBoxes[i].right = (float)m_originalPageWidths[i];
+                pageBBoxes[i].bottom = (float)m_originalPageHeights[i];
+            }
             
             // DEBUG: Print actual PDF page dimensions to debug file (in build folder)
             std::ofstream debugFile("build/pdf_embedder_debug.txt", std::ios::app);
@@ -303,6 +327,7 @@ bool PDFViewerEmbedder::loadPDF(const std::string& filePath)
     m_scrollState->pageWidths = &m_pageWidths;
     m_scrollState->originalPageWidths = &m_originalPageWidths;
     m_scrollState->originalPageHeights = &m_originalPageHeights;
+    m_scrollState->pageBBoxes = std::move(pageBBoxes);
     
     std::cout << "PDFViewerEmbedder: Initializing with " << pageCount << " pages" << std::endl;
     std::cout << "PDFViewerEmbedder: Original page dimensions: " << m_originalPageWidths[0] << "x" << m_originalPageHeights[0] << std::endl;

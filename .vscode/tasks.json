@@ -229,6 +229,22 @@
 				"$gcc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Agent Build",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build",
+				"--target",
+				"Way2RepairLoginSystem"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
 		}
 	]
 }

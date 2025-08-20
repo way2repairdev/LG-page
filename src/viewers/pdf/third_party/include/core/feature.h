@@ -111,6 +111,9 @@ struct PDFScrollState {
     std::vector<int>* pageWidths = nullptr;  // Pointer to page widths for coordinate calculations
     std::vector<double>* originalPageWidths = nullptr;  // Pointer to original PDF page widths
     std::vector<double>* originalPageHeights = nullptr; // Pointer to original PDF page heights
+  // Page bounding boxes (intersection of MediaBox and CropBox) in PDF coordinates.
+  // Used to correctly map screen<->PDF coordinates when pages have non-zero CropBox origins.
+  std::vector<FS_RECTF> pageBBoxes;
       // Scroll bar dragging support
     bool isScrollBarDragging = false;    // Flag to indicate if user is dragging scroll bar
     double scrollBarDragStartY = 0.0;    // Mouse Y position when scroll bar drag started

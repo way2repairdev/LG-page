@@ -736,16 +736,32 @@ void ScreenToPDFCoordinates(double screenX, double screenY, double& pdfX, double
     if (pageRelativeX > 1.0f) pageRelativeX = 1.0f;
     if (pageRelativeY < 0.0f) pageRelativeY = 0.0f;
     if (pageRelativeY > 1.0f) pageRelativeY = 1.0f;
-      // 7. Convert to PDF coordinates (PDF origin is bottom-left, screen origin is top-left)
-    // CRITICAL FIX: Use original PDF page dimensions for text coordinate calculations
-    pdfX = pageRelativeX * (*state.originalPageWidths)[pageIndex];
-    pdfY = (1.0 - pageRelativeY) * (*state.originalPageHeights)[pageIndex]; // Flip Y for PDF coordinate system
     
-    // 8. Final validation
-    if (pdfX < 0.0) pdfX = 0.0;
-    if (pdfY < 0.0) pdfY = 0.0;
-    if (pdfX > (*state.originalPageWidths)[pageIndex]) pdfX = (*state.originalPageWidths)[pageIndex];
-    if (pdfY > (*state.originalPageHeights)[pageIndex]) pdfY = (*state.originalPageHeights)[pageIndex];
+    // 7. Convert to PDF coordinates using page bounding box (CropBox ∩ MediaBox)
+    // PDF origin is bottom-left; screen origin is top-left
+    double bboxLeft = 0.0, bboxRight = (*state.originalPageWidths)[pageIndex];
+    double bboxBottom = 0.0, bboxTop = (*state.originalPageHeights)[pageIndex];
+    if (pageIndex >= 0 && pageIndex < (int)state.pageBBoxes.size()) {
+        const FS_RECTF& bb = state.pageBBoxes[pageIndex];
+        // FS_RECTF uses top greater than bottom; use as floats
+        bboxLeft = bb.left;
+        bboxRight = bb.right;
+        bboxBottom = bb.bottom;
+        bboxTop = bb.top;
+        // Fallback sanity if invalid
+        if (bboxRight <= bboxLeft) { bboxLeft = 0.0; bboxRight = (*state.originalPageWidths)[pageIndex]; }
+        if (bboxTop <= bboxBottom) { bboxBottom = 0.0; bboxTop = (*state.originalPageHeights)[pageIndex]; }
+    }
+    const double bboxWidth = bboxRight - bboxLeft;
+    const double bboxHeight = bboxTop - bboxBottom;
+    pdfX = bboxLeft + pageRelativeX * bboxWidth;
+    pdfY = bboxBottom + (1.0 - pageRelativeY) * bboxHeight; // Flip Y for PDF coordinate system
+    
+    // 8. Final validation within bbox
+    if (pdfX < bboxLeft) pdfX = bboxLeft;
+    if (pdfX > bboxRight) pdfX = bboxRight;
+    if (pdfY < bboxBottom) pdfY = bboxBottom;
+    if (pdfY > bboxTop) pdfY = bboxTop;
 }
 
 // Find which page is at a given screen Y position
@@ -1188,12 +1204,21 @@ void DrawTextSelection(const PDFScrollState& state, const std::vector<int>& page
                 // 3. Calculate page center position considering horizontal offset
                 float pageCenterX = (winWidth / 2.0f) - state.horizontalOffset;
                 float pageLeftX = pageCenterX - (pageWidthInScreen / 2.0f);
-                // 4. Convert PDF text coordinates to page-relative coordinates (0 to 1)
-                // CRITICAL FIX: Use original PDF page dimensions, not rendered bitmap dimensions
-                float textRelativeLeft = (float)(left / (*state.originalPageWidths)[pageIndex]);
-                float textRelativeRight = (float)(right / (*state.originalPageWidths)[pageIndex]);
-                float textRelativeTop = (float)(1.0 - top / (*state.originalPageHeights)[pageIndex]); // Flip Y for PDF coordinate system
-                float textRelativeBottom = (float)(1.0 - bottom / (*state.originalPageHeights)[pageIndex]); // Flip Y for PDF coordinate system
+                // 4. Convert PDF text coordinates to page-relative coordinates within bbox (0 to 1)
+                double bboxLeft = 0.0, bboxRight = (*state.originalPageWidths)[pageIndex];
+                double bboxBottom = 0.0, bboxTop = (*state.originalPageHeights)[pageIndex];
+                if (pageIndex >= 0 && pageIndex < (int)state.pageBBoxes.size()) {
+                    const FS_RECTF& bb = state.pageBBoxes[pageIndex];
+                    bboxLeft = bb.left; bboxRight = bb.right; bboxBottom = bb.bottom; bboxTop = bb.top;
+                    if (bboxRight <= bboxLeft) { bboxLeft = 0.0; bboxRight = (*state.originalPageWidths)[pageIndex]; }
+                    if (bboxTop <= bboxBottom) { bboxBottom = 0.0; bboxTop = (*state.originalPageHeights)[pageIndex]; }
+                }
+                const double bboxW = bboxRight - bboxLeft;
+                const double bboxH = bboxTop - bboxBottom;
+                float textRelativeLeft = (float)((left - bboxLeft) / bboxW);
+                float textRelativeRight = (float)((right - bboxLeft) / bboxW);
+                float textRelativeTop = (float)(1.0 - (top - bboxBottom) / bboxH); // Flip Y for PDF coordinate system
+                float textRelativeBottom = (float)(1.0 - (bottom - bboxBottom) / bboxH); // Flip Y for PDF coordinate system
                 
                 // 5. Convert page-relative coordinates to screen coordinates
                 float screenLeft = pageLeftX + textRelativeLeft * pageWidthInScreen;
@@ -1285,12 +1310,21 @@ void DrawTextCoordinateDebug(const PDFScrollState& state, const std::vector<int>
                 float pageCenterX = (winWidth / 2.0f) - state.horizontalOffset;
                 float pageLeftX = pageCenterX - (pageWidthInScreen / 2.0f);
                 
-                // 4. Convert PDF coordinates to page-relative coordinates (0 to 1)
-                // CRITICAL FIX: Use original PDF page dimensions, not rendered bitmap dimensions
-                float textRelativeLeft = (float)(left / (*state.originalPageWidths)[pageIndex]);
-                float textRelativeRight = (float)(right / (*state.originalPageWidths)[pageIndex]);
-                float textRelativeTop = (float)(1.0 - top / (*state.originalPageHeights)[pageIndex]); // Flip Y for PDF coordinate system
-                float textRelativeBottom = (float)(1.0 - bottom / (*state.originalPageHeights)[pageIndex]); // Flip Y for PDF coordinate system
+                // 4. Convert PDF coordinates to page-relative coordinates within bbox (0 to 1)
+                double bboxLeft = 0.0, bboxRight = (*state.originalPageWidths)[pageIndex];
+                double bboxBottom = 0.0, bboxTop = (*state.originalPageHeights)[pageIndex];
+                if (pageIndex >= 0 && pageIndex < (int)state.pageBBoxes.size()) {
+                    const FS_RECTF& bb = state.pageBBoxes[pageIndex];
+                    bboxLeft = bb.left; bboxRight = bb.right; bboxBottom = bb.bottom; bboxTop = bb.top;
+                    if (bboxRight <= bboxLeft) { bboxLeft = 0.0; bboxRight = (*state.originalPageWidths)[pageIndex]; }
+                    if (bboxTop <= bboxBottom) { bboxBottom = 0.0; bboxTop = (*state.originalPageHeights)[pageIndex]; }
+                }
+                const double bboxW = bboxRight - bboxLeft;
+                const double bboxH = bboxTop - bboxBottom;
+                float textRelativeLeft = (float)((left - bboxLeft) / bboxW);
+                float textRelativeRight = (float)((right - bboxLeft) / bboxW);
+                float textRelativeTop = (float)(1.0 - (top - bboxBottom) / bboxH);
+                float textRelativeBottom = (float)(1.0 - (bottom - bboxBottom) / bboxH);
                 
                 // 5. Convert page-relative coordinates to screen coordinates
                 float screenLeft = pageLeftX + textRelativeLeft * pageWidthInScreen;
