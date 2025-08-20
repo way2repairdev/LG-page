@@ -7,6 +7,7 @@
 #include <QStandardPaths>
 #include <QCoreApplication>
 #include <QMouseEvent>
+#include <QHoverEvent>
 #include <QTimer>
 #include <QTabBar>
 #include <QMessageBox>
@@ -93,6 +94,10 @@ static QToolButton* makeCloseButton(QWidget* parent)
 static void setCloseButtonsVisible(QTabBar* bar, int onlyIndex)
 {
     if (!bar) return;
+    // Avoid spamming updates/logs when the hovered index hasn't changed
+    const int lastIdx = bar->property("lastCloseIdx").toInt();
+    if (lastIdx == onlyIndex) return;
+
     bool anyShown = false;
     for (int i = 0; i < bar->count(); ++i) {
         const bool vis = (i == onlyIndex);
@@ -102,6 +107,7 @@ static void setCloseButtonsVisible(QTabBar* bar, int onlyIndex)
         }
         if (QWidget* btnL = bar->tabButton(i, QTabBar::LeftSide)) btnL->setVisible(vis);
     }
+    bar->setProperty("lastCloseIdx", onlyIndex);
     logDebug(QString("setCloseButtonsVisible: onlyIndex=%1, anyShown=%2, count=%3")
                  .arg(onlyIndex).arg(anyShown).arg(bar->count()));
 }
@@ -511,10 +517,7 @@ void DualTabWidget::setupUI()
     // Hide all close buttons initially (hover-only behavior)
     setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
     setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
-    // Track mouse globally so hover works over sub-controls too
-    if (QCoreApplication::instance()) {
-        QCoreApplication::instance()->installEventFilter(this);
-    }
+    // We only need hover on the tab bars (avoid global event filter churn)
     
     // DEBUG: Test with obvious colors (comment out after testing)
     // testObviousStyle();
@@ -541,11 +544,15 @@ void DualTabWidget::setupUI()
         "}"
     );
     
+    // Wrap content areas in a single switcher to avoid flicker from hide/show
+    m_contentSwitcher = new QStackedWidget();
+    m_contentSwitcher->addWidget(m_pdfContentArea);
+    m_contentSwitcher->addWidget(m_pcbContentArea);
+
     // Add to main layout
     m_mainLayout->addWidget(m_pdfTabWidget);
     m_mainLayout->addWidget(m_pcbTabWidget);
-    m_mainLayout->addWidget(m_pdfContentArea, 1); // Give content areas most space
-    m_mainLayout->addWidget(m_pcbContentArea, 1);
+    m_mainLayout->addWidget(m_contentSwitcher, 1); // single stack handles both
     
     // Connect signals
     connect(m_pdfTabWidget, &QTabWidget::tabCloseRequested, this, &DualTabWidget::onPdfTabCloseRequested);
@@ -560,7 +567,7 @@ void DualTabWidget::setupUI()
     
     logDebug("Signal connections established for both tab widgets");
     
-    // Initially hide all content and set up proper state
+    // Initially no active content
     hideAllContent();
     updateVisibility();
     updateTabBarStates();
@@ -827,8 +834,7 @@ void DualTabWidget::setMovable(bool /*movable*/)
 void DualTabWidget::activateTab(int index, TabType type)
 {
     logDebug(QString("activateTab() called - index: %1, type: %2").arg(index).arg((int)type));
-    // Fast path: if this tab is already active, do nothing to avoid unnecessary
-    // deactivate/reactivate cycles that can trigger heavy redraws in child viewers.
+    // Fast path: if this tab is already active, do nothing
     if (m_hasActiveTab && type == m_activeTabType) {
         if ((type == PDF_TAB && index == m_activePdfIndex) || (type == PCB_TAB && index == m_activePcbIndex)) {
             logDebug("activateTab(): requested tab already active - skipping");
@@ -836,11 +842,7 @@ void DualTabWidget::activateTab(int index, TabType type)
         }
     }
     
-    // Step 1: Deactivate all tabs first
-    logDebug("Step 1: Deactivating all tabs");
-    deactivateAllTabs();
-    
-    // Step 2: Validate the requested tab
+    // Validate the requested tab
     if (type == PDF_TAB) {
         if (index < 0 || index >= m_pdfWidgets.count()) {
             logDebug(QString("Invalid PDF tab index: %1, widget count: %2").arg(index).arg(m_pdfWidgets.count()));
@@ -852,9 +854,9 @@ void DualTabWidget::activateTab(int index, TabType type)
             return;
         }
     }
-    
-    // Step 3: Set active tab type and activate the specific tab
-    logDebug("Step 3: Setting active tab type");
+
+    // Set active tab type and activate the specific tab
+    logDebug("Setting active tab type");
     setActiveTabType(type);
     
     if (type == PDF_TAB) {
@@ -870,18 +872,18 @@ void DualTabWidget::activateTab(int index, TabType type)
     }
     
     m_hasActiveTab = true;
-    logDebug("Step 4: Set hasActiveTab to true");
+    logDebug("Set hasActiveTab to true");
     
-    // Step 4: Show only the active content
-    logDebug("Step 5: Calling showActiveContent()");
+    // Show the active content via the switcher (no hide/show churn)
+    logDebug("Calling showActiveContent()");
     showActiveContent();
     
-    // Step 5: Update UI states
-    logDebug("Step 6: Updating tab bar states");
+    // Update UI states (cheap)
+    logDebug("Updating tab bar states");
     updateTabBarStates();
     
     // Emit signal about active tab change
-    logDebug("Step 7: Emitting signals");
+    logDebug("Emitting signals");
     emit activeTabChanged(type);
     emit currentChanged(index, type);
     logDebug("activateTab() completed successfully");
@@ -893,12 +895,7 @@ void DualTabWidget::deactivateAllTabs()
     m_hasActiveTab = false;
     m_activePdfIndex = -1;
     m_activePcbIndex = -1;
-    
-    // Hide all content
-    hideAllContent();
-    
     // Keep tab bars enabled so users can click to switch
-    // Visual styling will indicate the inactive state
     m_pdfTabWidget->setEnabled(true);
     m_pcbTabWidget->setEnabled(true);
 }
@@ -974,19 +971,10 @@ void DualTabWidget::setActiveTabType(TabType type)
     if (m_activeTabType != type) {
         logDebug("Tab type changed - updating active tab type");
         m_activeTabType = type;
-        
-        // Hide all content first
-        logDebug("Hiding all content before type change");
-        hideAllContent();
-        
-        // Keep both tab bars enabled so users can click to switch
-        // Visual styling will indicate which is active/inactive
-        m_pdfTabWidget->setEnabled(true);
-        m_pcbTabWidget->setEnabled(true);
-        
-        // Update visual styling to show active/inactive state
-        logDebug("Updating visual state for new tab type");
-        updateTabBarVisualState();
+    // Keep both tab bars enabled so users can click to switch
+    m_pdfTabWidget->setEnabled(true);
+    m_pcbTabWidget->setEnabled(true);
+    // No heavy restyling on switch (avoid flicker)
     } else {
         logDebug("Tab type unchanged - no action needed");
     }
@@ -994,8 +982,7 @@ void DualTabWidget::setActiveTabType(TabType type)
 
 void DualTabWidget::hideAllContent()
 {
-    m_pdfContentArea->hide();
-    m_pcbContentArea->hide();
+    if (m_contentSwitcher) m_contentSwitcher->hide();
 }
 
 void DualTabWidget::showActiveContent()
@@ -1009,13 +996,17 @@ void DualTabWidget::showActiveContent()
     }
     
     if (m_activeTabType == PDF_TAB) {
-        logDebug("Showing PDF content area");
-        m_pdfContentArea->show();
-        m_pcbContentArea->hide();
+        logDebug("Switching to PDF content area");
+        if (m_contentSwitcher) {
+            m_contentSwitcher->setCurrentWidget(m_pdfContentArea);
+            m_contentSwitcher->show();
+        }
     } else {
-        logDebug("Showing PCB content area");
-        m_pcbContentArea->show();
-        m_pdfContentArea->hide();
+        logDebug("Switching to PCB content area");
+        if (m_contentSwitcher) {
+            m_contentSwitcher->setCurrentWidget(m_pcbContentArea);
+            m_contentSwitcher->show();
+        }
     }
 }
 
@@ -1024,260 +1015,21 @@ void DualTabWidget::updateTabBarStates()
     // Keep both tab bars enabled so users can click to switch between tab types
     m_pdfTabWidget->setEnabled(true);
     m_pcbTabWidget->setEnabled(true);
-    
-    // Update visual styling to show which tab type is active
+    // No heavy stylesheet reapply on every switch
     updateTabBarVisualState();
 }
 
 void DualTabWidget::updateTabBarVisualState()
 {
-    logDebug("updateTabBarVisualState() called");
-    // Capture state prior to applying runtime styles
-    if (m_pdfTabWidget && m_pdfTabWidget->tabBar()) {
-        logTabBarState(m_pdfTabWidget->tabBar(), "before-runtime-style", "PDF");
-    }
-    if (m_pcbTabWidget && m_pcbTabWidget->tabBar()) {
-        logTabBarState(m_pcbTabWidget->tabBar(), "before-runtime-style", "PCB");
-    }
-    
-    // Professional rectangular tabs with proper borders (BLUE for PDF)
-    QString modernTabStyleBlue = 
-        "QTabWidget {"
-        "    background: #000000 !important;"
-        "    font-family: 'Segoe UI Variable Text', 'Segoe UI', 'Inter', Arial, sans-serif !important;"
-        "}"
-        "QTabWidget::pane {"
-        "    border: 2px solid #4A90E2;"
-        "    background-color: #ffffff;"
-        "    margin-top: 6px;"
-        "    border-radius: 0px;"
-        "}"
-        "QTabBar {"
-        "    qproperty-drawBase: 0 !important;"
-        "    qproperty-iconSize: 0px 0px !important;"
-        "    background: #e8e8e8 !important;"
-        "}"
-    "QTabBar::tab {"
-    "    background-color: #f0f0f0;"
-    "    border: 2px solid #666666;"
-    "    color: #333333;"
-    "    padding: 4px 6px 4px 3px;"
-    "    margin: 2px;"
-    "    min-height: 22px;"
-    "    min-width: 120px;"
-    "    max-width: 250px;"
-    "    font-size: 12px !important;"
-    "    font-weight: 500 !important;"
-    "    letter-spacing: 0.2px;"
-    "    text-align: left;"
-    "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "}"
-    "QTabBar::tab:selected {"
-    "    background-color: #ffffff;"
-    "    color: #0066cc;"
-    "    border: 2px solid #4A90E2;"
-    "    font-weight: 700 !important;"
-    "    padding: 4px 6px 4px 3px;"
-    "    font-size: 12px !important;"
-    "    min-width: 120px;"
-    "    max-width: 250px;"
-    "    text-align: left;"
-    "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "}"
-    "QTabBar::tab:hover:!selected {"
-    "    background-color: rgba(227, 242, 253, 0.8);"
-    "    border: 2px solid #90caf9;"
-    "    color: #1976d2;"
-    "    font-family: \"Segoe UI\", Arial, sans-serif;"
-    "    opacity: 0.9;"
-    "    padding: 4px 6px 4px 3px;"
-    "    min-width: 120px;"
-    "    max-width: 250px;"
-    "    text-align: left;"
-    "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "    font-weight: 500 !important;"
-    "}"
-        "/* Active tab hover state - enhanced glow */"
-    "QTabBar::tab:selected:hover {"
-    "    background-color: #ffffff;"
-    "    color: #0066cc;"
-    "    border: 2px solid #4A90E2;"
-    "    padding: 4px 6px 4px 3px;"
-    "    min-width: 120px;"
-    "    max-width: 250px;"
-    "    text-align: left;"
-    "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "}"
-        "/* Tab press/click animation - satisfying feedback */"
-        "QTabBar::tab:pressed {"
-
-        "    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.6, 1);"
-        "    box-shadow: 0px 1px 4px rgba(74, 144, 226, 0.2);"
-        "}"
-        "/* First tab - remove left margin */"
-        "QTabBar::tab:first {"
-        "    margin-left: 0px;"
-        "}"
-        "/* Last tab - add right margin */"
-        "QTabBar::tab:last {"
-        "    margin-right: 0px;"
-        "}"
-        "/* Disable focus outline */"
-        "QTabBar::tab:focus {"
-        "    outline: none;"
-        "}"
-        "/* Tab switching animation states */"
-        "QTabBar::tab:!selected {"
-        "    animation-duration: 0.3s;"
-        "    animation-timing-function: cubic-bezier(0.4, 0.0, 0.2, 1);"
-        "}"
-    "/* Close button styling: image always defined; visibility controlled in code */"
-    "QTabBar::close-button {"
-    "    image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=);"
-    "    subcontrol-origin: content;"
-    "    subcontrol-position: center right;"
-    "    width: 12px;"
-    "    height: 12px;"
-    "    margin: 0px 6px 0px 4px;"
-    "    border-radius: 2px;"
-    "    background: transparent;"
-    "}"
-    ""
-    "QTabBar::close-button:hover {"
-        "    background: rgba(255, 0, 0, 0.1);"
-        "    border-radius: 2px;"
-        "}"
-        "QTabBar QToolButton:hover {"
-        "    background: #333333 !important;"
-        "    color: #ffffff !important;"
-        "}";
-
-    // RED theme for PCB tab widget (runtime)
-    QString modernTabStyleRed =
-        "QTabWidget {"
-        "    background: #000000 !important;"
-        "    font-family: 'Segoe UI Variable Text', 'Segoe UI', 'Inter', Arial, sans-serif !important;"
-        "}"
-        "QTabWidget::pane {"
-        "    border: 2px solid #E53935;"
-        "    background-color: #ffffff;"
-        "    margin-top: 6px;"
-        "    border-radius: 0px;"
-        "}"
-        "QTabBar {"
-        "    qproperty-drawBase: 0 !important;"
-        "    qproperty-iconSize: 0px 0px !important;"
-        "    background: #e8e8e8 !important;"
-        "}"
-        "QTabBar::tab {"
-        "    background-color: #f0f0f0;"
-        "    border: 2px solid #666666;"
-        "    color: #333333;"
-    "    padding: 4px 28px 4px 3px;"
-        "    margin: 2px;"
-        "    min-height: 22px;"
-        "    min-width: 120px;"
-        "    max-width: 250px;"
-    "    font-size: 12px !important;"
-    "    font-weight: 500 !important;"
-    "    letter-spacing: 0.2px;"
-        "    text-align: left;"
-        "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-        "}"
-        "QTabBar::tab:selected {"
-        "    background-color: #ffffff;"
-        "    color: #c62828;"
-        "    border: 2px solid #E53935;"
-    "    font-weight: 700 !important;"
-    "    padding: 4px 28px 4px 3px;"
-        "    font-size: 12px !important;"
-        "    min-width: 120px;"
-        "    max-width: 250px;"
-        "    text-align: left;"
-        "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-        "}"
-        "QTabBar::tab:hover:!selected {"
-        "    background-color: rgba(255, 235, 238, 0.85);"
-        "    border: 2px solid #ef9a9a;"
-        "    color: #d32f2f;"
-        "    font-family: \"Segoe UI\", Arial, sans-serif;"
-        "    opacity: 0.9;"
-    "    padding: 4px 28px 4px 3px;"
-        "    min-width: 120px;"
-        "    max-width: 250px;"
-        "    text-align: left;"
-        "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "    font-weight: 500 !important;"
-        "}"
-        "QTabBar::tab:selected:hover {"
-        "    background-color: #ffffff;"
-        "    color: #c62828;"
-        "    border: 2px solid #E53935;"
-    "    padding: 4px 28px 4px 3px;"
-        "    min-width: 120px;"
-        "    max-width: 250px;"
-        "    text-align: left;"
-        "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-        "}"
-        "QTabBar::tab:pressed {"
-        "    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.6, 1);"
-        "    box-shadow: 0px 1px 4px rgba(229, 57, 53, 0.2);"
-        "}"
-        "QTabBar::tab:first {"
-        "    margin-left: 0px;"
-        "}"
-        "QTabBar::tab:last {"
-        "    margin-right: 0px;"
-        "}"
-        "QTabBar::tab:focus {"
-        "    outline: none;"
-        "}"
-        "QTabBar::tab:!selected {"
-        "    animation-duration: 0.3s;"
-        "    animation-timing-function: cubic-bezier(0.4, 0.0, 0.2, 1);"
-        "}"
-    "QTabBar::close-button {"
-    "    image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=);"
-    "    subcontrol-origin: content;"
-    "    subcontrol-position: center right;"
-    "    width: 12px;"
-    "    height: 12px;"
-    "    margin: 0px 6px 0px 4px;"
-    "    border-radius: 2px;"
-    "    background: transparent;"
-    "}"
-    ""
-    "QTabBar::close-button:hover {"
-        "    background: rgba(255, 0, 0, 0.1);"
-        "    border-radius: 2px;"
-        "}"
-        "QTabBar QToolButton:hover {"
-        "    background: #333333 !important;"
-        "    color: #ffffff !important;"
-        "}";
-    
-    // Apply BLUE to PDF and RED to PCB tab widgets at runtime
-    applyStyleWithTag(m_pdfTabWidget, modernTabStyleBlue, "modernTabStyleBlue-runtime");
-    applyStyleWithTag(m_pcbTabWidget, modernTabStyleRed, "modernTabStyleRed-runtime");
-    
-    // Ensure icon space is disabled after styling updates
-    m_pdfTabWidget->setIconSize(QSize(0, 0));
-    m_pcbTabWidget->setIconSize(QSize(0, 0));
-    // Keep close buttons hidden until hover after style changes
+    // Keep icon space disabled; avoid re-assigning stylesheets here
+    if (m_pdfTabWidget) m_pdfTabWidget->setIconSize(QSize(0, 0));
+    if (m_pcbTabWidget) m_pcbTabWidget->setIconSize(QSize(0, 0));
+    // Ensure close buttons exist (no-op if already present)
     ensureCloseButtons(this, m_pdfTabWidget, [this](int idx){ onPdfTabCloseRequested(idx); });
     ensureCloseButtons(this, m_pcbTabWidget, [this](int idx){ onPcbTabCloseRequested(idx); });
+    // Reset hover state
     setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
     setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
-    
-    // Capture state after applying runtime styles
-    if (m_pdfTabWidget && m_pdfTabWidget->tabBar()) {
-        logTabBarState(m_pdfTabWidget->tabBar(), "after-runtime-style", "PDF");
-    }
-    if (m_pcbTabWidget && m_pcbTabWidget->tabBar()) {
-        logTabBarState(m_pcbTabWidget->tabBar(), "after-runtime-style", "PCB");
-    }
-
-    logDebug("updateTabBarVisualState() completed with modern tab styling");
 }
 
 // Slot methods for tab events
@@ -1343,30 +1095,50 @@ void DualTabWidget::updateVisibility()
 
 bool DualTabWidget::eventFilter(QObject *obj, QEvent *event)
 {
-    // Hover handling: show close button only for hovered tab (using global cursor, works over children)
+    // Only handle hover inside the tab bars; avoid global cursor tracking
     if (event->type() == QEvent::MouseMove || event->type() == QEvent::HoverMove || event->type() == QEvent::Enter) {
-        const QPoint globalPos = QCursor::pos();
-        if (m_pdfTabWidget && m_pdfTabWidget->tabBar()) {
+        auto computeIndex = [](QTabBar* bar, QEvent* ev) -> int {
+            if (!bar) return -1;
+            QPoint local;
+            switch (ev->type()) {
+                case QEvent::MouseMove:
+                    local = static_cast<QMouseEvent*>(ev)->pos();
+                    break;
+                case QEvent::HoverMove:
+                    local = static_cast<QHoverEvent*>(ev)->position().toPoint();
+                    break;
+                default:
+                    local = bar->mapFromGlobal(QCursor::pos());
+                    break;
+            }
+            return bar->rect().contains(local) ? bar->tabAt(local) : -1;
+        };
+
+        if (obj == m_pdfTabWidget->tabBar()) {
             auto *bar = m_pdfTabWidget->tabBar();
-            const QPoint local = bar->mapFromGlobal(globalPos);
-            const int idx = bar->rect().contains(local) ? bar->tabAt(local) : -1;
-            setCloseButtonsVisible(bar, idx);
-        }
-        if (m_pcbTabWidget && m_pcbTabWidget->tabBar()) {
+            const int idx = computeIndex(bar, event);
+            if (idx != m_pdfHoveredIndex) {
+                m_pdfHoveredIndex = idx;
+                setCloseButtonsVisible(bar, idx);
+            }
+        } else if (obj == m_pcbTabWidget->tabBar()) {
             auto *bar = m_pcbTabWidget->tabBar();
-            const QPoint local = bar->mapFromGlobal(globalPos);
-            const int idx = bar->rect().contains(local) ? bar->tabAt(local) : -1;
-            setCloseButtonsVisible(bar, idx);
+            const int idx = computeIndex(bar, event);
+            if (idx != m_pcbHoveredIndex) {
+                m_pcbHoveredIndex = idx;
+                setCloseButtonsVisible(bar, idx);
+            }
         }
     }
     // Ensure buttons hide immediately when cursor leaves a tab bar
     if (event->type() == QEvent::Leave) {
         if (m_pdfTabWidget && obj == m_pdfTabWidget->tabBar()) {
+            m_pdfHoveredIndex = -1;
             setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
         } else if (m_pcbTabWidget && obj == m_pcbTabWidget->tabBar()) {
+            m_pcbHoveredIndex = -1;
             setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
         }
-        // continue default processing
     }
     // Log geometry/metrics on resize events for both tab bars
     if (event->type() == QEvent::Resize) {

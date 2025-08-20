@@ -89,6 +89,9 @@ private:
     QTabWidget *m_pdfTabWidget;    // Row 1: PDF tabs
     QTabWidget *m_pcbTabWidget;    // Row 2: PCB tabs
     
+    // Single switcher to avoid flicker from hide/show of large areas
+    QStackedWidget *m_contentSwitcher {nullptr};
+
     // Separate content areas for complete isolation
     QStackedWidget *m_pdfContentArea; // PDF-only content area
     QStackedWidget *m_pcbContentArea; // PCB-only content area
@@ -106,6 +109,10 @@ private:
     // Track selection per row independent of active content
     int m_selectedPdfIndex = -1;
     int m_selectedPcbIndex = -1;
+
+    // Hover state cache to avoid per-mouse-move relayout churn
+    int m_pdfHoveredIndex = -1;
+    int m_pcbHoveredIndex = -1;
 };
 
 #endif // DUALTABWIDGET_H
