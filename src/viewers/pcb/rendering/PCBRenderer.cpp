@@ -6,6 +6,7 @@
 #include <set>
 #include <imgui.h>
 #include <cctype>
+#include <GL/glew.h>
 
 // Simple vertex shader - kept for reference but not used in ImGui rendering
 const char* vertex_shader_source = R"(
@@ -43,34 +44,43 @@ PCBRenderer::~PCBRenderer() {
 }
 
 bool PCBRenderer::Initialize() {
-    // Create minimal OpenGL resources for compatibility
-    // Note: These resources aren't actively used for rendering anymore (ImGui handles the drawing)
-    // but are kept for compatibility with the OpenGL context
-    
-    if (!CreateShaderProgram()) {
-        LOG_ERROR("Failed to create shader program");
-        return false;
+    // Initialize minimal GL state but don't fail if modern features are missing.
+    // ImGui handles all drawing; these resources are optional.
+
+    bool hasVBO = glewIsSupported("GL_ARB_vertex_buffer_object") || GLEW_VERSION_2_0;
+    bool hasVAO = glewIsSupported("GL_ARB_vertex_array_object") || GLEW_VERSION_3_0;
+    bool hasShaders = glewIsSupported("GL_ARB_shader_objects") || GLEW_VERSION_2_0;
+
+    // Try to create a tiny shader program only if shaders are supported; ignore failure.
+    if (hasShaders) {
+        if (!CreateShaderProgram()) {
+            LOG_ERROR("Shader program unavailable; continuing with ImGui-only rendering");
+            shader_program = 0;
+        }
     }
 
-    // Create VAO and VBO
-    glGenVertexArrays(1, &vao);
-    glGenBuffers(1, &vbo);
+    // Create optional VAO/VBO only if supported; skip otherwise.
+    if (hasVBO) {
+        if (hasVAO) {
+            glGenVertexArrays(1, &vao);
+            glBindVertexArray(vao);
+        }
+        glGenBuffers(1, &vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-    glBindVertexArray(vao);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        // Position attribute
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
 
-    // Position attribute
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
+        // Color attribute
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(2 * sizeof(float)));
+        glEnableVertexAttribArray(1);
 
-    // Color attribute
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        if (hasVAO) glBindVertexArray(0);
+    }
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-
-    LOG_INFO("PCB Renderer initialized successfully");
+    LOG_INFO("PCB Renderer initialized (optional GL resources: VBO=" + std::string(hasVBO?"Y":"N") + ", VAO=" + std::string(hasVAO?"Y":"N") + ", Shaders=" + std::string(hasShaders?"Y":"N") + ")");
     return true;
 }
 

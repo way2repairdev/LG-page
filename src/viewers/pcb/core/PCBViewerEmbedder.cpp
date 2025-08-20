@@ -21,6 +21,8 @@
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
+// Include OpenGL2 backend for intermediate pipeline fallback
+#include <imgui_impl_opengl2.h>
 
 #include <iostream>
 #include <unordered_set>
@@ -110,12 +112,18 @@ void PCBViewerEmbedder::cleanup()
         // Set context before cleanup
         ImGui::SetCurrentContext(m_imguiContext);
         
-        ImGui_ImplOpenGL3_Shutdown();
+        // Shutdown whichever backend was initialized
+        if (m_imguiUseGL3) {
+            ImGui_ImplOpenGL3_Shutdown();
+        } else {
+            ImGui_ImplOpenGL2_Shutdown();
+        }
         ImGui_ImplGlfw_Shutdown();
         
         // Destroy our specific context
         ImGui::DestroyContext(m_imguiContext);
-        m_imguiContext = nullptr;
+    m_imguiContext = nullptr;
+    m_imguiUseGL3 = false;
     }
 
     // Cleanup renderer
@@ -228,8 +236,12 @@ void PCBViewerEmbedder::render()
     // Clear the framebuffer
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Start ImGui frame - matching main.cpp sequence
-    ImGui_ImplOpenGL3_NewFrame();
+    // Start ImGui frame using the backend selected at initialization
+    if (m_imguiUseGL3) {
+        ImGui_ImplOpenGL3_NewFrame();
+    } else {
+        ImGui_ImplOpenGL2_NewFrame();
+    }
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
@@ -243,7 +255,11 @@ void PCBViewerEmbedder::render()
 
     // Render ImGui - matching main.cpp sequence
     ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    if (m_imguiUseGL3) {
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    } else {
+        ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
+    }
 
     // Swap buffers - matching main.cpp
     glfwSwapBuffers(m_glfwWindow);
@@ -668,7 +684,7 @@ bool PCBViewerEmbedder::initializeGLFW(void* parentHandle, int width, int height
         s_instanceCount++;
     }
 
-    // Set GLFW window hints - matching Window.cpp configuration
+    // Set GLFW window hints - prefer modern GL, but we'll fallback to compatibility if needed
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -687,7 +703,18 @@ bool PCBViewerEmbedder::initializeGLFW(void* parentHandle, int width, int height
     // Create GLFW window - similar to Window.cpp but for embedding
     m_glfwWindow = glfwCreateWindow(width, height, "PCB Viewer Embedded", nullptr, nullptr);
     if (!m_glfwWindow) {
-        handleError("Failed to create GLFW window");
+        // Retry with a compatibility profile that supports legacy and GL2 paths
+        glfwDefaultWindowHints();
+        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+        // Ask for a 2.1 compatibility context which works with ImGui OpenGL2 backend
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+        // On some drivers, omitting the PROFILE hint yields a compatibility context
+        m_glfwWindow = glfwCreateWindow(width, height, "PCB Viewer Embedded", nullptr, nullptr);
+    }
+    if (!m_glfwWindow) {
+        handleError("Failed to create GLFW window (both core and compatibility)");
         glfwTerminate();
         return false;
     }
@@ -727,10 +754,14 @@ bool PCBViewerEmbedder::initializeGLFW(void* parentHandle, int width, int height
         handleError("Failed to initialize ImGui GLFW backend");
         return false;
     }
-
-    if (!ImGui_ImplOpenGL3_Init("#version 330")) {
-        handleError("Failed to initialize ImGui OpenGL3 backend");
-        return false;
+    // Try OpenGL3 backend first (modern pipeline)
+    m_imguiUseGL3 = ImGui_ImplOpenGL3_Init("#version 330");
+    if (!m_imguiUseGL3) {
+        // Fallback to OpenGL2 backend for intermediate/legacy contexts
+        if (!ImGui_ImplOpenGL2_Init()) {
+            handleError("Failed to initialize both ImGui OpenGL3 and OpenGL2 backends");
+            return false;
+        }
     }
 
 #ifdef _WIN32

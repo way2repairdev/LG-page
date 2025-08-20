@@ -214,6 +214,21 @@
 			],
 			"isBackground": false,
 			"group": "test"
+		},
+		{
+			"label": "One-off Build (agent)",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build",
+				"--target",
+				"Way2RepairLoginSystem"
+			],
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
 		}
 	]
 }

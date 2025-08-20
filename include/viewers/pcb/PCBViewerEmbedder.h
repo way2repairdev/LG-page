@@ -134,6 +134,8 @@ private:
     // ImGui context for this instance (prevents conflicts between tabs)
     ImGuiContext* m_imguiContext;
     bool m_imguiUIEnabled;
+    // Track which ImGui renderer backend is initialized (true = GL3, false = GL2)
+    bool m_imguiUseGL3 {false};
 
     // Core PCB viewer components
     std::unique_ptr<PCBRenderer> m_renderer;

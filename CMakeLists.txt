@@ -168,6 +168,8 @@ set(PCB_SOURCES
     # ImGui implementation sources for GLFW and OpenGL
     ${IMGUI_BACKENDS_DIR}/imgui_impl_glfw.cpp
     ${IMGUI_BACKENDS_DIR}/imgui_impl_opengl3.cpp
+    # Also compile the OpenGL2 backend so we can run on intermediate (GL 2.1) contexts
+    ${IMGUI_BACKENDS_DIR}/imgui_impl_opengl2.cpp
 )
 
 set(DATABASE_SOURCES
