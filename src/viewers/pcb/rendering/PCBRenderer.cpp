@@ -1447,9 +1447,10 @@ bool PCBRenderer::HandleMouseClick(float screen_x, float screen_y, int window_wi
                 if (highlighted_part_index == static_cast<int>(part_idx)) {
                     // Clicking on already highlighted part deselects it
                     highlighted_part_index = -1;
+                    // Also clear highlighted net to fully reset state
+                    highlighted_net.clear();
                 } else {
-                    // Clear pin selection and highlight this part
-                    selected_pin_index = -1;
+                    // Highlight this part without altering any existing pin selection
                     highlighted_net.clear();
                     highlighted_part_index = static_cast<int>(part_idx);
                 }
@@ -1458,9 +1459,10 @@ bool PCBRenderer::HandleMouseClick(float screen_x, float screen_y, int window_wi
         }
     }
     
-    // Click on empty area - deselect everything
+    // Click on empty area - deselect everything, including external net highlight
     selected_pin_index = -1;
     highlighted_part_index = -1;
+    highlighted_net.clear();
     return false; // Click not consumed
 }
 

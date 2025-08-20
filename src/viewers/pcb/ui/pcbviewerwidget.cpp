@@ -800,6 +800,9 @@ void PCBViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QStrin
                                 }
                             }
                             
+                            // Draw a frame so the new highlight is visible immediately under the current menu
+                            m_embedder->render();
+
                             // If it was a right click, open the context menu again for the newly selected target
                             if (me->button() == Qt::RightButton && m_owner) {
                                 // Record a pending reopen at this position and suppress embedder callback once
@@ -819,6 +822,9 @@ void PCBViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QStrin
     PCBViewerEmbedder *m_embedder {nullptr};
     PCBViewerWidget *m_owner {nullptr};
     };
+
+    // Ensure the latest selection/highlight state is drawn before opening the menu
+    if (m_pcbEmbedder) m_pcbEmbedder->render();
 
     OutsideClickForwarder forwarder(&menu, m_viewerContainer, m_pcbEmbedder.get(), this);
     qApp->installEventFilter(&forwarder);

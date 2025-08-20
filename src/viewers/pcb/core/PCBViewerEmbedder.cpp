@@ -864,58 +864,101 @@ void PCBViewerEmbedder::mouseButtonCallback(GLFWwindow* window, int button, int 
                 embedder->m_rcPressX = xpos;
                 embedder->m_rcPressY = ypos;
                 embedder->m_rcMoved = false;
-                // Start panning on press (right-drag), but DO NOT change selection here.
-                // Avoid clearing an existing left-click selection when user right-clicks on empty space to open context menu.
+                // Do not mutate selection/highlight on press; wait for release to decide (quick menu vs drag)
+                // Start panning on press (right-drag)
                 embedder->m_mouseDragging = true;
                 embedder->m_lastMouseX = xpos;
                 embedder->m_lastMouseY = ypos;
             } else if (action == GLFW_RELEASE) {
                 double dt = glfwGetTime() - embedder->m_rcPressTime;
                 if (embedder->m_rcPressTime > 0.0 && !embedder->m_rcMoved && dt < 0.35) {
-                    // On quick right-click, prefer using what's under the cursor.
-                    // If a pin is under cursor, select it; else, if a part is under cursor, highlight that part;
-                    // otherwise keep the current selection.
+                    // Determine if the cursor is on an actionable target (pin or part)
+                    int hoveredPin = -1;
+                    int partIdx    = -1;
                     if (embedder->m_renderer) {
-                        int hoveredPin = embedder->m_renderer->GetHoveredPin(
+                        hoveredPin = embedder->m_renderer->GetHoveredPin(
                             static_cast<float>(xpos), static_cast<float>(ypos),
                             embedder->m_windowWidth, embedder->m_windowHeight);
-                        if (hoveredPin >= 0) {
-                            const bool hasSel = embedder->m_renderer->HasSelectedPin();
-                            const int  selIdx = hasSel ? embedder->m_renderer->GetSelectedPinIndex() : -1;
-                            // Only trigger a select if hovered differs from current selection; this avoids toggling off.
-                            if (!hasSel || selIdx != hoveredPin) {
-                                embedder->handleMouseClick(static_cast<int>(xpos), static_cast<int>(ypos), GLFW_MOUSE_BUTTON_LEFT);
-                            }
-                        } else {
-                            int partIdx = embedder->m_renderer->HitTestPart(
+                        if (hoveredPin < 0) {
+                            partIdx = embedder->m_renderer->HitTestPart(
                                 static_cast<float>(xpos), static_cast<float>(ypos),
                                 embedder->m_windowWidth, embedder->m_windowHeight);
-                            if (partIdx >= 0) {
-                                // Clear pin selection and set highlighted part without toggling via clicks
-                                embedder->m_renderer->ClearSelection();
-                                embedder->m_renderer->SetHighlightedPart(partIdx);
-                            }
                         }
                     }
 
-                    // Gather part/net based on the current (possibly updated) selection/highlight
-                    std::string part;
-                    std::string net;
-                    
-                    // Check if a pin is selected first (pins have more specific info)
-                    if (embedder->m_renderer && embedder->m_renderer->HasSelectedPin()) {
-                        part = embedder->getSelectedPinPart();
-                        net = embedder->getSelectedPinNet();
+                    const bool actionable = (hoveredPin >= 0) || (partIdx >= 0);
+
+                    if (actionable) {
+                        // On quick right-click over a pin/part, update state minimally to reflect target
+                        if (embedder->m_renderer) {
+                            if (hoveredPin >= 0) {
+                                const bool hasSel = embedder->m_renderer->HasSelectedPin();
+                                const int  selIdx = hasSel ? embedder->m_renderer->GetSelectedPinIndex() : -1;
+                                // Only trigger a select if hovered differs from current selection; avoids toggling off
+                                if (!hasSel || selIdx != hoveredPin) {
+                                    embedder->handleMouseClick(static_cast<int>(xpos), static_cast<int>(ypos), GLFW_MOUSE_BUTTON_LEFT);
+                                }
+                                // Do NOT force component-only highlight here; let selected pin's net drive multi-component highlight
+                                // by ensuring no explicit part highlight is set.
+                                if (embedder->m_renderer->GetHighlightedPart() >= 0) {
+                                    embedder->m_renderer->ClearHighlightedPart();
+                                }
+                            } else if (partIdx >= 0) {
+                                bool keepPin = false;
+                                if (embedder->m_renderer->HasSelectedPin() && embedder->m_pcbData) {
+                                    int selIdx = embedder->m_renderer->GetSelectedPinIndex();
+                                    if (selIdx >= 0 && selIdx < static_cast<int>(embedder->m_pcbData->pins.size())) {
+                                        unsigned int selPartOneBased = embedder->m_pcbData->pins[selIdx].part;
+                                        if (selPartOneBased > 0 && static_cast<int>(selPartOneBased - 1) == partIdx) {
+                                            keepPin = true;
+                                        }
+                                    }
+                                }
+                                if (!keepPin) {
+                                    // Highlight part without affecting pin selection
+                                    embedder->m_renderer->ClearHighlightedNet();
+                                    embedder->m_renderer->SetHighlightedPart(partIdx);
+                                }
+                            }
+                        }
+
+                        // Gather part/net based on the current (possibly updated) selection/highlight
+                        std::string part;
+                        std::string net;
+                        
+                        // Prefer selected pin info (more specific)
+                        if (embedder->m_renderer && embedder->m_renderer->HasSelectedPin()) {
+                            part = embedder->getSelectedPinPart();
+                            net = embedder->getSelectedPinNet();
+                        } else if (embedder->m_renderer && embedder->m_renderer->GetHighlightedPart() >= 0) {
+                            part = embedder->getHighlightedPartName();
+                        }
+
+                        // Ensure on-screen highlight matches the menu candidate, but keep pin selection if present
+                        if (!part.empty() && embedder->m_renderer && embedder->m_pcbData) {
+                            int partIndex = -1; size_t idx = 0;
+                            for (const auto &p : embedder->m_pcbData->parts) { if (p.name == part) { partIndex = (int)idx; break; } ++idx; }
+                            if (partIndex >= 0) {
+                                const bool hadSelectedPin = embedder->m_renderer->HasSelectedPin();
+                                if (!hadSelectedPin) {
+                                    embedder->m_renderer->ClearSelection();
+                                    embedder->m_renderer->ClearHighlightedNet();
+                                    embedder->m_renderer->SetHighlightedPart(partIndex);
+                                } else {
+                                    // When a pin is selected, prefer net-driven highlighting; clear any explicit part highlight.
+                                    embedder->m_renderer->ClearHighlightedPart();
+                                }
+                            }
+                        }
+
+                        // Render once so visual state matches the menu
+                        embedder->render();
+
+                        if ((!part.empty() || !net.empty()) && embedder->m_quickRightClickCallback) {
+                            embedder->m_quickRightClickCallback(part, net);
+                        }
                     }
-                    // If no pin is selected, check if a part is highlighted
-                    else if (embedder->m_renderer && embedder->m_renderer->GetHighlightedPart() >= 0) {
-                        part = embedder->getHighlightedPartName();
-                        // For highlighted parts, we don't have a specific net, leave empty
-                    }
-                    
-                    if ((!part.empty() || !net.empty()) && embedder->m_quickRightClickCallback) {
-                        embedder->m_quickRightClickCallback(part, net);
-                    }
+                    // else: blank space quick right-click -> no context menu (allows simple panning behavior)
                 }
                 embedder->m_rcPressTime = 0.0;
                 // Stop panning
