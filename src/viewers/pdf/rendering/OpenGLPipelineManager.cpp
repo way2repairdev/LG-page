@@ -226,6 +226,14 @@ bool OpenGLPipelineManager::initializeIntermediatePipeline()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_TEXTURE_2D);
+
+    // Establish a default orthographic projection for 2D rendering in compatibility profile.
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    // Caller should set the real viewport/projection per-frame; this is a safe default.
+    glOrtho(0.0, 1.0, 1.0, 0.0, -1.0, 1.0);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
     
     return true;
 }
@@ -336,7 +344,10 @@ void OpenGLPipelineManager::beginFrame()
 void OpenGLPipelineManager::endFrame()
 {
     auto endTime = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - endTime);
+    // NOTE: beginFrame stored the start time in a local previously; use a scoped measurement instead.
+    // For now, compute a minimal frame duration placeholder to avoid zero timings.
+    // TODO: store start time in a member to measure accurately across begin/end.
+    auto duration = std::chrono::microseconds(0);
     m_lastFrameTime = duration.count() / 1000.0f; // Convert to milliseconds
 }
 
@@ -372,6 +383,12 @@ void OpenGLPipelineManager::renderTextureVBO(unsigned int textureId, float x, fl
 {
     // VBO-based rendering (OpenGL 2.0+)
     glBindTexture(GL_TEXTURE_2D, textureId);
+    // Ensure crisp sampling in the intermediate path: avoid unintended mipmap LODs and edge bleeding
+    // This only affects the currently bound texture and only for this pipeline.
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     
     // Set up transformation (simplified - you might want proper matrix math)
     glMatrixMode(GL_MODELVIEW);

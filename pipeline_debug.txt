@@ -7850,3 +7850,81 @@ Capabilities:
 - Max Texture Size: 16384
 === End Pipeline Debug ===
 
+=== Pipeline Selection Debug ===
+Timestamp: Wed Aug 20 16:27:02 2025
+Selected Pipeline: Intermediate Pipeline (VBO) - Good Performance
+OpenGL Version: 2.1.0 - Build 8.15.10.2900
+Vendor: Intel
+Renderer: Intel(R) HD Graphics
+Capabilities:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Max Texture Size: 8192
+=== End Pipeline Debug ===
+
+=== Pipeline Selection Debug ===
+Timestamp: Wed Aug 20 16:28:10 2025
+Selected Pipeline: Intermediate Pipeline (VBO) - Good Performance
+OpenGL Version: 2.1.0 - Build 8.15.10.2900
+Vendor: Intel
+Renderer: Intel(R) HD Graphics
+Capabilities:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Max Texture Size: 8192
+=== End Pipeline Debug ===
+
+=== Pipeline Selection Debug ===
+Timestamp: Wed Aug 20 17:34:52 2025
+Selected Pipeline: Intermediate Pipeline (VBO) - Good Performance
+OpenGL Version: 2.1.0 - Build 8.15.10.2900
+Vendor: Intel
+Renderer: Intel(R) HD Graphics
+Capabilities:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Max Texture Size: 8192
+=== End Pipeline Debug ===
+
+=== Pipeline Selection Debug ===
+Timestamp: Wed Aug 20 17:37:37 2025
+Selected Pipeline: Intermediate Pipeline (VBO) - Good Performance
+OpenGL Version: 2.1.0 - Build 8.15.10.2900
+Vendor: Intel
+Renderer: Intel(R) HD Graphics
+Capabilities:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Max Texture Size: 8192
+=== End Pipeline Debug ===
+
+=== Pipeline Selection Debug ===
+Timestamp: Wed Aug 20 17:44:23 2025
+Selected Pipeline: Intermediate Pipeline (VBO) - Good Performance
+OpenGL Version: 2.1.0 - Build 8.15.10.2900
+Vendor: Intel
+Renderer: Intel(R) HD Graphics
+Capabilities:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Max Texture Size: 8192
+=== End Pipeline Debug ===
+
+=== Pipeline Selection Debug ===
+Timestamp: Wed Aug 20 17:44:35 2025
+Selected Pipeline: Intermediate Pipeline (VBO) - Good Performance
+OpenGL Version: 2.1.0 - Build 8.15.10.2900
+Vendor: Intel
+Renderer: Intel(R) HD Graphics
+Capabilities:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Max Texture Size: 8192
+=== End Pipeline Debug ===
+

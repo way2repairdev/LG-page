@@ -2575,17 +2575,31 @@ void PDFViewerEmbedder::processAsyncResults() {
 
         GLuint tex=0; glGenTextures(1, &tex);
         glBindTexture(GL_TEXTURE_2D, tex);
-        if (r.preview) {
-            // Cheaper filtering & no mipmaps for preview to speed interaction
+        // If the selected pipeline is Intermediate (VBO, no shaders), avoid mipmaps and enforce crisp sampling.
+        // This prevents overly blurred pages on drivers/contexts that pick lower LOD aggressively.
+        bool intermediatePipeline = (m_pipelineManager &&
+                                     m_pipelineManager->getSelectedPipeline() == RenderingPipeline::INTERMEDIATE_VBO);
+        if (intermediatePipeline) {
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            // Ensure base level only, in case driver had stale state
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
         } else {
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            if (r.preview) {
+                // Cheaper filtering & no mipmaps for preview to speed interaction
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            } else {
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            }
         }
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, r.width, r.height, 0, GL_BGRA, GL_UNSIGNED_BYTE, r.bgra.data());
-        if (!r.preview) glGenerateMipmap(GL_TEXTURE_2D);
+        if (!intermediatePipeline && !r.preview) glGenerateMipmap(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, 0);
         m_textures[r.pageIndex] = tex;
 

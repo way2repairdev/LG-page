@@ -79,3 +79,4 @@ CMakeLists.txt.user*
 .rcc/
 .uic/
 /build*/
+src/viewers/README.md
