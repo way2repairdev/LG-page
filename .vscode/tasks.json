@@ -183,6 +183,37 @@
 			],
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "Safe Build (kill and build)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"taskkill /IM Way2RepairLoginSystem.exe /F 2>$null; cmake --build build --target Way2RepairLoginSystem"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Safe Run (kill and run)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-Command",
+				"taskkill /IM Way2RepairLoginSystem.exe /F 2>$null; .\\build\\Way2RepairLoginSystem.exe"
+			],
+			"isBackground": false,
+			"group": "test"
 		}
 	]
 }

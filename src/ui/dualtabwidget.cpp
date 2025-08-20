@@ -5,21 +5,227 @@
 #include <QTextStream>
 #include <QDateTime>
 #include <QStandardPaths>
+#include <QCoreApplication>
 #include <QMouseEvent>
 #include <QTimer>
 #include <QTabBar>
 #include <QMessageBox>
+#include <QProxyStyle>
+#include <QFont>
+#include <QToolButton>
+#include <QStyle>
+
+// Forward declaration for logging helper used below
+void logDebug(const QString &message);
+
+// Custom style to remove built-in horizontal padding inside QTabBar tabs
+class MinimalTabStyle : public QProxyStyle {
+public:
+    using QProxyStyle::QProxyStyle;
+    int pixelMetric(PixelMetric metric, const QStyleOption *option, const QWidget *widget) const override {
+        if (metric == PM_TabBarTabHSpace) {
+            return 0; // no extra left/right spacing around the tab label
+        }
+        if (metric == PM_TabBarIconSize) {
+            return 0; // ensure no implicit icon space
+        }
+        // Don't reserve space for the built-in close indicator; we manage our own
+        if (metric == PM_TabCloseIndicatorWidth || metric == PM_TabCloseIndicatorHeight) {
+            return 0;
+        }
+        return QProxyStyle::pixelMetric(metric, option, widget);
+    }
+    // Provide a tiny safe inset for the text rect only (not full tab padding)
+    // to avoid first-glyph clipping when visual left padding is 0.
+    QRect subElementRect(SubElement element, const QStyleOption *option, const QWidget *widget) const override {
+        QRect r = QProxyStyle::subElementRect(element, option, widget);
+        if (element == SE_TabBarTabText) {
+            // Compute minimal left inset to avoid clipping, considering both normal and bold weights.
+            QFont baseFont = widget ? widget->font() : QFont();
+            QFont boldFont = baseFont; boldFont.setWeight(QFont::Weight(700));
+            QFontMetrics fm(baseFont);
+            QFontMetrics fmBold(boldFont);
+
+            // Probe a representative set of first characters and use the worst-case negative left bearing.
+            static const QString probes = QStringLiteral("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _-.,()");
+            int worstLb = 0;
+            for (QChar ch : probes) {
+                int lb1 = fm.leftBearing(ch);
+                int lb2 = fmBold.leftBearing(ch);
+                worstLb = qMin(worstLb, lb1);
+                worstLb = qMin(worstLb, lb2);
+            }
+
+            // Always keep at least 1px inset as a safety against edge-case clipping
+            const int leftInset = qMax(1, (worstLb < 0) ? -worstLb : 0);
+
+            // Reserve space on the right for our custom close button (~14px) + tiny margin
+            const int rightReserve = 16; // 14px button + 2px gap
+
+            r.adjust(leftInset, 0, -rightReserve, 0);
+            if (r.width() < 0) r.setWidth(0);
+        }
+        return r;
+    }
+};
+
+static MinimalTabStyle g_minimalTabStyle;
+
+// Create a small close button for a tab if the native one isn't available
+static QToolButton* makeCloseButton(QWidget* parent)
+{
+    auto *btn = new QToolButton(parent);
+    btn->setAutoRaise(true);
+    btn->setCursor(Qt::PointingHandCursor);
+    btn->setFixedSize(14, 14);
+    // Use a high-contrast text glyph for maximum visibility
+    btn->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    btn->setText(QString::fromUtf16(u"✕"));
+    btn->setStyleSheet(
+        "QToolButton { margin:0; padding:0; border:none; background: transparent; color: #444; font-weight: 600; }"
+        "QToolButton:hover { background: rgba(0,0,0,0.12); border-radius: 3px; color: #b00020; }"
+    );
+    btn->setToolTip(QObject::tr("Close"));
+    return btn;
+}
+
+// Helper: toggle visibility of built-in close buttons per tab index
+static void setCloseButtonsVisible(QTabBar* bar, int onlyIndex)
+{
+    if (!bar) return;
+    bool anyShown = false;
+    for (int i = 0; i < bar->count(); ++i) {
+        const bool vis = (i == onlyIndex);
+        if (QWidget* btn = bar->tabButton(i, QTabBar::RightSide)) {
+            btn->setVisible(vis);
+            if (vis) anyShown = true;
+        }
+        if (QWidget* btnL = bar->tabButton(i, QTabBar::LeftSide)) btnL->setVisible(vis);
+    }
+    logDebug(QString("setCloseButtonsVisible: onlyIndex=%1, anyShown=%2, count=%3")
+                 .arg(onlyIndex).arg(anyShown).arg(bar->count()));
+}
+
+// Ensure each tab has a QWidget close button we can show/hide
+static void ensureCloseButtons(QWidget* owner, QTabWidget* tabWidget, std::function<void(int)> onClose)
+{
+    if (!tabWidget) return;
+    QTabBar* bar = tabWidget->tabBar();
+    if (!bar) return;
+    for (int i = 0; i < bar->count(); ++i) {
+        // Always replace with our own button to avoid style-specific quirks
+        QToolButton* btn = makeCloseButton(bar);
+        btn->setVisible(false);
+        // Resolve index at click time to handle dynamic tab indices
+        QObject::connect(btn, &QToolButton::clicked, owner, [bar, btn, onClose]() {
+            for (int j = 0; j < bar->count(); ++j) {
+                if (bar->tabButton(j, QTabBar::RightSide) == btn) {
+                    onClose(j);
+                    return;
+                }
+            }
+        });
+        bar->setTabButton(i, QTabBar::RightSide, btn);
+        logDebug(QString("ensureCloseButtons: injected button on tab %1").arg(i));
+    }
+}
 
 // Debug logging function
 void logDebug(const QString &message) {
-    static QString debugFilePath = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + "/dualtab_debug.txt";
-    QFile debugFile(debugFilePath);
-    if (debugFile.open(QIODevice::WriteOnly | QIODevice::Append)) {
-        QTextStream stream(&debugFile);
-        stream << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz") 
-               << " - " << message << "\n";
-        debugFile.close();
+    const QString stamped = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz") + " - " + message + "\n";
+    // 1) User Downloads (existing path)
+    static QString downloadsPath = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + "/dualtab_debug.txt";
+    {
+        QFile f(downloadsPath);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Append)) { QTextStream s(&f); s << stamped; }
     }
+    // 2) App folder (next to exe) for easy sharing with builds
+    static QString appLogPath = QCoreApplication::applicationDirPath() + "/tab_debug.txt";
+    {
+        QFile f(appLogPath);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Append)) { QTextStream s(&f); s << stamped; }
+    }
+}
+
+// Helper: log key metrics of a QTabBar and its tabs
+static void logTabBarState(QTabBar* bar, const char* when, const char* tag)
+{
+    if (!bar) return;
+    QStringList lines;
+    lines << QString("[TabBar %1] tag=%2 when=%3 count=%4 elide=%5 usesScroll=%6 size=%7x%8")
+                .arg(reinterpret_cast<quintptr>(bar), 0, 16)
+                .arg(tag)
+                .arg(when)
+                .arg(bar->count())
+                .arg(static_cast<int>(bar->elideMode()))
+                .arg(bar->usesScrollButtons())
+                .arg(bar->width()).arg(bar->height());
+    const int pmHSpace = bar->style()->pixelMetric(QStyle::PM_TabBarTabHSpace, nullptr, bar);
+    const int pmIcon   = bar->style()->pixelMetric(QStyle::PM_TabBarIconSize, nullptr, bar);
+    const int pmCloseW = bar->style()->pixelMetric(QStyle::PM_TabCloseIndicatorWidth, nullptr, bar);
+    const QSize iconSz = bar->iconSize();
+    lines << QString("  pixelMetric HSpace=%1 IconPM=%2 CloseW=%3 iconSizeProp=%4x%5")
+                .arg(pmHSpace).arg(pmIcon).arg(pmCloseW).arg(iconSz.width()).arg(iconSz.height());
+    QFontMetrics fm(bar->font());
+    for (int i = 0; i < bar->count(); ++i) {
+        const QRect r = bar->tabRect(i);
+        const QString t = bar->tabText(i);
+        const int textMaxW = qMax(0, r.width() - pmHSpace); // approx available width
+        const QString elided = fm.elidedText(t, bar->elideMode(), textMaxW);
+        const ushort first = t.isEmpty() ? 0 : t.at(0).unicode();
+    lines << QString("  idx=%1 rect=[%2,%3 %4x%5] textMaxW=%6 firstU+%7 text='%8' elided='%9'")
+            .arg(i)
+            .arg(r.left()).arg(r.top()).arg(r.width()).arg(r.height())
+            .arg(textMaxW)
+            .arg(first, 4, 16, QLatin1Char('0'))
+            .arg(t)
+            .arg(elided);
+    }
+    logDebug(lines.join('\n'));
+}
+
+// Returns a user-friendly display name from a label/path by removing
+// any directory components and the final file extension (e.g., .pdf, .pcb)
+static QString displayNameFromLabel(const QString &label)
+{
+    if (label.isEmpty()) return label;
+
+    // Normalize and strip common prefixes like "PDF File:" or "PCB File:" (case-insensitive)
+    QString cleaned = label.trimmed();
+    auto stripPrefix = [&cleaned](const QString &prefix){
+        if (cleaned.startsWith(prefix, Qt::CaseInsensitive)) {
+            cleaned = cleaned.mid(prefix.length()).trimmed();
+        }
+    };
+    stripPrefix("PDF File:");
+    stripPrefix("PCB File:");
+    stripPrefix("PDF:");
+    stripPrefix("PCB:");
+
+    // Extract last path segment (supports both '/' and '\\')
+    int posSlash = cleaned.lastIndexOf('/');
+    int posBack = cleaned.lastIndexOf('\\');
+    int pos = qMax(posSlash, posBack);
+    QString name = (pos >= 0) ? cleaned.mid(pos + 1) : cleaned;
+
+    // Remove extension if it is .pdf or .pcb (case-insensitive)
+    int dot = name.lastIndexOf('.');
+    if (dot > 0 && dot < name.length() - 1) {
+        const QString ext = name.mid(dot + 1).toLower();
+        if (ext == "pdf" || ext == "pcb") {
+            name = name.left(dot);
+        }
+    }
+    // Remove any leading punctuation that might remain (e.g., ":" or dashes)
+    while (!name.isEmpty()) {
+        const QChar ch = name.at(0);
+        if (ch == ' ' || ch == '\t' || ch == ':' || ch == '.' || ch == '-') {
+            name.remove(0, 1);
+        } else {
+            break;
+        }
+    }
+    return name;
 }
 
 DualTabWidget::DualTabWidget(QWidget *parent) 
@@ -42,9 +248,17 @@ void DualTabWidget::setupUI()
     
     // Create PDF tab widget (Row 1)
     m_pdfTabWidget = new QTabWidget();
-    m_pdfTabWidget->setTabsClosable(true);
+    // We'll manage close buttons ourselves (hover-only)
+    m_pdfTabWidget->setTabsClosable(false);
     // Disable tab dragging/reordering for PDF tabs  
     m_pdfTabWidget->setMovable(false);
+    // Apply minimal tab style to remove built-in label h-padding
+    m_pdfTabWidget->tabBar()->setStyle(&g_minimalTabStyle);
+    // Enable hover tracking
+    m_pdfTabWidget->tabBar()->setMouseTracking(true);
+    m_pdfTabWidget->tabBar()->setAttribute(Qt::WA_Hover, true);
+    // Show hover state events without pressing
+    m_pdfTabWidget->tabBar()->setMouseTracking(true);
     
     // Enable scrollable tabs when there are too many
     m_pdfTabWidget->tabBar()->setUsesScrollButtons(true);
@@ -56,7 +270,7 @@ void DualTabWidget::setupUI()
     QString modernTabStyleBlue = 
         "QTabWidget {"
         "    background: #000000 !important;"
-        "    font-family: 'Segoe UI', Arial, sans-serif !important;"
+        "    font-family: 'Segoe UI Variable Text', 'Segoe UI', 'Inter', Arial, sans-serif !important;"
         "}"
         "QTabWidget::pane {"
         "    border: 2px solid #4A90E2;"
@@ -71,14 +285,16 @@ void DualTabWidget::setupUI()
         "}"
     "QTabBar::tab {"
     "    background-color: #f0f0f0;"
-    "    border: 2px solid #cccccc;"
+    "    border: 2px solid #666666;"
     "    color: #333333;"
-    "    padding: 4px 32px 4px 24px;"  // reduced height
+    "    padding: 4px 6px 4px 3px;"
     "    margin: 2px;"
     "    min-height: 22px;"
     "    min-width: 120px;"
     "    max-width: 250px;"
-    "    font-size: 11px;"
+    "    font-size: 12px !important;"
+    "    font-weight: 500 !important;"
+    "    letter-spacing: 0.2px;"
     "    text-align: left;"
     "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
     "}"
@@ -86,9 +302,9 @@ void DualTabWidget::setupUI()
     "    background-color: #ffffff;"
     "    color: #0066cc;"
     "    border: 2px solid #4A90E2;"
-    "    font-weight: normal;"
-    "    padding: 4px 32px 4px 24px;"
-    "    font-size: 11px;"
+    "    font-weight: 700 !important;"
+    "    padding: 4px 6px 4px 3px;"
+    "    font-size: 12px !important;"
     "    min-width: 120px;"
     "    max-width: 250px;"
     "    text-align: left;"
@@ -99,22 +315,20 @@ void DualTabWidget::setupUI()
     "    border: 2px solid #90caf9;"
     "    color: #1976d2;"
     "    font-family: \"Segoe UI\", Arial, sans-serif;"
-    "    letter-spacing: 0.3px;"
     "    opacity: 0.9;"
-    "    padding: 4px 32px 4px 24px;"
+    "    padding: 4px 6px 4px 3px;"
     "    min-width: 120px;"
     "    max-width: 250px;"
     "    text-align: left;"
     "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "    transition: all 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);"
-    "    font-weight: normal;"
+    "    font-weight: 500 !important;"
     "}"
         "/* Active tab hover state - enhanced glow */"
     "QTabBar::tab:selected:hover {"
     "    background-color: #ffffff;"
     "    color: #0066cc;"
     "    border: 2px solid #4A90E2;"
-    "    padding: 4px 32px 4px 24px;"
+    "    padding: 4px 6px 4px 3px;"
     "    min-width: 120px;"
     "    max-width: 250px;"
     "    text-align: left;"
@@ -143,7 +357,7 @@ void DualTabWidget::setupUI()
         "    animation-duration: 0.3s;"
         "    animation-timing-function: cubic-bezier(0.4, 0.0, 0.2, 1);"
         "}"
-        "/* Close button styling */"
+        "/* Close button styling: image always defined; visibility controlled in code */"
     "QTabBar::close-button {"
     "    image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=);"
     "    subcontrol-origin: content;"
@@ -154,6 +368,7 @@ void DualTabWidget::setupUI()
     "    border-radius: 2px;"
     "    background: transparent;"
     "}"
+    ""
         "QTabBar::close-button:hover {"
         "    background: rgba(255, 0, 0, 0.1);"
         "    border-radius: 2px;"
@@ -167,10 +382,10 @@ void DualTabWidget::setupUI()
     QString modernTabStyleRed =
         "QTabWidget {"
         "    background: #000000 !important;"
-        "    font-family: 'Segoe UI', Arial, sans-serif !important;"
+        "    font-family: 'Segoe UI Variable Text', 'Segoe UI', 'Inter', Arial, sans-serif !important;"
         "}"
         "QTabWidget::pane {"
-        "    border: 2px solid #E53935;"
+        "    border: 2px solid #666666;"
         "    background-color: #ffffff;"
         "    margin-top: 6px;"
         "    border-radius: 0px;"
@@ -182,14 +397,16 @@ void DualTabWidget::setupUI()
         "}"
     "QTabBar::tab {"
     "    background-color: #f0f0f0;"
-    "    border: 2px solid #cccccc;"
+    "    border: 2px solid #666666;"
     "    color: #333333;"
-    "    padding: 4px 32px 4px 24px;"
+    "    padding: 4px 6px 4px 3px;"
     "    margin: 2px;"
     "    min-height: 22px;"
     "    min-width: 120px;"
     "    max-width: 250px;"
-    "    font-size: 11px;"
+    "    font-size: 12px !important;"
+    "    font-weight: 500 !important;"
+    "    letter-spacing: 0.2px;"
     "    text-align: left;"
     "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
     "}"
@@ -197,9 +414,9 @@ void DualTabWidget::setupUI()
     "    background-color: #ffffff;"
     "    color: #c62828;"
     "    border: 2px solid #E53935;"
-    "    font-weight: normal;"
-    "    padding: 4px 32px 4px 24px;"
-    "    font-size: 11px;"
+    "    font-weight: 700 !important;"
+    "    padding: 4px 6px 4px 3px;"
+    "    font-size: 12px !important;"
     "    min-width: 120px;"
     "    max-width: 250px;"
     "    text-align: left;"
@@ -210,21 +427,19 @@ void DualTabWidget::setupUI()
     "    border: 2px solid #ef9a9a;"
     "    color: #d32f2f;"
     "    font-family: \"Segoe UI\", Arial, sans-serif;"
-    "    letter-spacing: 0.3px;"
     "    opacity: 0.9;"
-    "    padding: 4px 32px 4px 24px;"
+    "    padding: 4px 6px 4px 3px;"
     "    min-width: 120px;"
     "    max-width: 250px;"
     "    text-align: left;"
     "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "    transition: all 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);"
-    "    font-weight: normal;"
+    "    font-weight: 500 !important;"
     "}"
     "QTabBar::tab:selected:hover {"
     "    background-color: #ffffff;"
     "    color: #c62828;"
     "    border: 2px solid #E53935;"
-    "    padding: 4px 32px 4px 24px;"
+    "    padding: 4px 6px 4px 3px;"
     "    min-width: 120px;"
     "    max-width: 250px;"
     "    text-align: left;"
@@ -247,17 +462,18 @@ void DualTabWidget::setupUI()
         "    animation-duration: 0.3s;"
         "    animation-timing-function: cubic-bezier(0.4, 0.0, 0.2, 1);"
         "}"
-        "QTabBar::close-button {"
-        "    image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=);"
-        "    subcontrol-origin: content;"
-        "    subcontrol-position: center right;"
-        "    width: 12px;"
-        "    height: 12px;"
-        "    margin: 0px 6px 0px 4px;"
-        "    border-radius: 2px;"
-        "    background: transparent;"
-        "}"
-        "QTabBar::close-button:hover {"
+    "QTabBar::close-button {"
+    "    image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=);"
+    "    subcontrol-origin: content;"
+    "    subcontrol-position: center right;"
+    "    width: 12px;"
+    "    height: 12px;"
+    "    margin: 0px 6px 0px 4px;"
+    "    border-radius: 2px;"
+    "    background: transparent;"
+    "}"
+    ""
+    "QTabBar::close-button:hover {"
         "    background: rgba(255, 0, 0, 0.1);"
         "    border-radius: 2px;"
         "}"
@@ -266,9 +482,15 @@ void DualTabWidget::setupUI()
         "    color: #ffffff !important;"
         "}";
     m_pcbTabWidget = new QTabWidget();
-    m_pcbTabWidget->setTabsClosable(true);
+    // We'll manage close buttons ourselves (hover-only)
+    m_pcbTabWidget->setTabsClosable(false);
     // Disable tab dragging/reordering for PCB tabs
     m_pcbTabWidget->setMovable(false);
+    // Apply minimal tab style to remove built-in label h-padding
+    m_pcbTabWidget->tabBar()->setStyle(&g_minimalTabStyle);
+    // Show hover state events without pressing
+    m_pcbTabWidget->tabBar()->setMouseTracking(true);
+    m_pcbTabWidget->tabBar()->setAttribute(Qt::WA_Hover, true);
     
     // Enable scrollable tabs when there are too many
     m_pcbTabWidget->tabBar()->setUsesScrollButtons(true);
@@ -280,6 +502,19 @@ void DualTabWidget::setupUI()
     // Apply BLUE to PDF and RED to PCB tab widgets (tagged for runtime debugging)
     applyStyleWithTag(m_pdfTabWidget, modernTabStyleBlue, "modernTabStyleBlue-startup");
     applyStyleWithTag(m_pcbTabWidget, modernTabStyleRed, "modernTabStyleRed-startup");
+    // Log initial tab bar state after startup style
+    logTabBarState(m_pdfTabWidget->tabBar(), "after-startup-style", "PDF");
+    logTabBarState(m_pcbTabWidget->tabBar(), "after-startup-style", "PCB");
+    // Ensure close buttons exist and are hidden initially
+    ensureCloseButtons(this, m_pdfTabWidget, [this](int idx){ onPdfTabCloseRequested(idx); });
+    ensureCloseButtons(this, m_pcbTabWidget, [this](int idx){ onPcbTabCloseRequested(idx); });
+    // Hide all close buttons initially (hover-only behavior)
+    setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
+    setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
+    // Track mouse globally so hover works over sub-controls too
+    if (QCoreApplication::instance()) {
+        QCoreApplication::instance()->installEventFilter(this);
+    }
     
     // DEBUG: Test with obvious colors (comment out after testing)
     // testObviousStyle();
@@ -321,6 +556,7 @@ void DualTabWidget::setupUI()
     // Install event filters on tab bars to ensure clicks are always detected
     m_pdfTabWidget->tabBar()->installEventFilter(this);
     m_pcbTabWidget->tabBar()->installEventFilter(this);
+    logDebug("Event filters installed on both tab bars");
     
     logDebug("Signal connections established for both tab widgets");
     
@@ -344,7 +580,7 @@ int DualTabWidget::addTab(QWidget *widget, const QString &label, TabType type)
     return addTab(widget, QIcon(), label, type);
 }
 
-int DualTabWidget::addTab(QWidget *widget, const QIcon &icon, const QString &label, TabType type)
+int DualTabWidget::addTab(QWidget *widget, const QIcon &/*icon*/, const QString &label, TabType type)
 {
     logDebug(QString("addTab() called - label: %1, type: %2").arg(label).arg((int)type));
     
@@ -376,8 +612,17 @@ int DualTabWidget::addTab(QWidget *widget, const QIcon &icon, const QString &lab
         m_pdfWidgets.append(widget);
         
         // Add dummy widget to PDF tab bar (actual content is in PDF content area)
-        QWidget *dummyWidget = new QWidget();
-        tabIndex = m_pdfTabWidget->addTab(dummyWidget, label); // Remove icon parameter
+    QWidget *dummyWidget = new QWidget();
+    // Show only the base file name without extension
+    const QString display = displayNameFromLabel(label);
+    tabIndex = m_pdfTabWidget->addTab(dummyWidget, display); // icon intentionally ignored
+    // Ensure close button exists for this tab and hide until hover
+    ensureCloseButtons(this, m_pdfTabWidget, [this](int idx){ onPdfTabCloseRequested(idx); });
+    setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
+    // Log the state after adding a tab
+    logTabBarState(m_pdfTabWidget->tabBar(), "after-add-tab", "PDF");
+    // Ensure close buttons remain hidden until hover
+    setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
         
         logDebug(QString("Added PDF tab - index: %1, total PDF tabs: %2").arg(tabIndex).arg(m_pdfWidgets.count()));
         
@@ -392,8 +637,17 @@ int DualTabWidget::addTab(QWidget *widget, const QIcon &icon, const QString &lab
         m_pcbWidgets.append(widget);
         
         // Add dummy widget to PCB tab bar
-        QWidget *dummyWidget = new QWidget();
-        tabIndex = m_pcbTabWidget->addTab(dummyWidget, label); // Remove icon parameter
+    QWidget *dummyWidget = new QWidget();
+    // Show only the base file name without extension
+    const QString display = displayNameFromLabel(label);
+    tabIndex = m_pcbTabWidget->addTab(dummyWidget, display); // icon intentionally ignored
+    // Ensure close button exists for this tab and hide until hover
+    ensureCloseButtons(this, m_pcbTabWidget, [this](int idx){ onPcbTabCloseRequested(idx); });
+    setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
+    // Log the state after adding a tab
+    logTabBarState(m_pcbTabWidget->tabBar(), "after-add-tab", "PCB");
+    // Ensure close buttons remain hidden until hover
+    setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
         
         logDebug(QString("Added PCB tab - index: %1, total PCB tabs: %2").arg(tabIndex).arg(m_pcbWidgets.count()));
         
@@ -518,10 +772,13 @@ int DualTabWidget::count(TabType type) const
 
 void DualTabWidget::setTabText(int index, const QString &text, TabType type)
 {
+    const QString display = displayNameFromLabel(text);
     if (type == PDF_TAB) {
-        m_pdfTabWidget->setTabText(index, text);
+        m_pdfTabWidget->setTabText(index, display);
+    logTabBarState(m_pdfTabWidget->tabBar(), "after-setTabText", "PDF");
     } else {
-        m_pcbTabWidget->setTabText(index, text);
+        m_pcbTabWidget->setTabText(index, display);
+    logTabBarState(m_pcbTabWidget->tabBar(), "after-setTabText", "PCB");
     }
 }
 
@@ -775,12 +1032,19 @@ void DualTabWidget::updateTabBarStates()
 void DualTabWidget::updateTabBarVisualState()
 {
     logDebug("updateTabBarVisualState() called");
+    // Capture state prior to applying runtime styles
+    if (m_pdfTabWidget && m_pdfTabWidget->tabBar()) {
+        logTabBarState(m_pdfTabWidget->tabBar(), "before-runtime-style", "PDF");
+    }
+    if (m_pcbTabWidget && m_pcbTabWidget->tabBar()) {
+        logTabBarState(m_pcbTabWidget->tabBar(), "before-runtime-style", "PCB");
+    }
     
     // Professional rectangular tabs with proper borders (BLUE for PDF)
     QString modernTabStyleBlue = 
         "QTabWidget {"
         "    background: #000000 !important;"
-        "    font-family: 'Segoe UI', Arial, sans-serif !important;"
+        "    font-family: 'Segoe UI Variable Text', 'Segoe UI', 'Inter', Arial, sans-serif !important;"
         "}"
         "QTabWidget::pane {"
         "    border: 2px solid #4A90E2;"
@@ -795,14 +1059,16 @@ void DualTabWidget::updateTabBarVisualState()
         "}"
     "QTabBar::tab {"
     "    background-color: #f0f0f0;"
-    "    border: 2px solid #cccccc;"
+    "    border: 2px solid #666666;"
     "    color: #333333;"
-    "    padding: 4px 32px 4px 24px;"
+    "    padding: 4px 6px 4px 3px;"
     "    margin: 2px;"
     "    min-height: 22px;"
     "    min-width: 120px;"
     "    max-width: 250px;"
-    "    font-size: 11px;"
+    "    font-size: 12px !important;"
+    "    font-weight: 500 !important;"
+    "    letter-spacing: 0.2px;"
     "    text-align: left;"
     "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
     "}"
@@ -810,9 +1076,9 @@ void DualTabWidget::updateTabBarVisualState()
     "    background-color: #ffffff;"
     "    color: #0066cc;"
     "    border: 2px solid #4A90E2;"
-    "    font-weight: normal;"
-    "    padding: 4px 32px 4px 24px;"
-    "    font-size: 11px;"
+    "    font-weight: 700 !important;"
+    "    padding: 4px 6px 4px 3px;"
+    "    font-size: 12px !important;"
     "    min-width: 120px;"
     "    max-width: 250px;"
     "    text-align: left;"
@@ -823,22 +1089,20 @@ void DualTabWidget::updateTabBarVisualState()
     "    border: 2px solid #90caf9;"
     "    color: #1976d2;"
     "    font-family: \"Segoe UI\", Arial, sans-serif;"
-    "    letter-spacing: 0.3px;"
     "    opacity: 0.9;"
-    "    padding: 4px 32px 4px 24px;"
+    "    padding: 4px 6px 4px 3px;"
     "    min-width: 120px;"
     "    max-width: 250px;"
     "    text-align: left;"
     "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "    transition: all 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);"
-    "    font-weight: normal;"
+    "    font-weight: 500 !important;"
     "}"
         "/* Active tab hover state - enhanced glow */"
     "QTabBar::tab:selected:hover {"
     "    background-color: #ffffff;"
     "    color: #0066cc;"
     "    border: 2px solid #4A90E2;"
-    "    padding: 4px 32px 4px 24px;"
+    "    padding: 4px 6px 4px 3px;"
     "    min-width: 120px;"
     "    max-width: 250px;"
     "    text-align: left;"
@@ -867,18 +1131,19 @@ void DualTabWidget::updateTabBarVisualState()
         "    animation-duration: 0.3s;"
         "    animation-timing-function: cubic-bezier(0.4, 0.0, 0.2, 1);"
         "}"
-        "/* Close button styling */"
-        "QTabBar::close-button {"
-        "    image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=);"
-        "    subcontrol-origin: content;"
-        "    subcontrol-position: center right;"
-        "    width: 12px;"
-        "    height: 12px;"
-        "    margin: 0px 6px 0px 4px;"
-        "    border-radius: 2px;"
-        "    background: transparent;"
-        "}"
-        "QTabBar::close-button:hover {"
+    "/* Close button styling: image always defined; visibility controlled in code */"
+    "QTabBar::close-button {"
+    "    image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=);"
+    "    subcontrol-origin: content;"
+    "    subcontrol-position: center right;"
+    "    width: 12px;"
+    "    height: 12px;"
+    "    margin: 0px 6px 0px 4px;"
+    "    border-radius: 2px;"
+    "    background: transparent;"
+    "}"
+    ""
+    "QTabBar::close-button:hover {"
         "    background: rgba(255, 0, 0, 0.1);"
         "    border-radius: 2px;"
         "}"
@@ -891,7 +1156,7 @@ void DualTabWidget::updateTabBarVisualState()
     QString modernTabStyleRed =
         "QTabWidget {"
         "    background: #000000 !important;"
-        "    font-family: 'Segoe UI', Arial, sans-serif !important;"
+        "    font-family: 'Segoe UI Variable Text', 'Segoe UI', 'Inter', Arial, sans-serif !important;"
         "}"
         "QTabWidget::pane {"
         "    border: 2px solid #E53935;"
@@ -906,14 +1171,16 @@ void DualTabWidget::updateTabBarVisualState()
         "}"
         "QTabBar::tab {"
         "    background-color: #f0f0f0;"
-        "    border: 2px solid #cccccc;"
+        "    border: 2px solid #666666;"
         "    color: #333333;"
-    "    padding: 4px 32px 4px 24px;"
+    "    padding: 4px 28px 4px 3px;"
         "    margin: 2px;"
         "    min-height: 22px;"
         "    min-width: 120px;"
         "    max-width: 250px;"
-        "    font-size: 11px;"
+    "    font-size: 12px !important;"
+    "    font-weight: 500 !important;"
+    "    letter-spacing: 0.2px;"
         "    text-align: left;"
         "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
         "}"
@@ -921,9 +1188,9 @@ void DualTabWidget::updateTabBarVisualState()
         "    background-color: #ffffff;"
         "    color: #c62828;"
         "    border: 2px solid #E53935;"
-        "    font-weight: normal;"
-    "    padding: 4px 32px 4px 24px;"
-        "    font-size: 11px;"
+    "    font-weight: 700 !important;"
+    "    padding: 4px 28px 4px 3px;"
+        "    font-size: 12px !important;"
         "    min-width: 120px;"
         "    max-width: 250px;"
         "    text-align: left;"
@@ -934,21 +1201,19 @@ void DualTabWidget::updateTabBarVisualState()
         "    border: 2px solid #ef9a9a;"
         "    color: #d32f2f;"
         "    font-family: \"Segoe UI\", Arial, sans-serif;"
-        "    letter-spacing: 0.3px;"
         "    opacity: 0.9;"
-    "    padding: 4px 32px 4px 24px;"
+    "    padding: 4px 28px 4px 3px;"
         "    min-width: 120px;"
         "    max-width: 250px;"
         "    text-align: left;"
         "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-        "    transition: all 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);"
-        "    font-weight: normal;"
+    "    font-weight: 500 !important;"
         "}"
         "QTabBar::tab:selected:hover {"
         "    background-color: #ffffff;"
         "    color: #c62828;"
         "    border: 2px solid #E53935;"
-    "    padding: 4px 32px 4px 24px;"
+    "    padding: 4px 28px 4px 3px;"
         "    min-width: 120px;"
         "    max-width: 250px;"
         "    text-align: left;"
@@ -971,17 +1236,18 @@ void DualTabWidget::updateTabBarVisualState()
         "    animation-duration: 0.3s;"
         "    animation-timing-function: cubic-bezier(0.4, 0.0, 0.2, 1);"
         "}"
-        "QTabBar::close-button {"
-        "    image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=);"
-        "    subcontrol-origin: content;"
-        "    subcontrol-position: center right;"
-        "    width: 12px;"
-        "    height: 12px;"
-        "    margin: 0px 6px 0px 4px;"
-        "    border-radius: 2px;"
-        "    background: transparent;"
-        "}"
-        "QTabBar::close-button:hover {"
+    "QTabBar::close-button {"
+    "    image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=);"
+    "    subcontrol-origin: content;"
+    "    subcontrol-position: center right;"
+    "    width: 12px;"
+    "    height: 12px;"
+    "    margin: 0px 6px 0px 4px;"
+    "    border-radius: 2px;"
+    "    background: transparent;"
+    "}"
+    ""
+    "QTabBar::close-button:hover {"
         "    background: rgba(255, 0, 0, 0.1);"
         "    border-radius: 2px;"
         "}"
@@ -997,7 +1263,20 @@ void DualTabWidget::updateTabBarVisualState()
     // Ensure icon space is disabled after styling updates
     m_pdfTabWidget->setIconSize(QSize(0, 0));
     m_pcbTabWidget->setIconSize(QSize(0, 0));
+    // Keep close buttons hidden until hover after style changes
+    ensureCloseButtons(this, m_pdfTabWidget, [this](int idx){ onPdfTabCloseRequested(idx); });
+    ensureCloseButtons(this, m_pcbTabWidget, [this](int idx){ onPcbTabCloseRequested(idx); });
+    setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
+    setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
     
+    // Capture state after applying runtime styles
+    if (m_pdfTabWidget && m_pdfTabWidget->tabBar()) {
+        logTabBarState(m_pdfTabWidget->tabBar(), "after-runtime-style", "PDF");
+    }
+    if (m_pcbTabWidget && m_pcbTabWidget->tabBar()) {
+        logTabBarState(m_pcbTabWidget->tabBar(), "after-runtime-style", "PCB");
+    }
+
     logDebug("updateTabBarVisualState() completed with modern tab styling");
 }
 
@@ -1021,6 +1300,8 @@ void DualTabWidget::onPdfCurrentChanged(int index)
         // User clicked on PDF tab - activate it with mutual exclusion
         logDebug(QString("Activating PDF tab %1").arg(index));
         activateTab(index, PDF_TAB);
+    // Log state after activation
+    logTabBarState(m_pdfTabWidget->tabBar(), "after-activate", "PDF");
     } else {
         logDebug(QString("Invalid PDF tab index: %1").arg(index));
     }
@@ -1035,6 +1316,8 @@ void DualTabWidget::onPcbCurrentChanged(int index)
         // User clicked on PCB tab - activate it with mutual exclusion
         logDebug(QString("Activating PCB tab %1").arg(index));
         activateTab(index, PCB_TAB);
+    // Log state after activation
+    logTabBarState(m_pcbTabWidget->tabBar(), "after-activate", "PCB");
     } else {
         logDebug(QString("Invalid PCB tab index: %1").arg(index));
     }
@@ -1060,6 +1343,41 @@ void DualTabWidget::updateVisibility()
 
 bool DualTabWidget::eventFilter(QObject *obj, QEvent *event)
 {
+    // Hover handling: show close button only for hovered tab (using global cursor, works over children)
+    if (event->type() == QEvent::MouseMove || event->type() == QEvent::HoverMove || event->type() == QEvent::Enter) {
+        const QPoint globalPos = QCursor::pos();
+        if (m_pdfTabWidget && m_pdfTabWidget->tabBar()) {
+            auto *bar = m_pdfTabWidget->tabBar();
+            const QPoint local = bar->mapFromGlobal(globalPos);
+            const int idx = bar->rect().contains(local) ? bar->tabAt(local) : -1;
+            setCloseButtonsVisible(bar, idx);
+        }
+        if (m_pcbTabWidget && m_pcbTabWidget->tabBar()) {
+            auto *bar = m_pcbTabWidget->tabBar();
+            const QPoint local = bar->mapFromGlobal(globalPos);
+            const int idx = bar->rect().contains(local) ? bar->tabAt(local) : -1;
+            setCloseButtonsVisible(bar, idx);
+        }
+    }
+    // Ensure buttons hide immediately when cursor leaves a tab bar
+    if (event->type() == QEvent::Leave) {
+        if (m_pdfTabWidget && obj == m_pdfTabWidget->tabBar()) {
+            setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
+        } else if (m_pcbTabWidget && obj == m_pcbTabWidget->tabBar()) {
+            setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
+        }
+        // continue default processing
+    }
+    // Log geometry/metrics on resize events for both tab bars
+    if (event->type() == QEvent::Resize) {
+        if (obj == m_pdfTabWidget->tabBar()) {
+            logTabBarState(m_pdfTabWidget->tabBar(), "on-resize", "PDF");
+        } else if (obj == m_pcbTabWidget->tabBar()) {
+            logTabBarState(m_pcbTabWidget->tabBar(), "on-resize", "PCB");
+        }
+        // continue default processing
+    }
+
     // Handle mouse press events on tab bars to ensure clicks are always detected
     if (event->type() == QEvent::MouseButtonPress) {
         QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
@@ -1070,6 +1388,8 @@ bool DualTabWidget::eventFilter(QObject *obj, QEvent *event)
                 int clickedIndex = m_pdfTabWidget->tabBar()->tabAt(mouseEvent->pos());
                 if (clickedIndex >= 0) {
                     logDebug(QString("Event filter caught PDF tab click - index: %1").arg(clickedIndex));
+                    // Also log state at click time
+                    logTabBarState(m_pdfTabWidget->tabBar(), "on-click", "PDF");
                     // Trigger the PDF tab activation directly
                     QTimer::singleShot(0, [this, clickedIndex]() {
                         onPdfCurrentChanged(clickedIndex);
@@ -1083,6 +1403,8 @@ bool DualTabWidget::eventFilter(QObject *obj, QEvent *event)
                 int clickedIndex = m_pcbTabWidget->tabBar()->tabAt(mouseEvent->pos());
                 if (clickedIndex >= 0) {
                     logDebug(QString("Event filter caught PCB tab click - index: %1").arg(clickedIndex));
+                    // Also log state at click time
+                    logTabBarState(m_pcbTabWidget->tabBar(), "on-click", "PCB");
                     // Trigger the PCB tab activation directly
                     QTimer::singleShot(0, [this, clickedIndex]() {
                         onPcbCurrentChanged(clickedIndex);

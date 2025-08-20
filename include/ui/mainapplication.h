@@ -77,6 +77,7 @@ private slots:
     void onTabCloseRequestedByType(int index, DualTabWidget::TabType type);
     void onTabChangedByType(int index, DualTabWidget::TabType type);
     void onCrossSearchRequest(const QString &term, bool isNet, bool targetIsOther);
+    void onFullUpdateUI();
     // Server-side slots (commented out for local file loading)
     //void onHttpRequestFinished(QNetworkReply *reply);
     //void onNetworkError(QNetworkReply::NetworkError error);

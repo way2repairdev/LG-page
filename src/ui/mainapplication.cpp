@@ -158,6 +158,11 @@ void MainApplication::setupMenuBar()
     connect(fullScreenPDFAction, &QAction::triggered, this, &MainApplication::toggleFullScreenPDF);
     
     viewMenu->addSeparator();
+    QAction *fullUpdateAction = viewMenu->addAction("&Full Update UI");
+    fullUpdateAction->setShortcut(QKeySequence("Ctrl+Shift+R"));
+    connect(fullUpdateAction, &QAction::triggered, this, &MainApplication::onFullUpdateUI);
+    
+    viewMenu->addSeparator();
     viewMenu->addAction("&Refresh Tree", this, &MainApplication::loadLocalFiles);
     viewMenu->addAction("&Expand All", this, [this]() { m_treeWidget->expandAll(); });
     viewMenu->addAction("&Collapse All", this, [this]() { m_treeWidget->collapseAll(); });
@@ -187,6 +192,17 @@ void MainApplication::setupStatusBar()
     m_statusBar->addPermanentWidget(timeLabel);
     
     m_statusBar->showMessage("Ready");
+}
+
+void MainApplication::onFullUpdateUI()
+{
+    if (m_tabWidget) {
+        statusBar()->showMessage("Refreshing UI styles…", 1500);
+        // Force reapply styles on both tab widgets
+        m_tabWidget->forceStyleRefresh();
+        // Also update any dynamic visuals
+        // updateTabBarVisualState is private to DualTabWidget; forceStyleRefresh re-applies styles.
+    }
 }
 
 // --- SmoothTreeDelegate paint implementation ---
