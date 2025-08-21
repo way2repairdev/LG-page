@@ -162,6 +162,8 @@ set(PCB_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/core/Utils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/BRDFileBase.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/XZZPCBFile.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/BRDFile.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/BRD2File.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/des.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/rendering/PCBRenderer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/rendering/Window.cpp
@@ -214,6 +216,8 @@ set(PCB_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/core/Utils.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/BRDFileBase.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/XZZPCBFile.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/BRDFile.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/BRD2File.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/format/des.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/rendering/PCBRenderer.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/rendering/Window.h

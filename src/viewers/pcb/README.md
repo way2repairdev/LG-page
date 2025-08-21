@@ -24,8 +24,14 @@ pcb/
     └── gerber_parser/  # Gerber file format support
 ```
 
-## Supported File Formats (Planned)
+## Supported File Formats
 
+### Currently Implemented ✅
+- **XZZPCB**: `.xzz`, `.xzzpcb`, `.pcb` - Original format with encryption support
+- **BRD**: `.brd` - OpenBoardView BRD format with encoded/unencoded support  
+- **BRD2**: `.brd2` - OpenBoardView BRD2 format with named sections
+
+### Planned for Future
 - **KiCad**: `.kicad_pcb`, `.kicad_sch`
 - **Eagle**: `.brd`, `.sch`
 - **Gerber**: `.gbr`, `.gbl`, `.gtl`, etc.
@@ -50,16 +56,24 @@ The PCB viewer will follow the same pattern as the PDF viewer:
 
 ## Implementation Status
 
-🔴 **Not Started** - This is a placeholder for future development
+� **Fully Implemented** - Multi-format PCB viewer with OpenGL rendering
 
-## Next Steps
+### Completed Features
+- ✅ Multiple file format support (XZZPCB, BRD, BRD2)
+- ✅ OpenGL-based rendering with ImGui
+- ✅ Interactive navigation (pan, zoom, rotate)
+- ✅ Component and pin visualization
+- ✅ Net highlighting and selection
+- ✅ Board outline rendering
+- ✅ Test point visualization
+- ✅ Format auto-detection
+- ✅ Qt integration via embedder
 
-1. Research PCB file format specifications
-2. Evaluate existing open-source PCB libraries
-3. Design the PCB document data model
-4. Implement basic file parsing
-5. Create rendering pipeline
-6. Build UI components
+### Recent Updates (BRD Format Support)
+- ✅ Added BRD format parser based on OpenBoardView
+- ✅ Added BRD2 format parser based on OpenBoardView  
+- ✅ Updated file dialogs to include new formats
+- ✅ Enhanced PCBViewerEmbedder for multi-format loading
 
 ## Dependencies
 
