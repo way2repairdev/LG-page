@@ -316,7 +316,7 @@ void PDFViewerWidget::setupToolbar()
               dark ? "#2a2b2d" : "white",
               dark ? "#e8eaed" : "#111")
     );
-    connect(m_searchInput, &QLineEdit::returnPressed, this, &PDFViewerWidget::onSearchInputChanged);
+    connect(m_searchInput, &QLineEdit::returnPressed, this, &PDFViewerWidget::onSearchReturnPressed);
     connect(m_searchInput, &QLineEdit::textChanged, this, &PDFViewerWidget::onSearchInputChanged);
     m_toolbar->addWidget(m_searchInput);
 
@@ -670,6 +670,31 @@ void PDFViewerWidget::onSearchInputChanged()
     updateStatusInfo();
 }
 
+void PDFViewerWidget::onSearchReturnPressed()
+{
+    if (!m_searchInput)
+        return;
+    const QString term = m_searchInput->text().trimmed();
+    if (term.isEmpty()) {
+        if (isPDFLoaded() && m_pdfEmbedder) m_pdfEmbedder->clearSelection();
+        m_lastSearchTerm.clear();
+        syncToolbarStates();
+        updateStatusInfo();
+        return;
+    }
+    // If the user pressed Enter and the term hasn't changed since last executed search,
+    // treat it as "Find Next". Otherwise, run a fresh search immediately.
+    if (term == m_lastSearchTerm) {
+        findNext();
+    } else {
+        m_lastSearchTerm = term;
+        if (isPDFLoaded() && m_pdfEmbedder)
+            m_pdfEmbedder->findText(term.toStdString());
+        syncToolbarStates();
+        updateStatusInfo();
+    }
+}
+
 void PDFViewerWidget::checkForSelectedText()
 {
     if (!isPDFLoaded() || !m_pdfEmbedder || !m_searchInput)
@@ -682,6 +707,7 @@ void PDFViewerWidget::checkForSelectedText()
         m_searchInput->setText(sel);
         m_searchInput->blockSignals(old);
         m_pdfEmbedder->findText(selStd);
+    m_lastSearchTerm = sel;
         // Enable next/previous search buttons now that we have selected text
         syncToolbarStates();
     } else if (sel.isEmpty()) {

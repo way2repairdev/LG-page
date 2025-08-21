@@ -141,6 +141,7 @@ private slots:
     void updateViewer();
     void onPageInputChanged();
     void onSearchInputChanged();
+    void onSearchReturnPressed();
     void checkForSelectedText();
     // Split view action removed
 
