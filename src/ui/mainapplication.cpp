@@ -305,6 +305,8 @@ void MainApplication::setupTreeView()
     // Use the built-in clear icon to avoid an extra button cluttering the UI
     m_treeSearchEdit->setClearButtonEnabled(true);
     m_treeSearchEdit->setMinimumHeight(30);
+    // Prevent autofocusing at startup; only focus when clicked or via shortcut
+    m_treeSearchEdit->setFocusPolicy(Qt::ClickFocus);
 
     // Remove separate clear button (kept member for compatibility but not shown)
     m_treeSearchClearButton = new QToolButton(m_treeSearchBar);
@@ -2023,6 +2025,15 @@ void MainApplication::setupKeyboardShortcuts()
             int currentIndex = m_tabWidget->currentIndex(DualTabWidget::PCB_TAB);
             int prevIndex = (currentIndex - 1 + m_tabWidget->count(DualTabWidget::PCB_TAB)) % m_tabWidget->count(DualTabWidget::PCB_TAB);
             m_tabWidget->setCurrentIndex(prevIndex, DualTabWidget::PCB_TAB);
+        }
+    });
+
+    // Focus tree search on demand
+    QShortcut *focusSearchShortcut = new QShortcut(QKeySequence("Ctrl+F"), this);
+    connect(focusSearchShortcut, &QShortcut::activated, this, [this]() {
+        if (m_treeSearchEdit) {
+            m_treeSearchEdit->setFocus();
+            m_treeSearchEdit->selectAll();
         }
     });
 }
