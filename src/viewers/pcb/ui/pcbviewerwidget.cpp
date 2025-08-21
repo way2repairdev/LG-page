@@ -24,6 +24,12 @@
 #include <QAction>
 #include <QComboBox>
 #include <QPushButton>
+#include <QPalette>
+// Added for premium icon tinting and hover handling
+#include <QToolButton>
+#include <QIcon>
+#include <QPixmap>
+#include <QImage>
 // QWidgetAction header may not be available in current include paths; we'll use addWidget helpers instead.
 
 // Enhanced debug logging for PCBViewerWidget
@@ -441,7 +447,25 @@ void PCBViewerWidget::setupToolbar()
     m_toolbar = new QToolBar(this);
     m_toolbar->setIconSize(QSize(16, 16));
     m_toolbar->setMovable(false);
-    m_toolbar->setStyleSheet("QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;}");
+    // Theme-aware red accent (match tab styling: #E53935/#b71c1c family)
+    const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+    const QString tbStyleLight =
+        "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:36px;}"
+        "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+        "QToolBar QToolButton:hover{background:rgba(229,57,53,0.10);border-color:rgba(229,57,53,0.35);}" 
+        "QToolBar QToolButton:pressed{background:rgba(229,57,53,0.18);border-color:#E53935;}"
+        "QToolBar QToolButton:checked{background:rgba(229,57,53,0.14);border-color:#E53935;}"
+        "QToolBar QToolButton:disabled{color:#9e9e9e;background:transparent;border-color:transparent;}"
+        "QToolBar::separator{background:rgba(0,0,0,0.12);width:1px;margin:0 6px;}";
+    const QString tbStyleDark =
+        "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:36px;}"
+        "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+        "QToolBar QToolButton:hover{background:rgba(183,28,28,0.22);border-color:#cf6679;}"
+        "QToolBar QToolButton:pressed{background:rgba(183,28,28,0.30);border-color:#b71c1c;}"
+        "QToolBar QToolButton:checked{background:rgba(183,28,28,0.28);border-color:#cf6679;color:#e8eaed;}"
+        "QToolBar QToolButton:disabled{color:#9aa0a6;background:transparent;border-color:transparent;}"
+        "QToolBar::separator{background:rgba(255,255,255,0.12);width:1px;margin:0 6px;}";
+    m_toolbar->setStyleSheet(dark ? tbStyleDark : tbStyleLight);
     
     // Split view removed: no split window action
     // Rotation actions (match PDF viewer icon style)
@@ -493,15 +517,26 @@ void PCBViewerWidget::setupToolbar()
     m_netCombo->setInsertPolicy(QComboBox::NoInsert);
     m_netCombo->setToolTip("Type or pick a Net or Component name");
     // Match PDF viewer input styling
-    m_netCombo->setStyleSheet("QComboBox{border:1px solid #ccc;border-radius:3px;padding:2px 4px;background:white;}"
-                              "QComboBox:focus{border-color:#4285f4;}"
-                              "QComboBox::drop-down{border:none;}");
+    m_netCombo->setStyleSheet(QStringLiteral(
+        "QComboBox{border:1px solid %1;border-radius:3px;padding:2px 4px;background:%2;color:%3;}"
+        "QComboBox:focus{border-color:%4;}"
+        "QComboBox::drop-down{border:none;}"
+    ).arg(dark ? "#5f6368" : "#ccc",
+          dark ? "#2a2b2d" : "white",
+          dark ? "#e8eaed" : "#111",
+          dark ? "#cf6679" : "#E53935"));
     m_toolbar->addWidget(m_netCombo);
     m_netSearchButton = new QPushButton("Go", m_toolbar);
     m_netSearchButton->setToolTip("Highlight & zoom to Net or Component");
-    m_netSearchButton->setStyleSheet("QPushButton{border:1px solid #ccc;border-radius:3px;padding:2px 8px;background:#f8f8f8;}"
-                                     "QPushButton:hover{background:#f0f0f0;}"
-                                     "QPushButton:pressed{background:#e8e8e8;}");
+    m_netSearchButton->setStyleSheet(QStringLiteral(
+        "QPushButton{border:1px solid %1;border-radius:3px;padding:2px 8px;background:%2;color:%3;}"
+        "QPushButton:hover{background:%4;}"
+        "QPushButton:pressed{background:%5;}"
+    ).arg(dark ? "#5f6368" : "#ccc",
+          dark ? "#2a2b2d" : "#f8f8f8",
+          dark ? "#e8eaed" : "#111",
+          dark ? "#332222" : "#f0f0f0",
+          dark ? "#2b1f1f" : "#e8e8e8"));
     m_toolbar->addWidget(m_netSearchButton);
     connect(m_netSearchButton, &QPushButton::clicked, this, &PCBViewerWidget::onNetSearchClicked);
     // Auto trigger navigation when user picks from list (but still allow manual typing then Enter/Go)
@@ -511,6 +546,115 @@ void PCBViewerWidget::setupToolbar()
     WritePCBDebugToFile("Zoom and rotation/flip actions added to PCB toolbar");
     WritePCBDebugToFile("Split window action removed (feature deprecated)");
     WritePCBDebugToFile("PCB Qt toolbar setup completed with PDF viewer styling");
+
+    // Optional: Icon tinting to red on hover/checked similar to PDF (local inline since helpers are in PDF file)
+    {
+        const QSize iconSz(18, 18);
+        const QColor accent = QColor(dark ? "#cf6679" : "#E53935");
+        const QColor normal = dark ? QColor("#c7cacf") : QColor("#5f6368");
+        const QColor disabled = dark ? QColor("#6f7379") : QColor("#9e9e9e");
+        auto makeTint = [&](const QIcon &base, const QColor &c){
+            QPixmap src = base.pixmap(iconSz);
+            if (src.isNull()) return base;
+            QImage img = src.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied);
+            QImage colored(img.size(), QImage::Format_ARGB32_Premultiplied);
+            colored.fill(Qt::transparent);
+            QPainter p(&colored); p.fillRect(colored.rect(), c); p.setCompositionMode(QPainter::CompositionMode_DestinationIn); p.drawImage(0,0,img); p.end();
+            return QIcon(QPixmap::fromImage(colored));
+        };
+        for (QAction *act : m_toolbar->actions()) {
+            if (!act || act->isSeparator()) continue;
+            if (auto *btn = qobject_cast<QToolButton*>(m_toolbar->widgetForAction(act))) {
+                QIcon n = makeTint(act->icon(), normal);
+                QIcon h = makeTint(act->icon(), accent);
+                QIcon d = makeTint(act->icon(), disabled);
+                btn->setIcon(act->isEnabled() ? n : d);
+                btn->setIconSize(iconSz);
+                btn->setAttribute(Qt::WA_Hover, true);
+                btn->installEventFilter(new QObject(btn));
+                QObject::connect(btn, &QToolButton::toggled, btn, [btn, n, h](){ if (btn->isEnabled()) btn->setIcon(btn->isChecked() ? h : (btn->underMouse()?h:n)); });
+                QObject::connect(act, &QAction::changed, btn, [btn, act, n, d](){ btn->setIcon(act->isEnabled()?n:d); });
+            }
+        }
+    }
+}
+
+void PCBViewerWidget::applyToolbarTheme()
+{
+    if (!m_toolbar) return;
+    const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+    const QString tbStyleLight =
+        "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:36px;}"
+        "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+        "QToolBar QToolButton:hover{background:rgba(229,57,53,0.10);border-color:rgba(229,57,53,0.35);}" 
+        "QToolBar QToolButton:pressed{background:rgba(229,57,53,0.18);border-color:#E53935;}"
+        "QToolBar QToolButton:checked{background:rgba(229,57,53,0.14);border-color:#E53935;}"
+        "QToolBar QToolButton:disabled{color:#9e9e9e;background:transparent;border-color:transparent;}"
+        "QToolBar::separator{background:rgba(0,0,0,0.12);width:1px;margin:0 6px;}";
+    const QString tbStyleDark =
+        "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:36px;}"
+        "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+        "QToolBar QToolButton:hover{background:rgba(183,28,28,0.22);border-color:#cf6679;}"
+        "QToolBar QToolButton:pressed{background:rgba(183,28,28,0.30);border-color:#b71c1c;}"
+        "QToolBar QToolButton:checked{background:rgba(183,28,28,0.28);border-color:#cf6679;color:#e8eaed;}"
+        "QToolBar QToolButton:disabled{color:#9aa0a6;background:transparent;border-color:transparent;}"
+        "QToolBar::separator{background:rgba(255,255,255,0.12);width:1px;margin:0 6px;}";
+    m_toolbar->setStyleSheet(dark ? tbStyleDark : tbStyleLight);
+    // Update net combo and button styles to match theme
+    if (m_netCombo) {
+        m_netCombo->setStyleSheet(QStringLiteral(
+            "QComboBox{border:1px solid %1;border-radius:3px;padding:2px 4px;background:%2;color:%3;}"
+            "QComboBox:focus{border-color:%4;}"
+            "QComboBox::drop-down{border:none;}"
+        ).arg(dark ? "#5f6368" : "#ccc",
+              dark ? "#2a2b2d" : "white",
+              dark ? "#e8eaed" : "#111",
+              dark ? "#cf6679" : "#E53935"));
+    }
+    if (m_netSearchButton) {
+        m_netSearchButton->setStyleSheet(QStringLiteral(
+            "QPushButton{border:1px solid %1;border-radius:3px;padding:2px 8px;background:%2;color:%3;}"
+            "QPushButton:hover{background:%4;}"
+            "QPushButton:pressed{background:%5;}"
+        ).arg(dark ? "#5f6368" : "#ccc",
+              dark ? "#2a2b2d" : "#f8f8f8",
+              dark ? "#e8eaed" : "#111",
+              dark ? "#332222" : "#f0f0f0",
+              dark ? "#2b1f1f" : "#e8e8e8"));
+    }
+    // Retint icons for new theme (reuse local inline block logic)
+    const QSize iconSz(18, 18);
+    const QColor accent = QColor(dark ? "#cf6679" : "#E53935");
+    const QColor normal = dark ? QColor("#c7cacf") : QColor("#5f6368");
+    const QColor disabled = dark ? QColor("#6f7379") : QColor("#9e9e9e");
+    auto makeTint = [&](const QIcon &base, const QColor &c){
+        QPixmap src = base.pixmap(iconSz);
+        if (src.isNull()) return base;
+        QImage img = src.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        QImage colored(img.size(), QImage::Format_ARGB32_Premultiplied);
+        colored.fill(Qt::transparent);
+        QPainter p(&colored); p.fillRect(colored.rect(), c); p.setCompositionMode(QPainter::CompositionMode_DestinationIn); p.drawImage(0,0,img); p.end();
+        return QIcon(QPixmap::fromImage(colored));
+    };
+    for (QAction *act : m_toolbar->actions()) {
+        if (!act || act->isSeparator()) continue;
+        if (auto *btn = qobject_cast<QToolButton*>(m_toolbar->widgetForAction(act))) {
+            QIcon n = makeTint(act->icon(), normal);
+            QIcon h = makeTint(act->icon(), accent);
+            QIcon d = makeTint(act->icon(), disabled);
+            btn->setIcon(act->isEnabled() ? n : d);
+            btn->setIconSize(iconSz);
+            // Hover filter reuses existing QObject; icons are reset here only.
+        }
+    }
+}
+
+void PCBViewerWidget::changeEvent(QEvent *event)
+{
+    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange) {
+        applyToolbarTheme();
+    }
+    QWidget::changeEvent(event);
 }
 
 void PCBViewerWidget::connectSignals()

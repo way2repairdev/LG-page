@@ -85,6 +85,7 @@ protected:
     void focusInEvent(QFocusEvent *event) override;
     void focusOutEvent(QFocusEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
+    void changeEvent(QEvent *event) override; // respond to palette/theme changes
 
 private slots:
     void onPCBViewerError(const QString &error);
@@ -94,6 +95,7 @@ private:
     void setupUI();
     void setupToolbar();
     void connectSignals();
+    void applyToolbarTheme(); // reapply styles for current dark/light theme
 
     // PCB viewer core
     std::unique_ptr<PCBViewerEmbedder> m_pcbEmbedder;

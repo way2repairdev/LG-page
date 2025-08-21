@@ -135,6 +135,7 @@ protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
     void focusInEvent(QFocusEvent* event) override;
+    void changeEvent(QEvent* event) override; // respond to palette/theme changes
 
 private slots:
     void updateViewer();
@@ -153,6 +154,7 @@ private:
     void setupViewerArea();
     void setupIndividualToolbar(QToolBar* toolbar, bool isLeftPanel);
     void syncToolbarStates();
+    void applyToolbarTheme(); // reapply styles for current dark/light theme
     void initializePDFViewer();
     void updatePageInputSafely(int currentPage);
     void updateStatusInfo();

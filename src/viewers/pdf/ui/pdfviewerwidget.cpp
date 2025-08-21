@@ -22,10 +22,95 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QFutureWatcher>
 #include <QElapsedTimer>
+#include <QPalette>
+#include <QToolButton>
+#include <QPainter>
+#include <QStyle>
+#include <QGraphicsDropShadowEffect>
+#include <QIcon>
+#include <QPixmap>
+#include <QImage>
 #include "viewers/pdf/PDFPreviewLoader.h"
 #ifdef _WIN32
 #include <windows.h>
 #endif
+
+// --- Premium toolbar helpers (icon tinting, hover/checked states) ---
+static QIcon makeTintedIcon(const QIcon &base, const QColor &color, const QSize &size)
+{
+    if (base.isNull()) return base;
+    QPixmap src = base.pixmap(size);
+    if (src.isNull()) return base;
+    QImage img = src.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    QImage colored(img.size(), QImage::Format_ARGB32_Premultiplied);
+    colored.fill(Qt::transparent);
+    QPainter p(&colored);
+    p.fillRect(colored.rect(), color);
+    p.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+    p.drawImage(0, 0, img);
+    p.end();
+    return QIcon(QPixmap::fromImage(colored));
+}
+
+// Simple event filter to swap icons on hover/enable/checked states
+class PremiumButtonFilter : public QObject {
+public:
+    PremiumButtonFilter(QToolButton* btn, const QIcon &normal, const QIcon &hover, const QIcon &disabled)
+        : QObject(btn), m_btn(btn), m_normal(normal), m_hover(hover), m_disabled(disabled) {}
+protected:
+    bool eventFilter(QObject *obj, QEvent *ev) override {
+        if (obj != m_btn) return QObject::eventFilter(obj, ev);
+        switch (ev->type()) {
+            case QEvent::Enter:
+                if (m_btn->isEnabled()) m_btn->setIcon(m_hover);
+                break;
+            case QEvent::Leave:
+                if (m_btn->isEnabled()) m_btn->setIcon((m_btn->isCheckable() && m_btn->isChecked()) ? m_hover : m_normal);
+                break;
+            case QEvent::EnabledChange:
+                m_btn->setIcon(m_btn->isEnabled() ? (m_btn->underMouse() || (m_btn->isCheckable() && m_btn->isChecked()) ? m_hover : m_normal) : m_disabled);
+                break;
+            default: break;
+        }
+        return QObject::eventFilter(obj, ev);
+    }
+private:
+    QToolButton* m_btn {nullptr};
+    QIcon m_normal, m_hover, m_disabled;
+};
+
+static void installPremiumButtonStyling(QToolBar *bar, const QColor &accent, bool dark)
+{
+    if (!bar) return;
+    const QSize iconSz(18, 18);
+    const QColor normal = dark ? QColor("#c7cacf") : QColor("#5f6368");
+    const QColor disabled = dark ? QColor("#6f7379") : QColor("#9e9e9e");
+
+    for (QAction *act : bar->actions()) {
+        if (!act || act->isSeparator()) continue;
+        if (auto *btn = qobject_cast<QToolButton*>(bar->widgetForAction(act))) {
+            const QIcon baseIcon = act->icon();
+            QIcon iconNormal = makeTintedIcon(baseIcon, normal, iconSz);
+            QIcon iconHover  = makeTintedIcon(baseIcon, accent, iconSz);
+            QIcon iconDis    = makeTintedIcon(baseIcon, disabled, iconSz);
+            btn->setAutoRaise(true);
+            btn->setCursor(Qt::PointingHandCursor);
+            btn->setIconSize(iconSz);
+            btn->setToolButtonStyle(Qt::ToolButtonIconOnly);
+            btn->setIcon(act->isEnabled() ? iconNormal : iconDis);
+            btn->setAttribute(Qt::WA_Hover, true);
+            auto *filter = new PremiumButtonFilter(btn, iconNormal, iconHover, iconDis);
+            btn->installEventFilter(filter);
+            QObject::connect(btn, &QToolButton::toggled, btn, [btn, iconNormal, iconHover]() {
+                if (!btn->isEnabled()) return;
+                btn->setIcon(btn->isChecked() ? iconHover : (btn->underMouse() ? iconHover : iconNormal));
+            });
+            QObject::connect(act, &QAction::changed, btn, [btn, act, iconNormal, iconDis]() {
+                btn->setIcon(act->isEnabled() ? iconNormal : iconDis);
+            });
+        }
+    }
+}
 
 PDFViewerWidget::PDFViewerWidget(QWidget *parent)
     : QWidget(parent)
@@ -128,7 +213,32 @@ void PDFViewerWidget::setupToolbar()
     m_toolbar = new QToolBar(this);
     m_toolbar->setIconSize(QSize(16, 16));
     m_toolbar->setMovable(false);
-    m_toolbar->setStyleSheet("QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;}");
+    // Theme-aware blue accent (match tab styling: #1976d2/#4A90E2 family)
+    const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+    const QString tbStyleLight =
+        "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:36px;}"
+        "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+        "QToolBar QToolButton:hover{background:rgba(25,118,210,0.12);border-color:rgba(25,118,210,0.35);}" 
+        "QToolBar QToolButton:pressed{background:rgba(25,118,210,0.20);border-color:#1976d2;}"
+        "QToolBar QToolButton:checked{background:rgba(25,118,210,0.16);border-color:#1976d2;}"
+        "QToolBar QToolButton:disabled{color:#9e9e9e;background:transparent;border-color:transparent;}"
+        "QToolBar::separator{background:rgba(0,0,0,0.12);width:1px;margin:0 6px;}";
+    const QString tbStyleDark =
+        "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:36px;}"
+        "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+        "QToolBar QToolButton:hover{background:rgba(25,118,210,0.20);border-color:#4f89d3;}"
+        "QToolBar QToolButton:pressed{background:rgba(25,118,210,0.30);border-color:#1976d2;}"
+        "QToolBar QToolButton:checked{background:rgba(25,118,210,0.28);border-color:#4f89d3;color:#e8eaed;}"
+        "QToolBar QToolButton:disabled{color:#9aa0a6;background:transparent;border-color:transparent;}"
+        "QToolBar::separator{background:rgba(255,255,255,0.12);width:1px;margin:0 6px;}";
+    m_toolbar->setStyleSheet(dark ? tbStyleDark : tbStyleLight);
+
+    // Subtle drop shadow for depth
+    auto *shadow = new QGraphicsDropShadowEffect(this);
+    shadow->setBlurRadius(12);
+    shadow->setOffset(0, 1);
+    shadow->setColor(dark ? QColor(0,0,0,140) : QColor(0,0,0,60));
+    m_toolbar->setGraphicsEffect(shadow);
 
     // Rotation
     m_actionRotateLeft = m_toolbar->addAction(QIcon(":/icons/images/icons/rotate_left.svg"), "");
@@ -143,20 +253,29 @@ void PDFViewerWidget::setupToolbar()
 
     // Page navigation
     m_pageLabel = new QLabel("Page:", this);
-    m_pageLabel->setStyleSheet("QLabel{color:#333;font-weight:bold;margin:0 5px;}");
+    m_pageLabel->setStyleSheet(QStringLiteral("QLabel{color:%1;font-weight:bold;margin:0 5px;}")
+                                   .arg(dark ? "#e8eaed" : "#333"));
     m_toolbar->addWidget(m_pageLabel);
 
     m_pageInput = new QLineEdit(this);
     m_pageInput->setFixedWidth(60);
     m_pageInput->setAlignment(Qt::AlignCenter);
     m_pageInput->setText("1");
-    m_pageInput->setStyleSheet("QLineEdit{border:1px solid #ccc;border-radius:3px;padding:2px 4px;background:white;}QLineEdit:focus{border-color:#4285f4;}");
+    m_pageInput->setStyleSheet(
+        QStringLiteral(
+            "QLineEdit{border:1px solid %1;border-radius:3px;padding:2px 4px;background:%2;color:%3;}"
+            "QLineEdit:focus{border-color:#1976d2;}"
+        ).arg(dark ? "#5f6368" : "#ccc",
+              dark ? "#2a2b2d" : "white",
+              dark ? "#e8eaed" : "#111")
+    );
     connect(m_pageInput, &QLineEdit::returnPressed, this, &PDFViewerWidget::onPageInputChanged);
     connect(m_pageInput, &QLineEdit::editingFinished, this, &PDFViewerWidget::onPageInputChanged);
     m_toolbar->addWidget(m_pageInput);
 
     m_totalPagesLabel = new QLabel("/ 0", this);
-    m_totalPagesLabel->setStyleSheet("QLabel{color:#666;margin:0 5px;}");
+    m_totalPagesLabel->setStyleSheet(QStringLiteral("QLabel{color:%1;margin:0 5px;}")
+                                         .arg(dark ? "#bdbdbd" : "#666"));
     m_toolbar->addWidget(m_totalPagesLabel);
 
     m_actionPreviousPage = m_toolbar->addAction(QIcon(":/icons/images/icons/previous.svg"), "");
@@ -182,13 +301,21 @@ void PDFViewerWidget::setupToolbar()
 
     // Search
     m_searchLabel = new QLabel("Search:", this);
-    m_searchLabel->setStyleSheet("QLabel{color:#333;font-weight:bold;margin:0 5px;}");
+    m_searchLabel->setStyleSheet(QStringLiteral("QLabel{color:%1;font-weight:bold;margin:0 5px;}")
+                                     .arg(dark ? "#e8eaed" : "#333"));
     m_toolbar->addWidget(m_searchLabel);
 
     m_searchInput = new QLineEdit(this);
     m_searchInput->setFixedWidth(140);
     m_searchInput->setPlaceholderText("Search text...");
-    m_searchInput->setStyleSheet("QLineEdit{border:1px solid #ccc;border-radius:3px;padding:2px 6px;background:white;}QLineEdit:focus{border-color:#4285f4;}");
+    m_searchInput->setStyleSheet(
+        QStringLiteral(
+            "QLineEdit{border:1px solid %1;border-radius:3px;padding:2px 6px;background:%2;color:%3;}"
+            "QLineEdit:focus{border-color:#1976d2;}"
+        ).arg(dark ? "#5f6368" : "#ccc",
+              dark ? "#2a2b2d" : "white",
+              dark ? "#e8eaed" : "#111")
+    );
     connect(m_searchInput, &QLineEdit::returnPressed, this, &PDFViewerWidget::onSearchInputChanged);
     connect(m_searchInput, &QLineEdit::textChanged, this, &PDFViewerWidget::onSearchInputChanged);
     m_toolbar->addWidget(m_searchInput);
@@ -206,10 +333,70 @@ void PDFViewerWidget::setupToolbar()
     m_statusInfoLabel = new QLabel("No PDF", this);
     m_statusInfoLabel->setObjectName("statusInfoLabel");
     m_statusInfoLabel->setMinimumWidth(110);
-    m_statusInfoLabel->setStyleSheet("QLabel#statusInfoLabel{color:#444;padding:0 4px;font:10pt 'Segoe UI';}");
+    m_statusInfoLabel->setStyleSheet(QStringLiteral("QLabel#statusInfoLabel{color:%1;padding:0 4px;font:10pt 'Segoe UI';}")
+                                         .arg(dark ? "#e8eaed" : "#444"));
     m_toolbar->addWidget(m_statusInfoLabel);
 
+    // Premium icon tinting on hover/checked
+    installPremiumButtonStyling(m_toolbar, QColor(dark ? "#4f89d3" : "#1976d2"), dark);
+
     syncToolbarStates();
+}
+
+void PDFViewerWidget::applyToolbarTheme()
+{
+    if (!m_toolbar) return;
+    const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+    const QString tbStyleLight =
+        "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:36px;}"
+        "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+        "QToolBar QToolButton:hover{background:rgba(25,118,210,0.12);border-color:rgba(25,118,210,0.35);}"
+        "QToolBar QToolButton:pressed{background:rgba(25,118,210,0.20);border-color:#1976d2;}"
+        "QToolBar QToolButton:checked{background:rgba(25,118,210,0.16);border-color:#1976d2;}"
+        "QToolBar QToolButton:disabled{color:#9e9e9e;background:transparent;border-color:transparent;}"
+        "QToolBar::separator{background:rgba(0,0,0,0.12);width:1px;margin:0 6px;}";
+    const QString tbStyleDark =
+        "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:36px;}"
+        "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+        "QToolBar QToolButton:hover{background:rgba(25,118,210,0.20);border-color:#4f89d3;}"
+        "QToolBar QToolButton:pressed{background:rgba(25,118,210,0.30);border-color:#1976d2;}"
+        "QToolBar QToolButton:checked{background:rgba(25,118,210,0.28);border-color:#4f89d3;color:#e8eaed;}"
+        "QToolBar QToolButton:disabled{color:#9aa0a6;background:transparent;border-color:transparent;}"
+        "QToolBar::separator{background:rgba(255,255,255,0.12);width:1px;margin:0 6px;}";
+    m_toolbar->setStyleSheet(dark ? tbStyleDark : tbStyleLight);
+    // Retint icons for new theme
+    installPremiumButtonStyling(m_toolbar, QColor(dark ? "#4f89d3" : "#1976d2"), dark);
+    // Update label and input styles to match theme
+    if (m_pageLabel)
+        m_pageLabel->setStyleSheet(QStringLiteral("QLabel{color:%1;font-weight:bold;margin:0 5px;}").arg(dark ? "#e8eaed" : "#333"));
+    if (m_totalPagesLabel)
+        m_totalPagesLabel->setStyleSheet(QStringLiteral("QLabel{color:%1;margin:0 5px;}").arg(dark ? "#bdbdbd" : "#666"));
+    if (m_searchLabel)
+        m_searchLabel->setStyleSheet(QStringLiteral("QLabel{color:%1;font-weight:bold;margin:0 5px;}").arg(dark ? "#e8eaed" : "#333"));
+    if (m_statusInfoLabel)
+        m_statusInfoLabel->setStyleSheet(QStringLiteral("QLabel#statusInfoLabel{color:%1;padding:0 4px;font:10pt 'Segoe UI';}").arg(dark ? "#e8eaed" : "#444"));
+    if (m_pageInput)
+        m_pageInput->setStyleSheet(QStringLiteral(
+            "QLineEdit{border:1px solid %1;border-radius:3px;padding:2px 4px;background:%2;color:%3;}"
+            "QLineEdit:focus{border-color:#1976d2;}" )
+            .arg(dark ? "#5f6368" : "#ccc",
+                 dark ? "#2a2b2d" : "white",
+                 dark ? "#e8eaed" : "#111"));
+    if (m_searchInput)
+        m_searchInput->setStyleSheet(QStringLiteral(
+            "QLineEdit{border:1px solid %1;border-radius:3px;padding:2px 6px;background:%2;color:%3;}"
+            "QLineEdit:focus{border-color:#1976d2;}" )
+            .arg(dark ? "#5f6368" : "#ccc",
+                 dark ? "#2a2b2d" : "white",
+                 dark ? "#e8eaed" : "#111"));
+}
+
+void PDFViewerWidget::changeEvent(QEvent *event)
+{
+    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange) {
+        applyToolbarTheme();
+    }
+    QWidget::changeEvent(event);
 }
 
 void PDFViewerWidget::setupViewerArea()
