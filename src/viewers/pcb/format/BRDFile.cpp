@@ -277,6 +277,8 @@ bool BRDFile::Load(const std::vector<char>& buf, const std::string& /*filepath*/
     std::cout << "  Nails: " << nails.size() << std::endl;
     std::cout << "  Format points: " << format.size() << std::endl;
     std::cout << "  Circles: " << circles.size() << std::endl;
+    std::cout << "  Outline segments: " << outline_segments.size() << std::endl;
+    std::cout << "  Part outline segments: " << part_outline_segments.size() << std::endl;
     
     return valid;
 }
@@ -286,26 +288,109 @@ void BRDFile::GenerateRenderingGeometry() {
     circles.clear();
     rectangles.clear();
     ovals.clear();
+    outline_segments.clear();
+    part_outline_segments.clear();
+    
+    // Calculate board dimensions for layer separation
+    BRDPoint min_point, max_point;
+    GetBoundingBox(min_point, max_point);
+    float board_width = max_point.x - min_point.x;
+    float board_height = max_point.y - min_point.y;
+    
+    // Offset for bottom side components (place them to the right of top side)
+    float bottom_side_offset_x = board_width + 50.0f; // 50 unit gap between sides
+    float bottom_side_offset_y = 0.0f;
+    
+    // Generate board outline segments from format points
+    if (format.size() >= 2) {
+        // Top side outline (original position)
+        for (size_t i = 0; i < format.size(); ++i) {
+            size_t next_i = (i + 1) % format.size();
+            outline_segments.push_back({format[i], format[next_i]});
+        }
+        
+        // Bottom side outline (offset position)
+        for (size_t i = 0; i < format.size(); ++i) {
+            size_t next_i = (i + 1) % format.size();
+            BRDPoint p1_offset = {format[i].x + bottom_side_offset_x, format[i].y + bottom_side_offset_y};
+            BRDPoint p2_offset = {format[next_i].x + bottom_side_offset_x, format[next_i].y + bottom_side_offset_y};
+            outline_segments.push_back({p1_offset, p2_offset});
+        }
+    }
+    
+    // Generate part outline segments from parts
+    for (const auto& part : parts) {
+        bool is_bottom_side = (part.mounting_side == BRDPartMountingSide::Bottom);
+        float offset_x = is_bottom_side ? bottom_side_offset_x : 0.0f;
+        float offset_y = is_bottom_side ? bottom_side_offset_y : 0.0f;
+        
+        // Use p1 and p2 points to create part outline
+        if (part.p1 != part.p2) {
+            // Create rectangle from p1 and p2
+            BRDPoint top_left = {std::min(part.p1.x, part.p2.x) + offset_x, std::max(part.p1.y, part.p2.y) + offset_y};
+            BRDPoint top_right = {std::max(part.p1.x, part.p2.x) + offset_x, std::max(part.p1.y, part.p2.y) + offset_y};
+            BRDPoint bottom_right = {std::max(part.p1.x, part.p2.x) + offset_x, std::min(part.p1.y, part.p2.y) + offset_y};
+            BRDPoint bottom_left = {std::min(part.p1.x, part.p2.x) + offset_x, std::min(part.p1.y, part.p2.y) + offset_y};
+            
+            part_outline_segments.push_back({top_left, top_right});
+            part_outline_segments.push_back({top_right, bottom_right});
+            part_outline_segments.push_back({bottom_right, bottom_left});
+            part_outline_segments.push_back({bottom_left, top_left});
+        } else {
+            // Create a small square around the point
+            float part_size = 10.0f;
+            BRDPoint center = {part.p1.x + offset_x, part.p1.y + offset_y};
+            BRDPoint top_left = {center.x - part_size/2, center.y + part_size/2};
+            BRDPoint top_right = {center.x + part_size/2, center.y + part_size/2};
+            BRDPoint bottom_right = {center.x + part_size/2, center.y - part_size/2};
+            BRDPoint bottom_left = {center.x - part_size/2, center.y - part_size/2};
+            
+            part_outline_segments.push_back({top_left, top_right});
+            part_outline_segments.push_back({top_right, bottom_right});
+            part_outline_segments.push_back({bottom_right, bottom_left});
+            part_outline_segments.push_back({bottom_left, top_left});
+        }
+    }
     
     // Generate circles for pins
     for (const auto& pin : pins) {
+        bool is_bottom_side = (pin.side == BRDPinSide::Bottom);
+        float offset_x = is_bottom_side ? bottom_side_offset_x : 0.0f;
+        float offset_y = is_bottom_side ? bottom_side_offset_y : 0.0f;
+        
         // Use pin radius if available, otherwise use a default radius
         float radius = static_cast<float>(pin.radius);
         if (radius <= 0.0f) {
             radius = 6.5f; // Default radius similar to XZZPCBFile
         }
         
-        // Create circle for pin with red color (similar to XZZPCBFile)
-        BRDCircle circle(pin.pos, radius, 0.7f, 0.0f, 0.0f, 1.0f); // Red color
+        // Apply offset to pin position
+        BRDPoint pin_pos = {pin.pos.x + offset_x, pin.pos.y + offset_y};
+        
+        // Create circle for pin with red color (top) or blue color (bottom)
+        float r = is_bottom_side ? 0.0f : 0.7f; // Blue for bottom, red for top
+        float g = 0.0f;
+        float b = is_bottom_side ? 0.7f : 0.0f;
+        BRDCircle circle(pin_pos, radius, r, g, b, 1.0f);
         circles.push_back(circle);
     }
     
     // Generate circles for nails (test points) with different color
     for (const auto& nail : nails) {
+        bool is_bottom_side = (nail.side == BRDPartMountingSide::Bottom);
+        float offset_x = is_bottom_side ? bottom_side_offset_x : 0.0f;
+        float offset_y = is_bottom_side ? bottom_side_offset_y : 0.0f;
+        
         float radius = 4.0f; // Fixed radius for test points
         
-        // Create circle for nail with green color
-        BRDCircle circle(nail.pos, radius, 0.0f, 0.7f, 0.0f, 1.0f); // Green color
+        // Apply offset to nail position
+        BRDPoint nail_pos = {nail.pos.x + offset_x, nail.pos.y + offset_y};
+        
+        // Create circle for nail with green color (top) or cyan color (bottom)
+        float r = 0.0f;
+        float g = 0.7f;
+        float b = is_bottom_side ? 0.7f : 0.0f;
+        BRDCircle circle(nail_pos, radius, r, g, b, 1.0f);
         circles.push_back(circle);
     }
 }
