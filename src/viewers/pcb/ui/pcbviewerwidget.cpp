@@ -19,6 +19,11 @@
 #include <QVBoxLayout>
 #include <QMenu>
 #include <QDateTime>
+// Toolbar/UI widgets used below
+#include <QToolBar>
+#include <QAction>
+#include <QComboBox>
+#include <QPushButton>
 // QWidgetAction header may not be available in current include paths; we'll use addWidget helpers instead.
 
 // Enhanced debug logging for PCBViewerWidget
@@ -430,42 +435,17 @@ void PCBViewerWidget::setupUI()
 
 void PCBViewerWidget::setupToolbar()
 {
-    WritePCBDebugToFile("Setting up PCB viewer Qt toolbar with PDF viewer styling");
-    
-    // Create toolbar with same specifications as PDF viewer
+    WritePCBDebugToFile("Setting up PCB viewer Qt toolbar to match PDF viewer styling");
+
+    // Create toolbar with same styling as PDF viewer
     m_toolbar = new QToolBar(this);
-    m_toolbar->setFixedHeight(30);
-    m_toolbar->setIconSize(QSize(30, 30));  // Adjust icon size for 30px height
-    m_toolbar->setStyleSheet(
-        "QToolBar {"
-        "    background-color: #ffffff;"
-        "    border: none;"
-        "    border-bottom: 1px solid #d0d0d0;"
-        "    spacing: 5px;"
-        "    padding: 4px;"
-        "}"
-        "QToolButton {"
-        "    background-color: transparent;"
-        "    border: 1px solid transparent;"
-        "    border-radius: 2px;"
-        "    padding: 4px;"
-        "    min-width: 30px;"
-        "    min-height: 20px;"
-        "    font-size: 16px;"
-        "}"
-        "QToolButton:hover {"
-        "    background-color: #e6f3ff;"
-        "    border-color: #b3d9ff;"
-        "}"
-        "QToolButton:pressed {"
-        "    background-color: #cce7ff;"
-        "    border-color: #99ccff;"
-        "}"
-    );
+    m_toolbar->setIconSize(QSize(16, 16));
+    m_toolbar->setMovable(false);
+    m_toolbar->setStyleSheet("QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;}");
     
     // Split view removed: no split window action
     // Rotation actions (match PDF viewer icon style)
-    // Zoom actions first (manual zoom + fit)
+    // Zoom actions (manual zoom + fit)
     m_actionZoomIn = m_toolbar->addAction(QIcon(":/icons/images/icons/zoom_in.svg"), "");
     m_actionZoomIn->setToolTip("Zoom In");
     connect(m_actionZoomIn, &QAction::triggered, this, &PCBViewerWidget::zoomIn);
@@ -512,9 +492,16 @@ void PCBViewerWidget::setupToolbar()
     m_netCombo->setMinimumWidth(200);
     m_netCombo->setInsertPolicy(QComboBox::NoInsert);
     m_netCombo->setToolTip("Type or pick a Net or Component name");
+    // Match PDF viewer input styling
+    m_netCombo->setStyleSheet("QComboBox{border:1px solid #ccc;border-radius:3px;padding:2px 4px;background:white;}"
+                              "QComboBox:focus{border-color:#4285f4;}"
+                              "QComboBox::drop-down{border:none;}");
     m_toolbar->addWidget(m_netCombo);
     m_netSearchButton = new QPushButton("Go", m_toolbar);
     m_netSearchButton->setToolTip("Highlight & zoom to Net or Component");
+    m_netSearchButton->setStyleSheet("QPushButton{border:1px solid #ccc;border-radius:3px;padding:2px 8px;background:#f8f8f8;}"
+                                     "QPushButton:hover{background:#f0f0f0;}"
+                                     "QPushButton:pressed{background:#e8e8e8;}");
     m_toolbar->addWidget(m_netSearchButton);
     connect(m_netSearchButton, &QPushButton::clicked, this, &PCBViewerWidget::onNetSearchClicked);
     // Auto trigger navigation when user picks from list (but still allow manual typing then Enter/Go)
