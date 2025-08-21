@@ -15,6 +15,9 @@
 #include <QFont>
 #include <QToolButton>
 #include <QStyle>
+#include <QStyleOption>
+#include <QApplication>
+#include <QPalette>
 
 // Forward declaration for logging helper used below
 void logDebug(const QString &message);
@@ -30,9 +33,9 @@ public:
         if (metric == PM_TabBarIconSize) {
             return 0; // ensure no implicit icon space
         }
-        // Don't reserve space for the built-in close indicator; we manage our own
+        // Reserve a minimal space so text doesn't collide with our custom close button
         if (metric == PM_TabCloseIndicatorWidth || metric == PM_TabCloseIndicatorHeight) {
-            return 0;
+            return 14; // matches custom close button size
         }
         return QProxyStyle::pixelMetric(metric, option, widget);
     }
@@ -41,24 +44,18 @@ public:
     QRect subElementRect(SubElement element, const QStyleOption *option, const QWidget *widget) const override {
         QRect r = QProxyStyle::subElementRect(element, option, widget);
         if (element == SE_TabBarTabText) {
-            // Compute minimal left inset to avoid clipping, considering both normal and bold weights.
-            QFont baseFont = widget ? widget->font() : QFont();
-            QFont boldFont = baseFont; boldFont.setWeight(QFont::Weight(700));
-            QFontMetrics fm(baseFont);
-            QFontMetrics fmBold(boldFont);
+            // Use the effective style-provided metrics (reflects QSS font and bold for selected)
+            QFontMetrics fm = option ? option->fontMetrics : QFontMetrics(widget ? widget->font() : QFont());
 
             // Probe a representative set of first characters and use the worst-case negative left bearing.
             static const QString probes = QStringLiteral("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _-.,()");
             int worstLb = 0;
             for (QChar ch : probes) {
-                int lb1 = fm.leftBearing(ch);
-                int lb2 = fmBold.leftBearing(ch);
-                worstLb = qMin(worstLb, lb1);
-                worstLb = qMin(worstLb, lb2);
+                worstLb = qMin(worstLb, fm.leftBearing(ch));
             }
 
-            // Always keep at least 1px inset as a safety against edge-case clipping
-            const int leftInset = qMax(1, (worstLb < 0) ? -worstLb : 0);
+            // Keep a small safety inset; higher minimum to avoid clipping with bold fonts
+            const int leftInset = qMax(4, (worstLb < 0) ? -worstLb : 0);
 
             // Reserve space on the right for our custom close button (~14px) + tiny margin
             const int rightReserve = 16; // 14px button + 2px gap
@@ -192,6 +189,15 @@ static void logTabBarState(QTabBar* bar, const char* when, const char* tag)
 
 // Returns a user-friendly display name from a label/path by removing
 // any directory components and the final file extension (e.g., .pdf, .pcb)
+// Shorten very long names while preserving the most important prefix and a tiny suffix
+static QString smartShorten(const QString &name, int maxChars = 40, int tailChars = 8)
+{
+    if (name.length() <= maxChars) return name;
+    tailChars = qBound(0, tailChars, qMax(0, maxChars - 4));
+    const int headChars = qMax(0, maxChars - tailChars - 3); // 3 for ellipsis
+    return name.left(headChars).trimmed() + QStringLiteral(" … ") + name.right(tailChars).trimmed();
+}
+
 static QString displayNameFromLabel(const QString &label)
 {
     if (label.isEmpty()) return label;
@@ -231,7 +237,8 @@ static QString displayNameFromLabel(const QString &label)
             break;
         }
     }
-    return name;
+    // Apply smart shortening to keep the start visible and a small tail for uniqueness
+    return smartShorten(name, 40, 8);
 }
 
 DualTabWidget::DualTabWidget(QWidget *parent) 
@@ -272,221 +279,7 @@ void DualTabWidget::setupUI()
     m_pdfTabWidget->tabBar()->setExpanding(false);
     // Disable icon space completely - this is critical for proper text alignment
     m_pdfTabWidget->setIconSize(QSize(0, 0));
-    // Professional rectangular tabs with proper borders (BLUE for PDF)
-    QString modernTabStyleBlue = 
-        "QTabWidget {"
-        "    background: #000000 !important;"
-        "    font-family: 'Segoe UI Variable Text', 'Segoe UI', 'Inter', Arial, sans-serif !important;"
-        "}"
-        "QTabWidget::pane {"
-        "    border: 2px solid #4A90E2;"
-        "    background-color: #ffffff;"
-        "    margin-top: 6px;"
-        "    border-radius: 0px;"
-        "}"
-        "QTabBar {"
-        "    qproperty-drawBase: 0 !important;"
-        "    qproperty-iconSize: 0px 0px !important;"
-        "    background: #e8e8e8 !important;"
-        "}"
-    "QTabBar::tab {"
-    "    background-color: #f0f0f0;"
-    "    border: 2px solid #666666;"
-    "    color: #333333;"
-    "    padding: 4px 6px 4px 3px;"
-    "    margin: 2px;"
-    "    min-height: 22px;"
-    "    min-width: 120px;"
-    "    max-width: 250px;"
-    "    font-size: 12px !important;"
-    "    font-weight: 500 !important;"
-    "    letter-spacing: 0.2px;"
-    "    text-align: left;"
-    "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "}"
-    "QTabBar::tab:selected {"
-    "    background-color: #ffffff;"
-    "    color: #0066cc;"
-    "    border: 2px solid #4A90E2;"
-    "    font-weight: 700 !important;"
-    "    padding: 4px 6px 4px 3px;"
-    "    font-size: 12px !important;"
-    "    min-width: 120px;"
-    "    max-width: 250px;"
-    "    text-align: left;"
-    "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "}"
-    "QTabBar::tab:hover:!selected {"
-    "    background-color: rgba(227, 242, 253, 0.8);"
-    "    border: 2px solid #90caf9;"
-    "    color: #1976d2;"
-    "    font-family: \"Segoe UI\", Arial, sans-serif;"
-    "    opacity: 0.9;"
-    "    padding: 4px 6px 4px 3px;"
-    "    min-width: 120px;"
-    "    max-width: 250px;"
-    "    text-align: left;"
-    "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "    font-weight: 500 !important;"
-    "}"
-        "/* Active tab hover state - enhanced glow */"
-    "QTabBar::tab:selected:hover {"
-    "    background-color: #ffffff;"
-    "    color: #0066cc;"
-    "    border: 2px solid #4A90E2;"
-    "    padding: 4px 6px 4px 3px;"
-    "    min-width: 120px;"
-    "    max-width: 250px;"
-    "    text-align: left;"
-    "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "}"
-        "/* Tab press/click animation - satisfying feedback */"
-        "QTabBar::tab:pressed {"
-
-        "    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.6, 1);"
-        "    box-shadow: 0px 1px 4px rgba(74, 144, 226, 0.2);"
-        "}"
-        "/* First tab - remove left margin */"
-        "QTabBar::tab:first {"
-        "    margin-left: 0px;"
-        "}"
-        "/* Last tab - add right margin */"
-        "QTabBar::tab:last {"
-        "    margin-right: 0px;"
-        "}"
-        "/* Disable focus outline */"
-        "QTabBar::tab:focus {"
-        "    outline: none;"
-        "}"
-        "/* Tab switching animation states */"
-        "QTabBar::tab:!selected {"
-        "    animation-duration: 0.3s;"
-        "    animation-timing-function: cubic-bezier(0.4, 0.0, 0.2, 1);"
-        "}"
-        "/* Close button styling: image always defined; visibility controlled in code */"
-    "QTabBar::close-button {"
-    "    image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=);"
-    "    subcontrol-origin: content;"
-    "    subcontrol-position: center right;"
-    "    width: 12px;"
-    "    height: 12px;"
-    "    margin: 0px 6px 0px 4px;"
-    "    border-radius: 2px;"
-    "    background: transparent;"
-    "}"
-    ""
-        "QTabBar::close-button:hover {"
-        "    background: rgba(255, 0, 0, 0.1);"
-        "    border-radius: 2px;"
-        "}"
-    "QTabBar QToolButton:hover {"
-    "    background: #333333 !important;"
-    "    color: #ffffff !important;"
-    "}";
-    
-    // RED theme for PCB tab widget
-    QString modernTabStyleRed =
-        "QTabWidget {"
-        "    background: #000000 !important;"
-        "    font-family: 'Segoe UI Variable Text', 'Segoe UI', 'Inter', Arial, sans-serif !important;"
-        "}"
-        "QTabWidget::pane {"
-        "    border: 2px solid #666666;"
-        "    background-color: #ffffff;"
-        "    margin-top: 6px;"
-        "    border-radius: 0px;"
-        "}"
-        "QTabBar {"
-        "    qproperty-drawBase: 0 !important;"
-        "    qproperty-iconSize: 0px 0px !important;"
-        "    background: #e8e8e8 !important;"
-        "}"
-    "QTabBar::tab {"
-    "    background-color: #f0f0f0;"
-    "    border: 2px solid #666666;"
-    "    color: #333333;"
-    "    padding: 4px 6px 4px 3px;"
-    "    margin: 2px;"
-    "    min-height: 22px;"
-    "    min-width: 120px;"
-    "    max-width: 250px;"
-    "    font-size: 12px !important;"
-    "    font-weight: 500 !important;"
-    "    letter-spacing: 0.2px;"
-    "    text-align: left;"
-    "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "}"
-    "QTabBar::tab:selected {"
-    "    background-color: #ffffff;"
-    "    color: #c62828;"
-    "    border: 2px solid #E53935;"
-    "    font-weight: 700 !important;"
-    "    padding: 4px 6px 4px 3px;"
-    "    font-size: 12px !important;"
-    "    min-width: 120px;"
-    "    max-width: 250px;"
-    "    text-align: left;"
-    "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "}"
-    "QTabBar::tab:hover:!selected {"
-    "    background-color: rgba(255, 235, 238, 0.85);"
-    "    border: 2px solid #ef9a9a;"
-    "    color: #d32f2f;"
-    "    font-family: \"Segoe UI\", Arial, sans-serif;"
-    "    opacity: 0.9;"
-    "    padding: 4px 6px 4px 3px;"
-    "    min-width: 120px;"
-    "    max-width: 250px;"
-    "    text-align: left;"
-    "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "    font-weight: 500 !important;"
-    "}"
-    "QTabBar::tab:selected:hover {"
-    "    background-color: #ffffff;"
-    "    color: #c62828;"
-    "    border: 2px solid #E53935;"
-    "    padding: 4px 6px 4px 3px;"
-    "    min-width: 120px;"
-    "    max-width: 250px;"
-    "    text-align: left;"
-    "    qproperty-alignment: 'AlignLeft | AlignVCenter';"
-    "}"
-        "QTabBar::tab:pressed {"
-        "    transition: all 0.1s cubic-bezier(0.4, 0.0, 0.6, 1);"
-        "    box-shadow: 0px 1px 4px rgba(229, 57, 53, 0.2);"
-        "}"
-        "QTabBar::tab:first {"
-        "    margin-left: 0px;"
-        "}"
-        "QTabBar::tab:last {"
-        "    margin-right: 0px;"
-        "}"
-        "QTabBar::tab:focus {"
-        "    outline: none;"
-        "}"
-        "QTabBar::tab:!selected {"
-        "    animation-duration: 0.3s;"
-        "    animation-timing-function: cubic-bezier(0.4, 0.0, 0.2, 1);"
-        "}"
-    "QTabBar::close-button {"
-    "    image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=);"
-    "    subcontrol-origin: content;"
-    "    subcontrol-position: center right;"
-    "    width: 12px;"
-    "    height: 12px;"
-    "    margin: 0px 6px 0px 4px;"
-    "    border-radius: 2px;"
-    "    background: transparent;"
-    "}"
-    ""
-    "QTabBar::close-button:hover {"
-        "    background: rgba(255, 0, 0, 0.1);"
-        "    border-radius: 2px;"
-        "}"
-        "QTabBar QToolButton:hover {"
-        "    background: #333333 !important;"
-        "    color: #ffffff !important;"
-        "}";
+    // Styles will be applied by theme helper
     m_pcbTabWidget = new QTabWidget();
     // We'll manage close buttons ourselves (hover-only)
     m_pcbTabWidget->setTabsClosable(false);
@@ -505,9 +298,8 @@ void DualTabWidget::setupUI()
     // Disable icon space completely - this is critical for proper text alignment
     m_pcbTabWidget->setIconSize(QSize(0, 0));
     
-    // Apply BLUE to PDF and RED to PCB tab widgets (tagged for runtime debugging)
-    applyStyleWithTag(m_pdfTabWidget, modernTabStyleBlue, "modernTabStyleBlue-startup");
-    applyStyleWithTag(m_pcbTabWidget, modernTabStyleRed, "modernTabStyleRed-startup");
+    // Apply theme (default: light). This sets tab bar and content styles coherently.
+    applyCurrentThemeStyles();
     // Log initial tab bar state after startup style
     logTabBarState(m_pdfTabWidget->tabBar(), "after-startup-style", "PDF");
     logTabBarState(m_pcbTabWidget->tabBar(), "after-startup-style", "PCB");
@@ -527,22 +319,10 @@ void DualTabWidget::setupUI()
     
     // Create separate content areas for complete isolation
     m_pdfContentArea = new QStackedWidget();
-    m_pdfContentArea->setStyleSheet(
-        "QStackedWidget {"
-        "    border: 1px solid #e0e0e0;"
-        "    border-radius: 0px;"
-        "    background-color: black;"
-        "}"
-    );
+    // Style via theme helper
     
     m_pcbContentArea = new QStackedWidget();
-    m_pcbContentArea->setStyleSheet(
-        "QStackedWidget {"
-        "    border: 1px solid #e0e0e0;"
-        "    border-radius: 0px;"
-        "    background-color: black;"
-        "}"
-    );
+    // Style via theme helper
     
     // Wrap content areas in a single switcher to avoid flicker from hide/show
     m_contentSwitcher = new QStackedWidget();
@@ -621,8 +401,10 @@ int DualTabWidget::addTab(QWidget *widget, const QIcon &/*icon*/, const QString 
         // Add dummy widget to PDF tab bar (actual content is in PDF content area)
     QWidget *dummyWidget = new QWidget();
     // Show only the base file name without extension
-    const QString display = displayNameFromLabel(label);
+    const QString cleanedFull = displayNameFromLabel(label); // shortened already
+    const QString display = cleanedFull;
     tabIndex = m_pdfTabWidget->addTab(dummyWidget, display); // icon intentionally ignored
+    m_pdfTabWidget->setTabToolTip(tabIndex, label); // show full original path/label on hover
     // Ensure close button exists for this tab and hide until hover
     ensureCloseButtons(this, m_pdfTabWidget, [this](int idx){ onPdfTabCloseRequested(idx); });
     setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
@@ -646,8 +428,10 @@ int DualTabWidget::addTab(QWidget *widget, const QIcon &/*icon*/, const QString 
         // Add dummy widget to PCB tab bar
     QWidget *dummyWidget = new QWidget();
     // Show only the base file name without extension
-    const QString display = displayNameFromLabel(label);
+    const QString cleanedFull = displayNameFromLabel(label);
+    const QString display = cleanedFull;
     tabIndex = m_pcbTabWidget->addTab(dummyWidget, display); // icon intentionally ignored
+    m_pcbTabWidget->setTabToolTip(tabIndex, label);
     // Ensure close button exists for this tab and hide until hover
     ensureCloseButtons(this, m_pcbTabWidget, [this](int idx){ onPcbTabCloseRequested(idx); });
     setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
@@ -782,9 +566,11 @@ void DualTabWidget::setTabText(int index, const QString &text, TabType type)
     const QString display = displayNameFromLabel(text);
     if (type == PDF_TAB) {
         m_pdfTabWidget->setTabText(index, display);
+        m_pdfTabWidget->setTabToolTip(index, text);
     logTabBarState(m_pdfTabWidget->tabBar(), "after-setTabText", "PDF");
     } else {
         m_pcbTabWidget->setTabText(index, display);
+        m_pcbTabWidget->setTabToolTip(index, text);
     logTabBarState(m_pcbTabWidget->tabBar(), "after-setTabText", "PCB");
     }
 }
@@ -1268,4 +1054,125 @@ void DualTabWidget::forceStyleRefresh()
     applyStyleWithTag(m_pcbTabWidget, pcbStyle, "forced-reapply");
     
     qDebug() << "Forced style refresh by re-applying stylesheets";
+}
+
+void DualTabWidget::setDarkTheme(bool dark)
+{
+    if (m_darkTheme == dark) return;
+    m_darkTheme = dark;
+    this->setProperty("explicitTheme", true);
+    applyCurrentThemeStyles();
+}
+
+void DualTabWidget::applyCurrentThemeStyles()
+{
+    // Base palette-derived hint (optional): if not explicitly set, detect from app palette
+    bool dark = m_darkTheme;
+    if (!this->property("explicitTheme").toBool()) {
+        // Detect if app palette is dark and adopt it as default
+        const bool appDark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+        dark = m_darkTheme || appDark;
+        m_darkTheme = dark; // lock in
+    }
+
+    const QString pdfLight =
+        "QTabWidget {"
+        "    background: #ffffff;"
+        "    font-family: 'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif;"
+        "}"
+        "QTabWidget::pane { border:2px solid #4A90E2; background:#ffffff; margin-top:6px; border-radius:0; }"
+        "QTabBar { qproperty-drawBase:0; qproperty-iconSize:0px 0px; background:#e8e8e8; }"
+    "QTabBar::tab { background:#f0f0f0; border:2px solid #666; color:#333; padding:4px 6px 4px 3px; margin:2px; min-height:22px; min-width:120px; max-width:250px; font-size:12px; font-weight:500; letter-spacing:0.2px; text-align:left; qproperty-alignment:'AlignLeft | AlignVCenter'; }"
+    "QTabBar::tab:selected { background:#ffffff; color:#0066cc; border:2px solid #4A90E2; font-weight:700; padding-left:6px; }"
+        "QTabBar::tab:hover:!selected { background:rgba(227,242,253,0.8); border:2px solid #90caf9; color:#1976d2; }"
+    "QTabBar::tab:pressed { transition:all .1s cubic-bezier(.4,0,.6,1); box-shadow:0 1px 4px rgba(74,144,226,.2); }"
+    "QTabBar::tab:first { margin-left:8px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
+        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 6px 0 4px; border-radius:2px; background:transparent; }"
+        "QTabBar::close-button:hover { background: rgba(255,0,0,.1); border-radius:2px; }"
+    ;
+
+    const QString pcbLight =
+        "QTabWidget { background:#ffffff; font-family:'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif; }"
+        "QTabWidget::pane { border:2px solid #666; background:#ffffff; margin-top:6px; border-radius:0; }"
+        "QTabBar { qproperty-drawBase:0; qproperty-iconSize:0px 0px; background:#e8e8e8; }"
+    "QTabBar::tab { background:#f0f0f0; border:2px solid #666; color:#333; padding:4px 6px 4px 3px; margin:2px; min-height:22px; min-width:120px; max-width:250px; font-size:12px; font-weight:500; letter-spacing:.2px; text-align:left; qproperty-alignment:'AlignLeft | AlignVCenter'; }"
+    "QTabBar::tab:selected { background:#ffffff; color:#c62828; border:2px solid #E53935; font-weight:700; padding-left:6px; }"
+        "QTabBar::tab:hover:!selected { background:rgba(255,235,238,.85); border:2px solid #ef9a9a; color:#d32f2f; }"
+    "QTabBar::tab:pressed { transition:all .1s cubic-bezier(.4,0,.6,1); box-shadow:0 1px 4px rgba(229,57,53,.2); }"
+    "QTabBar::tab:first { margin-left:8px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
+        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 6px 0 4px; border-radius:2px; background:transparent; }"
+        "QTabBar::close-button:hover { background: rgba(255,0,0,.1); border-radius:2px; }"
+    ;
+
+    const QString pdfDark =
+        "QTabWidget { background:#111; color:#e8eaed; font-family:'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif; }"
+        "QTabWidget::pane { border:2px solid #1976d2; background:#1a1a1a; margin-top:6px; border-radius:0; }"
+        "QTabBar { qproperty-drawBase:0; qproperty-iconSize:0px 0px; background:#202124; }"
+    "QTabBar::tab { background:#2a2b2d; border:2px solid rgba(255,255,255,0.35); color:#e8eaed; padding:4px 6px 4px 3px; margin:2px; min-height:22px; min-width:120px; max-width:260px; font-size:12px; font-weight:500; letter-spacing:.2px; text-align:left; qproperty-alignment:'AlignLeft | AlignVCenter'; }"
+    "QTabBar::tab:selected { background:#1f2937; color:#8ab4f8; border:2px solid #1976d2; font-weight:700; padding-left:6px; }"
+        "QTabBar::tab:hover:!selected { background:#263238; border:2px solid #4f89d3; color:#90caf9; }"
+    "QTabBar::tab:pressed { transition:all .1s cubic-bezier(.4,0,.6,1); box-shadow:0 1px 4px rgba(25,118,210,.25); }"
+    "QTabBar::tab:first { margin-left:8px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
+        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iI2VlZWVlZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjZWVlZWVlIiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 6px 0 4px; border-radius:2px; background:transparent; }"
+        "QTabBar::close-button:hover { background: rgba(255,255,255,.08); border-radius:2px; }"
+        "QTabBar QToolButton:hover { background:#333 !important; color:#fff !important; }"
+    ;
+
+    const QString pcbDark =
+        "QTabWidget { background:#111; color:#f8dddd; font-family:'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif; }"
+        "QTabWidget::pane { border:2px solid #b71c1c; background:#1a1a1a; margin-top:6px; border-radius:0; }"
+        "QTabBar { qproperty-drawBase:0; qproperty-iconSize:0px 0px; background:#202124; }"
+    "QTabBar::tab { background:#2a2b2d; border:2px solid rgba(255,255,255,0.35); color:#e8eaed; padding:4px 6px 4px 3px; margin:2px; min-height:22px; min-width:120px; max-width:260px; font-size:12px; font-weight:500; letter-spacing:.2px; text-align:left; qproperty-alignment:'AlignLeft | AlignVCenter'; }"
+    "QTabBar::tab:selected { background:#2b1f1f; color:#ff8a80; border:2px solid #b71c1c; font-weight:700; padding-left:6px; }"
+        "QTabBar::tab:hover:!selected { background:#332222; border:2px solid #cf6679; color:#ef9a9a; }"
+    "QTabBar::tab:pressed { transition:all .1s cubic-bezier(.4,0,.6,1); box-shadow:0 1px 4px rgba(183,28,28,.25); }"
+    "QTabBar::tab:first { margin-left:8px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
+        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iI2VlZWVlZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjZWVlZWVlIiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 6px 0 4px; border-radius:2px; background:transparent; }"
+        "QTabBar::close-button:hover { background: rgba(255,255,255,.08); border-radius:2px; }"
+        "QTabBar QToolButton:hover { background:#333 !important; color:#fff !important; }"
+    ;
+
+    // Apply to widgets
+    if (m_pdfTabWidget) applyStyleWithTag(m_pdfTabWidget, dark ? pdfDark : pdfLight, dark ? "pdfDark" : "pdfLight");
+    if (m_pcbTabWidget) applyStyleWithTag(m_pcbTabWidget, dark ? pcbDark : pcbLight, dark ? "pcbDark" : "pcbLight");
+
+    // Content areas
+    if (m_pdfContentArea) {
+        m_pdfContentArea->setStyleSheet(QStringLiteral(
+            "QStackedWidget { border:1px solid %1; border-radius:0; background:%2; }"
+        ).arg(dark ? "#3c4043" : "#e0e0e0",
+              dark ? "#111111" : "#ffffff"));
+    }
+    if (m_pcbContentArea) {
+        m_pcbContentArea->setStyleSheet(QStringLiteral(
+            "QStackedWidget { border:1px solid %1; border-radius:0; background:%2; }"
+        ).arg(dark ? "#3c4043" : "#e0e0e0",
+              dark ? "#111111" : "#ffffff"));
+    }
+
+    // Update custom close buttons theme
+    updateCloseButtonsTheme(m_pdfTabWidget);
+    updateCloseButtonsTheme(m_pcbTabWidget);
+}
+
+void DualTabWidget::updateCloseButtonsTheme(QTabWidget* w)
+{
+    if (!w) return;
+    QTabBar* bar = w->tabBar();
+    if (!bar) return;
+    for (int i = 0; i < bar->count(); ++i) {
+        if (auto* btn = qobject_cast<QToolButton*>(bar->tabButton(i, QTabBar::RightSide))) {
+            if (m_darkTheme) {
+                btn->setStyleSheet(
+                    "QToolButton { margin:0; padding:0; border:none; background: transparent; color: #ddd; font-weight:600; }"
+                    "QToolButton:hover { background: rgba(255,255,255,0.10); border-radius: 3px; color: #ff8a80; }"
+                );
+            } else {
+                btn->setStyleSheet(
+                    "QToolButton { margin:0; padding:0; border:none; background: transparent; color: #444; font-weight:600; }"
+                    "QToolButton:hover { background: rgba(0,0,0,0.12); border-radius: 3px; color: #b00020; }"
+                );
+            }
+        }
+    }
 }

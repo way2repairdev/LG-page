@@ -17312,3 +17312,1235 @@ Library Versions:
 - GLEW Version: 2.2.0
 === End Debug Information ===
 
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:20:54 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:20:56 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:22:12 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:22:15 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:23:59 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:24:18 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:24:19 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:24:20 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:24:21 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:25:15 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:28:57 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:28:58 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:35:52 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:35:53 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:35:55 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:36:01 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:36:02 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:37:27 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:37:28 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:37:29 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:37:30 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:37:31 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:38:11 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:38:12 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:38:13 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:38:14 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:43:46 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:43:47 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:43:48 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:43:50 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:43:52 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:47:51 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:47:52 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:47:53 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:47:55 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:47:56 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:51:26 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:51:28 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:51:30 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:51:31 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:51:32 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:51:51 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:52:13 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+
+=== OpenGL Debug Information ===
+Timestamp: Thu Aug 21 11:52:27 2025
+OpenGL Version: 4.6.0 NVIDIA 456.71
+OpenGL Vendor: NVIDIA Corporation
+OpenGL Renderer: GeForce GT 730/PCIe/SSE2
+OpenGL Context Version: 4.6
+GLSL Version: 4.60 NVIDIA
+OpenGL Profile: Compatibility Profile
+Max Texture Size: 16384
+Max Viewport: 16384x16384
+Extensions Support:
+- VBO Support: YES
+- VAO Support: YES
+- Shader Support: YES
+- Framebuffer Support: YES
+=== Pipeline Analysis ===
+Selected Pipeline: Modern Pipeline (VBO/VAO/Shaders) - Optimal Performance
+Pipeline Features:
+- Fixed Function Pipeline: YES
+- Immediate Mode Rendering: NO
+- Vertex Arrays: YES
+- Vertex Buffer Objects (VBOs): YES
+- Shaders: YES
+Library Versions:
+- GLFW Version: 3.4.0 Win32 WGL Null EGL OSMesa MinGW-w64 DLL
+- GLEW Version: 2.2.0
+=== End Debug Information ===
+

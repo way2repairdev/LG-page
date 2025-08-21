@@ -18,6 +18,10 @@ public:
 
     explicit DualTabWidget(QWidget *parent = nullptr);
     
+    // Theme control
+    void setDarkTheme(bool dark);
+    bool isDarkTheme() const { return m_darkTheme; }
+    
     // Main interface methods (similar to QTabWidget)
     int addTab(QWidget *widget, const QString &label, TabType type);
     int addTab(QWidget *widget, const QIcon &icon, const QString &label, TabType type);
@@ -84,6 +88,8 @@ private:
     void showActiveContent();
     void updateTabBarStates();
     void updateTabBarVisualState();
+    void applyCurrentThemeStyles();
+    void updateCloseButtonsTheme(QTabWidget* w);
     
     QVBoxLayout *m_mainLayout;
     QTabWidget *m_pdfTabWidget;    // Row 1: PDF tabs
@@ -113,6 +119,9 @@ private:
     // Hover state cache to avoid per-mouse-move relayout churn
     int m_pdfHoveredIndex = -1;
     int m_pcbHoveredIndex = -1;
+
+    // Theme flag (default: light)
+    bool m_darkTheme = false;
 };
 
 #endif // DUALTABWIDGET_H
