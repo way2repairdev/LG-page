@@ -573,7 +573,7 @@ void MainApplication::openFileInTab(const QString &filePath)
     }
     
     // Check if it's a PCB file
-    if (extension == "xzz" || extension == "pcb" || extension == "xzzpcb") {
+    if (extension == "xzz" || extension == "pcb" || extension == "xzzpcb" || extension == "brd" || extension == "brd2") {
         openPCBInTab(filePath);
         return;
     }
@@ -581,7 +581,7 @@ void MainApplication::openFileInTab(const QString &filePath)
     // For non-PDF/PCB files, show a message
     statusBar()->showMessage("Only PDF and PCB files are supported in tabs");
     QMessageBox::information(this, "File Type Not Supported", 
-        "Only PDF files (.pdf) and PCB files (.xzz, .pcb, .xzzpcb) can be opened in tabs.\n\n"
+        "Only PDF files (.pdf) and PCB files (.xzz, .pcb, .xzzpcb, .brd, .brd2) can be opened in tabs.\n\n"
         "Selected file: " + fileInfo.fileName() + "\n"
         "File type: " + (extension.isEmpty() ? "Unknown" : extension.toUpper()));
 }
@@ -787,7 +787,7 @@ void MainApplication::openPCBInTab(const QString &filePath)
                 "• Corrupted or invalid\n"
                 "• Incompatible with XZZPCB format\n" 
                 "• Not accessible due to permissions\n\n"
-                "Supported formats: .xzz, .pcb, .xzzpcb"
+                "Supported formats: .xzz, .pcb, .xzzpcb, .brd, .brd2"
             ).arg(fileInfo.fileName()).arg(filePath);
             
             QMessageBox::warning(this, "PCB Loading Error", errorMessage);

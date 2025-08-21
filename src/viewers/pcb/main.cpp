@@ -1,6 +1,8 @@
 #include "Window.h"
 #include "PCBRenderer.h"
 #include "XZZPCBFile.h"
+#include "BRDFile.h"
+#include "BRD2File.h"
 #include "Utils.h"
 #include <iostream>
 #include <memory>
@@ -164,7 +166,7 @@ private:
         ofn.lStructSize = sizeof(ofn);
         ofn.hwndOwner = glfwGetWin32Window(window.GetHandle());
         ofn.lpstrFile = szFile;
-        ofn.nMaxFile = sizeof(szFile);        ofn.lpstrFilter = L"PCB Files\0*.xzzpcb;*.pcb;*.xzz\0XZZPCB Files\0*.xzzpcb;*.xzz\0PCB Files\0*.pcb\0All Files\0*.*\0";
+        ofn.nMaxFile = sizeof(szFile);        ofn.lpstrFilter = L"PCB Files\0*.xzzpcb;*.pcb;*.xzz;*.brd;*.brd2\0XZZPCB Files\0*.xzzpcb;*.xzz\0BRD Files\0*.brd\0BRD2 Files\0*.brd2\0PCB Files\0*.pcb\0All Files\0*.*\0";
         ofn.nFilterIndex = 1;
         ofn.lpstrFileTitle = NULL;
         ofn.nMaxFileTitle = 0;
@@ -187,17 +189,45 @@ private:
         LOG_INFO("Loading PCB file: " + filepath);
           // Check file extension
         std::string ext = Utils::ToLower(Utils::GetFileExtension(filepath));
-        if (ext != "xzz" && ext != "pcb" && ext != "xzzpcb") {
-            LOG_ERROR("Unsupported file format: " + ext);
+        LOG_INFO("Detected file extension: '" + ext + "'");
+        if (ext != "xzz" && ext != "pcb" && ext != "xzzpcb" && ext != "brd" && ext != "brd2") {
+            LOG_ERROR("Unsupported file format: '" + ext + "' - Expected: xzz, pcb, xzzpcb, brd, or brd2");
             return false;
         }
-          // Load XZZPCB file
-        auto xzzpcb = XZZPCBFile::LoadFromFile(filepath);
-        if (!xzzpcb) {
-            LOG_ERROR("Failed to load XZZPCB file: " + filepath);
+        
+        std::shared_ptr<BRDFileBase> loaded_pcb = nullptr;
+        
+        if (ext == "brd") {
+            // Load BRD file
+            auto brd = BRDFile::LoadFromFile(filepath);
+            if (!brd) {
+                LOG_ERROR("Failed to load BRD file: " + filepath);
+                return false;
+            }
+            loaded_pcb = std::shared_ptr<BRDFileBase>(brd.release());
+        } else if (ext == "brd2") {
+            // Load BRD2 file
+            auto brd2 = BRD2File::LoadFromFile(filepath);
+            if (!brd2) {
+                LOG_ERROR("Failed to load BRD2 file: " + filepath);
+                return false;
+            }
+            loaded_pcb = std::shared_ptr<BRDFileBase>(brd2.release());
+        } else {
+            // Load XZZPCB file (default for .xzz, .pcb, .xzzpcb)
+            auto xzzpcb = XZZPCBFile::LoadFromFile(filepath);
+            if (!xzzpcb) {
+                LOG_ERROR("Failed to load XZZPCB file: " + filepath);
+                return false;
+            }
+            loaded_pcb = std::shared_ptr<BRDFileBase>(xzzpcb.release());
+        }
+        
+        if (!loaded_pcb) {
+            LOG_ERROR("Failed to load PCB file: " + filepath);
             return false;
         }
-          pcb_data = std::shared_ptr<BRDFileBase>(xzzpcb.release());
+          pcb_data = loaded_pcb;
         renderer.SetPCBData(pcb_data);
         
         // Force camera to a reasonable position based on the coordinates we saw
@@ -503,7 +533,7 @@ private:
     }
 };
 
-int main(int argc, char* argv[]) {    std::cout << "PCB Viewer - XZZPCB Format Support" << std::endl;
+int main(int argc, char* argv[]) {    std::cout << "PCB Viewer - Multi-Format Support (XZZPCB, BRD, BRD2)" << std::endl;
     std::cout << "Controls:" << std::endl;
     std::cout << "  Right Mouse Button + Drag: Pan view" << std::endl;
     std::cout << "  Mouse Wheel: Zoom in/out" << std::endl;

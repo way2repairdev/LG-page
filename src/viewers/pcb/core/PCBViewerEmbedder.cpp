@@ -4,6 +4,8 @@
 #include "../rendering/PCBRenderer.h"
 #include "../format/BRDFileBase.h"
 #include "../format/XZZPCBFile.h"
+#include "../format/BRDFile.h"
+#include "../format/BRD2File.h"
 #include "../core/BRDTypes.h"
 #include "../core/Utils.h"
 
@@ -171,15 +173,37 @@ bool PCBViewerEmbedder::loadPCB(const std::string& filePath)
     }
 
     try {
-        // Load PCB file using XZZPCBFile
-        auto pcbFile = XZZPCBFile::LoadFromFile(filePath);
+        // Determine file format and load accordingly
+        std::string ext = Utils::ToLower(Utils::GetFileExtension(filePath));
+        std::shared_ptr<BRDFileBase> pcbFile = nullptr;
+        
+        if (ext == "brd") {
+            // Load BRD file
+            auto brd = BRDFile::LoadFromFile(filePath);
+            if (brd) {
+                pcbFile = std::shared_ptr<BRDFileBase>(brd.release());
+            }
+        } else if (ext == "brd2") {
+            // Load BRD2 file
+            auto brd2 = BRD2File::LoadFromFile(filePath);
+            if (brd2) {
+                pcbFile = std::shared_ptr<BRDFileBase>(brd2.release());
+            }
+        } else {
+            // Load XZZPCB file (default for .xzz, .pcb, .xzzpcb)
+            auto xzzpcb = XZZPCBFile::LoadFromFile(filePath);
+            if (xzzpcb) {
+                pcbFile = std::shared_ptr<BRDFileBase>(xzzpcb.release());
+            }
+        }
+        
         if (!pcbFile) {
             handleError("Failed to load PCB file: " + filePath);
             return false;
         }
 
         // Convert to shared_ptr<BRDFileBase>
-        m_pcbData = std::shared_ptr<BRDFileBase>(pcbFile.release());
+        m_pcbData = pcbFile;
         
         if (m_renderer) {
             m_renderer->SetPCBData(m_pcbData);
