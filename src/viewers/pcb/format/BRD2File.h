@@ -16,4 +16,7 @@ public:
 
 private:
     char *file_buf = nullptr;
+    
+    // Helper method to generate rendering geometry for pins
+    void GenerateRenderingGeometry();
 };

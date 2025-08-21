@@ -22,4 +22,7 @@ public:
 private:
     static constexpr std::array<uint8_t, 4> signature = {{0x23, 0xe2, 0x63, 0x28}};
     char *file_buf = nullptr;
+    
+    // Helper method to generate rendering geometry for pins
+    void GenerateRenderingGeometry();
 };

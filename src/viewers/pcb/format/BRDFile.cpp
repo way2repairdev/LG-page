@@ -266,13 +266,48 @@ bool BRDFile::Load(const std::vector<char>& buf, const std::string& /*filepath*/
 
     valid = current_block != 0;
     
+    // Generate rendering geometry for pins
+    if (valid) {
+        GenerateRenderingGeometry();
+    }
+    
     std::cout << "BRD file parsed successfully:" << std::endl;
     std::cout << "  Parts: " << parts.size() << std::endl;
     std::cout << "  Pins: " << pins.size() << std::endl;
     std::cout << "  Nails: " << nails.size() << std::endl;
     std::cout << "  Format points: " << format.size() << std::endl;
+    std::cout << "  Circles: " << circles.size() << std::endl;
     
     return valid;
+}
+
+void BRDFile::GenerateRenderingGeometry() {
+    // Clear existing geometry
+    circles.clear();
+    rectangles.clear();
+    ovals.clear();
+    
+    // Generate circles for pins
+    for (const auto& pin : pins) {
+        // Use pin radius if available, otherwise use a default radius
+        float radius = static_cast<float>(pin.radius);
+        if (radius <= 0.0f) {
+            radius = 6.5f; // Default radius similar to XZZPCBFile
+        }
+        
+        // Create circle for pin with red color (similar to XZZPCBFile)
+        BRDCircle circle(pin.pos, radius, 0.7f, 0.0f, 0.0f, 1.0f); // Red color
+        circles.push_back(circle);
+    }
+    
+    // Generate circles for nails (test points) with different color
+    for (const auto& nail : nails) {
+        float radius = 4.0f; // Fixed radius for test points
+        
+        // Create circle for nail with green color
+        BRDCircle circle(nail.pos, radius, 0.0f, 0.7f, 0.0f, 1.0f); // Green color
+        circles.push_back(circle);
+    }
 }
 
 BRDFile::~BRDFile() {
