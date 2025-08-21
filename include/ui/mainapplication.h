@@ -105,6 +105,7 @@ private:
     QWidget *m_centralWidget;
     QSplitter *m_splitter;
     QWidget *m_treePanel;           // container for search bar + tree
+    QWidget *m_treeSearchBar;       // search bar container (for theming)
     QTreeWidget *m_treeWidget;
     QLineEdit *m_treeSearchEdit;    // search input
     QPushButton *m_treeSearchButton; // search/next button

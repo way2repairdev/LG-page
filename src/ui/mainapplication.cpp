@@ -295,26 +295,25 @@ void MainApplication::setupTreeView()
     panelLayout->setSpacing(6);
 
     // Search bar row
-    QWidget *searchBar = new QWidget(m_treePanel);
-    QHBoxLayout *searchLayout = new QHBoxLayout(searchBar);
+    m_treeSearchBar = new QWidget(m_treePanel);
+    QHBoxLayout *searchLayout = new QHBoxLayout(m_treeSearchBar);
     searchLayout->setContentsMargins(6, 6, 6, 0);
     searchLayout->setSpacing(6);
 
-    m_treeSearchEdit = new QLineEdit(searchBar);
+    m_treeSearchEdit = new QLineEdit(m_treeSearchBar);
     m_treeSearchEdit->setPlaceholderText("Search files by name… (Enter or Find)");
-    m_treeSearchEdit->setClearButtonEnabled(false);
-    m_treeSearchEdit->setMinimumHeight(28);
+    // Use the built-in clear icon to avoid an extra button cluttering the UI
+    m_treeSearchEdit->setClearButtonEnabled(true);
+    m_treeSearchEdit->setMinimumHeight(30);
 
-    m_treeSearchClearButton = new QToolButton(searchBar);
-    m_treeSearchClearButton->setText(QString::fromUtf8("\xE2\x9C\x95")); // × icon
-    m_treeSearchClearButton->setToolTip("Clear");
-    m_treeSearchClearButton->setAutoRaise(true);
-    m_treeSearchClearButton->setCursor(Qt::PointingHandCursor);
+    // Remove separate clear button (kept member for compatibility but not shown)
+    m_treeSearchClearButton = new QToolButton(m_treeSearchBar);
+    m_treeSearchClearButton->setVisible(false);
 
-    m_treeSearchButton = new QPushButton(searchBar);
+    m_treeSearchButton = new QPushButton(m_treeSearchBar);
     m_treeSearchButton->setText(" Find");
     m_treeSearchButton->setCursor(Qt::PointingHandCursor);
-    m_treeSearchButton->setMinimumHeight(28);
+    m_treeSearchButton->setMinimumHeight(30);
     m_treeSearchButton->setMinimumWidth(68);
     // Try to use app search icon if available
     QIcon searchIcon;
@@ -329,9 +328,9 @@ void MainApplication::setupTreeView()
     }
 
     searchLayout->addWidget(m_treeSearchEdit, 1);
-    searchLayout->addWidget(m_treeSearchClearButton, 0);
+    // No explicit clear button inserted; QLineEdit shows its own clear icon
     searchLayout->addWidget(m_treeSearchButton, 0);
-    searchBar->setLayout(searchLayout);
+    m_treeSearchBar->setLayout(searchLayout);
 
     // Tree widget
     m_treeWidget = new SmoothTreeWidget(m_treePanel);
@@ -348,15 +347,15 @@ void MainApplication::setupTreeView()
     connect(m_treeWidget, &QTreeWidget::itemCollapsed, this, &MainApplication::onTreeItemCollapsed);
     // Search connections
     connect(m_treeSearchButton, &QPushButton::clicked, this, &MainApplication::onTreeSearchTriggered);
-    connect(m_treeSearchClearButton, &QToolButton::clicked, this, [this]() {
-        m_treeSearchEdit->clear();
+    // Built-in clear button handles field clearing; also clear results when text becomes empty
+    connect(m_treeSearchEdit, &QLineEdit::textChanged, this, [this](const QString &t){
+        if (!t.trimmed().isEmpty()) return;
         m_searchResultPaths.clear();
         m_searchResultIndex = -1;
         if (m_isSearchView) {
             m_isSearchView = false;
             loadLocalFiles();
         } else if (m_searchResultsRoot) {
-            // Clear Search Results section if present
             m_searchResultsRoot->takeChildren();
             m_searchResultsRoot->setHidden(true);
             m_searchResultsRoot->setExpanded(false);
@@ -365,7 +364,7 @@ void MainApplication::setupTreeView()
     });
     connect(m_treeSearchEdit, &QLineEdit::returnPressed, this, &MainApplication::onTreeSearchTriggered);
 
-    panelLayout->addWidget(searchBar);
+    panelLayout->addWidget(m_treeSearchBar);
     panelLayout->addWidget(m_treeWidget, 1);
     m_treePanel->setLayout(panelLayout);
     
@@ -382,12 +381,13 @@ void MainApplication::applyTreeViewTheme()
     bool dark = base.lightness() < 128; // heuristic
 
     // Clean Design Palette - Pure White Background
-    QString border        = dark ? "#39424c" : "#e6f0ff";           // Light blue border for premium feel
+    QString border        = dark ? "#39424c" : "#d7dbe2";           // Softer neutral border
     QString bg            = dark ? "#20262c" : "#ffffff";           // Pure white background - no alternating colors
     QString bgAlt         = dark ? "#262d33" : "#ffffff";           // Same as main background for uniform look
     QString text          = dark ? "#e2e8ef" : "#1a1a1a";           // Deep black for high contrast and readability
     QString textDisabled  = dark ? "#7a8794" : "#999999";           // Muted gray for disabled text
-    QString hover         = dark ? "#2d3640" : "#f8fbff";           // Very subtle blue tint on hover
+    QString placeholder   = dark ? "#8a96a3" : "#8b9197";          // Placeholder text color
+    QString hover         = dark ? "#2d3640" : "#f3f5f7";           // Neutral hover
     QString selectedBg    = dark ? "#2f7dd8" : "#0078d4";           // Microsoft blue for selections
     QString selectedBgInactive = dark ? "#30485e" : "#e6f2ff";     // Light blue for inactive selection
     QString selectedText  = "#ffffff";                              // White text on selection
@@ -535,58 +535,55 @@ void MainApplication::applyTreeViewTheme()
     
     qDebug() << "Applied clean TreeView theme - Dark mode:" << dark;
 
+    // Style search bar container and widgets to match theme (light/dark aware)
+    if (m_treeSearchBar) {
+        m_treeSearchBar->setStyleSheet(QString(
+            "QWidget {"
+            "  background: %1;"
+            "}"
+        ).arg(bg));
+    }
     // Style search widgets to match theme
     if (m_treeSearchEdit) {
-        // Premium pill-style field with subtle shadow
+        // Clean, compact field
         m_treeSearchEdit->setStyleSheet(QString(
             "QLineEdit {"
             "  border: 1px solid %1;"
-            "  border-radius: 14px;"
+            "  border-radius: 8px;"
             "  padding: 6px 10px;"
             "  background: %2;"
             "  color: %3;"
+            "  caret-color: %3;"
             "  selection-background-color: %6;"
             "  selection-color: %7;"
             "}"
+            "QLineEdit::placeholder { color: %5; }"
             "QLineEdit:focus {"
             "  border: 1px solid %4;"
-            "  box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.15);"
             "}")
-            .arg(border, bg, text, focusOutline, scrollbarGroove, selectedBg, selectedText));
+            .arg(border, bg, text, focusOutline, placeholder, selectedBg, selectedText));
     }
     if (m_treeSearchButton) {
+        // Outlined button, neutral until hovered/pressed
         m_treeSearchButton->setStyleSheet(QString(
             "QPushButton {"
-            "  background: %6;"
-            "  color: %7;"
-            "  border: 1px solid %6;"
-            "  border-radius: 14px;"
-            "  padding: 6px 14px;"
-            "}"
-            "QPushButton:hover {"
-            "  background: %8;"
-            "  border-color: %8;"
-            "  color: %3;"
-            "}"
-            "QPushButton:pressed {"
-            "  background: %5;"
-            "  border-color: %5;"
-            "}")
-            .arg(border, bg, text, focusOutline, hover, selectedBg, selectedText, selectedBgInactive));
-    }
-    if (m_treeSearchClearButton) {
-        m_treeSearchClearButton->setStyleSheet(QString(
-            "QToolButton {"
-            "  background: transparent;"
+            "  background: %2;"
             "  color: %3;"
             "  border: 1px solid %1;"
-            "  border-radius: 14px;"
-            "  padding: 4px 8px;"
+            "  border-radius: 8px;"
+            "  padding: 6px 12px;"
             "}"
-            "QToolButton:hover {"
+            "QPushButton:hover {"
             "  background: %5;"
+            "}"
+            "QPushButton:pressed {"
+            "  background: %12;"
             "}")
-            .arg(border, bg, text, focusOutline, hover));
+            .arg(border, bg, text, focusOutline, hover, selectedBg, selectedText, selectedBgInactive, scrollbarGroove, scrollbarHandle, scrollbarHandleHover, bgAlt));
+    }
+    if (m_treeSearchClearButton) {
+        // No visible clear button; style reset to avoid theme artifacts if ever shown
+        m_treeSearchClearButton->setStyleSheet("QToolButton { border: none; background: transparent; } QToolButton:hover { background: transparent; }");
     }
 }
 
@@ -796,7 +793,7 @@ void MainApplication::expandToItem(QTreeWidgetItem *item)
 void MainApplication::changeEvent(QEvent *event)
 {
     QMainWindow::changeEvent(event);
-    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::ApplicationPaletteChange) {
+    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::ApplicationPaletteChange || event->type() == QEvent::StyleChange) {
         applyTreeViewTheme();
     }
 }
