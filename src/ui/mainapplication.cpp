@@ -51,12 +51,13 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
     setMinimumSize(1200, 800);
     resize(1400, 900);
     
-    // Center the window
-    QScreen *screen = QApplication::primaryScreen();
-    QRect screenGeometry = screen->availableGeometry();
-    int x = (screenGeometry.width() - width()) / 2;
-    int y = (screenGeometry.height() - height()) / 2;
-    move(x, y);
+    // Center the window (defensive: primaryScreen can be null on some systems briefly)
+    if (QScreen *screen = QApplication::primaryScreen()) {
+        const QRect screenGeometry = screen->availableGeometry();
+        const int x = (screenGeometry.width() - width()) / 2;
+        const int y = (screenGeometry.height() - height()) / 2;
+        move(x, y);
+    }
     
     // Set application icon (you can add an icon file later)
     setWindowIcon(QIcon(":/icons/app_icon.png"));
@@ -913,7 +914,7 @@ void MainApplication::openFileInTab(const QString &filePath)
     }
     
     // Check if it's a PCB file
-    if (extension == "xzz" || extension == "pcb" || extension == "xzzpcb") {
+    if (extension == "xzz" || extension == "pcb" || extension == "xzzpcb" || extension == "brd" || extension == "brd2") {
         openPCBInTab(filePath);
         return;
     }
@@ -921,7 +922,7 @@ void MainApplication::openFileInTab(const QString &filePath)
     // For non-PDF/PCB files, show a message
     statusBar()->showMessage("Only PDF and PCB files are supported in tabs");
     QMessageBox::information(this, "File Type Not Supported", 
-        "Only PDF files (.pdf) and PCB files (.xzz, .pcb, .xzzpcb) can be opened in tabs.\n\n"
+        "Only PDF files (.pdf) and PCB files (.xzz, .pcb, .xzzpcb, .brd, .brd2) can be opened in tabs.\n\n"
         "Selected file: " + fileInfo.fileName() + "\n"
         "File type: " + (extension.isEmpty() ? "Unknown" : extension.toUpper()));
 }
@@ -1127,7 +1128,7 @@ void MainApplication::openPCBInTab(const QString &filePath)
                 "• Corrupted or invalid\n"
                 "• Incompatible with XZZPCB format\n" 
                 "• Not accessible due to permissions\n\n"
-                "Supported formats: .xzz, .pcb, .xzzpcb"
+                "Supported formats: .xzz, .pcb, .xzzpcb, .brd, .brd2"
             ).arg(fileInfo.fileName()).arg(filePath);
             
             QMessageBox::warning(this, "PCB Loading Error", errorMessage);
@@ -1897,6 +1898,10 @@ void MainApplication::toggleTreeView()
 
 void MainApplication::toggleFullScreenPDF()
 {
+    if (!m_tabWidget) {
+        statusBar()->showMessage("No tabs available");
+        return;
+    }
     // Check which tab type is currently active and get the current widget
     DualTabWidget::TabType currentType = m_tabWidget->getCurrentTabType();
     QWidget *currentWidget = nullptr;
@@ -1939,15 +1944,27 @@ void MainApplication::setTreeViewVisible(bool visible)
     
     m_treeViewVisible = visible;
     
+    // Defensive: splitter must exist before we try to resize panes
+    if (!m_splitter) {
+        if (visible) {
+            if (m_treePanel) m_treePanel->show();
+        } else {
+            if (m_treePanel) m_treePanel->hide();
+        }
+        return;
+    }
+
     if (visible) {
         // Show tree view - restore original sizes
-    if (m_treePanel) m_treePanel->show();
-        m_splitter->setSizes(m_splitterSizes);
+        if (m_treePanel) m_treePanel->show();
+        if (!m_splitterSizes.isEmpty()) {
+            m_splitter->setSizes(m_splitterSizes);
+        }
         statusBar()->showMessage("Tree view shown");
     } else {
         // Hide tree view - save current sizes and collapse completely
         m_splitterSizes = m_splitter->sizes();
-    if (m_treePanel) m_treePanel->hide();
+        if (m_treePanel) m_treePanel->hide();
         
         // Force all space to the tab widget (PDF viewer)
         QList<int> fullScreenSizes;
