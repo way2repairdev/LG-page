@@ -26,6 +26,9 @@
 #include <QFileInfo>
 #include <QTextStream>
 #include <vector>
+#include <QLineEdit>
+#include <QToolButton>
+#include <QVector>
 
 #include "ui/dualtabwidget.h"
 
@@ -101,13 +104,24 @@ private:
     // UI Components
     QWidget *m_centralWidget;
     QSplitter *m_splitter;
+    QWidget *m_treePanel;           // container for search bar + tree
     QTreeWidget *m_treeWidget;
+    QLineEdit *m_treeSearchEdit;    // search input
+    QPushButton *m_treeSearchButton; // search/next button
+    QToolButton *m_treeSearchClearButton; // clear input
     DualTabWidget *m_tabWidget;  // Changed from QTabWidget to DualTabWidget
     QStatusBar *m_statusBar;
     
     // Tree view state
     bool m_treeViewVisible;
     QList<int> m_splitterSizes; // Store original splitter sizes
+
+    // Search state
+    QString m_lastSearchTerm;
+    QVector<QString> m_searchResultPaths;
+    int m_searchResultIndex { -1 };
+    QTreeWidgetItem *m_searchResultsRoot { nullptr }; // top-level node for search results
+    bool m_isSearchView { false }; // when true, tree shows only search results (flat)
     
     void setupUI();
     void setupMenuBar();
@@ -146,6 +160,14 @@ private:
     void hideAllViewerToolbars();
     void debugToolbarStates(); // Debug helper method
     void forceToolbarIsolation(); // Complete toolbar isolation method
+
+    // Tree search UI and logic
+    void setupTreeSearchBar();
+    void onTreeSearchTriggered();
+    QVector<QString> findMatchingFiles(const QString &term, int maxResults = -1) const;
+    bool revealPathInTree(const QString &absPath);
+    static void expandToItem(QTreeWidgetItem *item);
+    void renderSearchResultsFlat(const QVector<QString> &results, const QString &term);
     
     // Server-side methods (commented out for local file loading)
     //void loadFileList();

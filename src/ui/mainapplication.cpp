@@ -1,3 +1,4 @@
+
 #include "ui/mainapplication.h"
 #include "ui/dualtabwidget.h"
 #include "viewers/pdf/pdfviewerwidget.h"
@@ -23,6 +24,10 @@
 #include <QPainter>
 #include <QEasingCurve>
 #include <QMouseEvent>
+#include <QLineEdit>
+#include <QToolButton>
+#include <QPushButton>
+#include <QScrollBar>
 
 MainApplication::MainApplication(const UserSession &userSession, QWidget *parent)
     : QMainWindow(parent)
@@ -85,7 +90,7 @@ void MainApplication::setupUI()
     setupTabWidget();
     
     // Add to splitter
-    m_splitter->addWidget(m_treeWidget);
+    m_splitter->addWidget(m_treePanel);
     m_splitter->addWidget(m_tabWidget);
     
     // Set splitter proportions (tree view: 25%, tabs: 75%)
@@ -281,8 +286,56 @@ void SmoothTreeWidget::leaveEvent(QEvent *e) {
 
 void MainApplication::setupTreeView()
 {
-    m_treeWidget = new SmoothTreeWidget();
-    m_treeWidget->setHeaderLabel("Files & Folders");
+    // Container panel with vertical layout for floating search + tree
+    m_treePanel = new QWidget(this);
+    m_treePanel->setMinimumWidth(250);
+    m_treePanel->setMaximumWidth(420);
+    QVBoxLayout *panelLayout = new QVBoxLayout(m_treePanel);
+    panelLayout->setContentsMargins(0, 0, 0, 0);
+    panelLayout->setSpacing(6);
+
+    // Search bar row
+    QWidget *searchBar = new QWidget(m_treePanel);
+    QHBoxLayout *searchLayout = new QHBoxLayout(searchBar);
+    searchLayout->setContentsMargins(6, 6, 6, 0);
+    searchLayout->setSpacing(6);
+
+    m_treeSearchEdit = new QLineEdit(searchBar);
+    m_treeSearchEdit->setPlaceholderText("Search files by name… (Enter or Find)");
+    m_treeSearchEdit->setClearButtonEnabled(false);
+    m_treeSearchEdit->setMinimumHeight(28);
+
+    m_treeSearchClearButton = new QToolButton(searchBar);
+    m_treeSearchClearButton->setText(QString::fromUtf8("\xE2\x9C\x95")); // × icon
+    m_treeSearchClearButton->setToolTip("Clear");
+    m_treeSearchClearButton->setAutoRaise(true);
+    m_treeSearchClearButton->setCursor(Qt::PointingHandCursor);
+
+    m_treeSearchButton = new QPushButton(searchBar);
+    m_treeSearchButton->setText(" Find");
+    m_treeSearchButton->setCursor(Qt::PointingHandCursor);
+    m_treeSearchButton->setMinimumHeight(28);
+    m_treeSearchButton->setMinimumWidth(68);
+    // Try to use app search icon if available
+    QIcon searchIcon;
+    if (QFile(":/images/icons/search_next.svg").exists()) {
+        searchIcon.addFile(":/images/icons/search_next.svg");
+    } else if (QFile(":/images/icons/zoom_in.svg").exists()) {
+        searchIcon.addFile(":/images/icons/zoom_in.svg");
+    }
+    if (!searchIcon.isNull()) {
+        m_treeSearchButton->setIcon(searchIcon);
+        m_treeSearchButton->setIconSize(QSize(16,16));
+    }
+
+    searchLayout->addWidget(m_treeSearchEdit, 1);
+    searchLayout->addWidget(m_treeSearchClearButton, 0);
+    searchLayout->addWidget(m_treeSearchButton, 0);
+    searchBar->setLayout(searchLayout);
+
+    // Tree widget
+    m_treeWidget = new SmoothTreeWidget(m_treePanel);
+    m_treeWidget->setHeaderLabel("Treeview");
     m_treeWidget->setMinimumWidth(250);
     m_treeWidget->setMaximumWidth(400);
     
@@ -293,6 +346,28 @@ void MainApplication::setupTreeView()
     connect(m_treeWidget, &QTreeWidget::itemDoubleClicked, this, &MainApplication::onTreeItemDoubleClicked);
     connect(m_treeWidget, &QTreeWidget::itemExpanded, this, &MainApplication::onTreeItemExpanded);
     connect(m_treeWidget, &QTreeWidget::itemCollapsed, this, &MainApplication::onTreeItemCollapsed);
+    // Search connections
+    connect(m_treeSearchButton, &QPushButton::clicked, this, &MainApplication::onTreeSearchTriggered);
+    connect(m_treeSearchClearButton, &QToolButton::clicked, this, [this]() {
+        m_treeSearchEdit->clear();
+        m_searchResultPaths.clear();
+        m_searchResultIndex = -1;
+        if (m_isSearchView) {
+            m_isSearchView = false;
+            loadLocalFiles();
+        } else if (m_searchResultsRoot) {
+            // Clear Search Results section if present
+            m_searchResultsRoot->takeChildren();
+            m_searchResultsRoot->setHidden(true);
+            m_searchResultsRoot->setExpanded(false);
+        }
+        statusBar()->showMessage("Search cleared");
+    });
+    connect(m_treeSearchEdit, &QLineEdit::returnPressed, this, &MainApplication::onTreeSearchTriggered);
+
+    panelLayout->addWidget(searchBar);
+    panelLayout->addWidget(m_treeWidget, 1);
+    m_treePanel->setLayout(panelLayout);
     
     // Tree will be populated via local file loading in constructor
 }
@@ -459,6 +534,263 @@ void MainApplication::applyTreeViewTheme()
     m_treeWidget->setFocusPolicy(Qt::StrongFocus);
     
     qDebug() << "Applied clean TreeView theme - Dark mode:" << dark;
+
+    // Style search widgets to match theme
+    if (m_treeSearchEdit) {
+        // Premium pill-style field with subtle shadow
+        m_treeSearchEdit->setStyleSheet(QString(
+            "QLineEdit {"
+            "  border: 1px solid %1;"
+            "  border-radius: 14px;"
+            "  padding: 6px 10px;"
+            "  background: %2;"
+            "  color: %3;"
+            "  selection-background-color: %6;"
+            "  selection-color: %7;"
+            "}"
+            "QLineEdit:focus {"
+            "  border: 1px solid %4;"
+            "  box-shadow: 0 0 0 2px rgba(0, 120, 215, 0.15);"
+            "}")
+            .arg(border, bg, text, focusOutline, scrollbarGroove, selectedBg, selectedText));
+    }
+    if (m_treeSearchButton) {
+        m_treeSearchButton->setStyleSheet(QString(
+            "QPushButton {"
+            "  background: %6;"
+            "  color: %7;"
+            "  border: 1px solid %6;"
+            "  border-radius: 14px;"
+            "  padding: 6px 14px;"
+            "}"
+            "QPushButton:hover {"
+            "  background: %8;"
+            "  border-color: %8;"
+            "  color: %3;"
+            "}"
+            "QPushButton:pressed {"
+            "  background: %5;"
+            "  border-color: %5;"
+            "}")
+            .arg(border, bg, text, focusOutline, hover, selectedBg, selectedText, selectedBgInactive));
+    }
+    if (m_treeSearchClearButton) {
+        m_treeSearchClearButton->setStyleSheet(QString(
+            "QToolButton {"
+            "  background: transparent;"
+            "  color: %3;"
+            "  border: 1px solid %1;"
+            "  border-radius: 14px;"
+            "  padding: 4px 8px;"
+            "}"
+            "QToolButton:hover {"
+            "  background: %5;"
+            "}")
+            .arg(border, bg, text, focusOutline, hover));
+    }
+}
+
+// Create and style the search widgets (called within setupTreeView)
+void MainApplication::setupTreeSearchBar() { /* kept for future extension if needed */ }
+
+// Perform filename search under root and reveal results sequentially
+void MainApplication::onTreeSearchTriggered()
+{
+    const QString term = m_treeSearchEdit ? m_treeSearchEdit->text().trimmed() : QString();
+    if (term.isEmpty()) {
+        statusBar()->showMessage("Enter a file name to search");
+        return;
+    }
+
+    // Recompute full result list when term changes
+    if (term.compare(m_lastSearchTerm, Qt::CaseInsensitive) != 0) {
+        m_searchResultPaths = findMatchingFiles(term, -1);
+        m_lastSearchTerm = term;
+        m_searchResultIndex = -1; // kept for potential future use, not used to navigate anymore
+
+        if (m_searchResultPaths.isEmpty()) {
+            // If we were in a search-only view, restore the tree
+            if (m_isSearchView) {
+                m_isSearchView = false;
+                loadLocalFiles();
+            }
+            // Hide Search Results section if present
+            if (m_searchResultsRoot) {
+                m_searchResultsRoot->takeChildren();
+                m_searchResultsRoot->setHidden(true);
+                m_searchResultsRoot->setExpanded(false);
+            }
+            statusBar()->showMessage("No files found");
+            return;
+        }
+
+        // Show a flat list view with only the matching files
+        renderSearchResultsFlat(m_searchResultPaths, term);
+        statusBar()->showMessage(QString("%1 match(es)").arg(m_searchResultPaths.size()));
+        return; // do not auto-select or navigate on first Find
+    }
+
+    // Term unchanged -> do not navigate; just reaffirm results count
+    if (m_searchResultPaths.isEmpty()) {
+        statusBar()->showMessage("No files found");
+    } else {
+        statusBar()->showMessage(QString("%1 match(es)").arg(m_searchResultPaths.size()));
+    }
+}
+
+// Replace the tree with a flat list of search results
+void MainApplication::renderSearchResultsFlat(const QVector<QString> &results, const QString &term)
+{
+    Q_UNUSED(term);
+    m_isSearchView = true;
+    m_treeWidget->clear();
+    // Header label remains "Treeview" for consistency
+
+    // Create a simple flat list: one top-level item per result
+    QDir root(m_rootFolderPath);
+    for (const QString &path : results) {
+        QFileInfo fi(path);
+        QString relDir = root.relativeFilePath(fi.absolutePath());
+        QString display = QString("%1 — %2").arg(fi.fileName(), relDir);
+        QTreeWidgetItem *it = new QTreeWidgetItem(m_treeWidget);
+        it->setText(0, display);
+        it->setData(0, Qt::UserRole, fi.absoluteFilePath());
+        it->setIcon(0, getFileIcon(fi.absoluteFilePath()));
+        it->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
+        it->setToolTip(0, fi.absoluteFilePath());
+    }
+
+    // Sort alphabetically for predictability and apply compact premium look
+    m_treeWidget->sortItems(0, Qt::AscendingOrder);
+    m_treeWidget->setAlternatingRowColors(true);
+    m_treeWidget->setStyleSheet(m_treeWidget->styleSheet() + QString(
+        "\nQTreeWidget::item { padding: 4px 6px; }\n"
+        "QTreeWidget::item:selected { border-radius: 8px; }\n"));
+}
+
+QVector<QString> MainApplication::findMatchingFiles(const QString &term, int maxResults) const
+{
+    QVector<QString> results;
+    if (m_rootFolderPath.isEmpty()) return results;
+    QDir root(m_rootFolderPath);
+    if (!root.exists()) return results;
+
+    // Breadth-first traversal using a queue to be responsive for large trees
+    QList<QString> dirs; dirs << root.absolutePath();
+    const Qt::CaseSensitivity cs = Qt::CaseInsensitive;
+    const bool noCap = (maxResults < 0);
+    while (!dirs.isEmpty() && (noCap || results.size() < maxResults)) {
+        const QString d = dirs.takeFirst();
+        QDir dir(d);
+        QFileInfoList entries = dir.entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot,
+                                                  QDir::DirsFirst | QDir::Name);
+        for (const QFileInfo &fi : entries) {
+            if (fi.isDir()) {
+                dirs << fi.absoluteFilePath();
+            } else {
+                if (fi.fileName().contains(term, cs)) {
+                    results.push_back(fi.absoluteFilePath());
+                    if (!noCap && results.size() >= maxResults) break;
+                }
+            }
+        }
+    }
+    return results;
+}
+
+// Expand parent folders and select the file item if present (lazy-load children as needed)
+bool MainApplication::revealPathInTree(const QString &absPath)
+{
+    if (!m_treeWidget) return false;
+    QFileInfo fi(absPath);
+    if (!fi.exists()) return false;
+
+    // Build list of folder names from root to file's parent
+    QString rel = QDir(m_rootFolderPath).relativeFilePath(fi.absolutePath());
+    QStringList parts = rel.split(QDir::separator(), Qt::SkipEmptyParts);
+
+    // Find the root item matching m_rootFolderPath; top-level items correspond to entries of the root
+    // For our tree, folders are top-level items initially; iterate accordingly
+    auto matchChildByName = [](QTreeWidgetItem *item, const QString &name) -> QTreeWidgetItem* {
+        for (int i = 0; i < (item ? item->childCount() : 0); ++i) {
+            QTreeWidgetItem *c = item->child(i);
+            if (c && c->text(0).compare(name, Qt::CaseInsensitive) == 0) return c;
+        }
+        return nullptr;
+    };
+
+    // Navigate/expand down the path
+    QTreeWidgetItem *current = nullptr;
+    QTreeWidget *tw = m_treeWidget;
+    // At top level, search among tw->topLevelItem(i)
+    for (const QString &folderName : parts) {
+        if (!current) {
+            QTreeWidgetItem *next = nullptr;
+            for (int i = 0; i < tw->topLevelItemCount(); ++i) {
+                QTreeWidgetItem *ti = tw->topLevelItem(i);
+                if (ti->data(0, Qt::UserRole + 1).toString().endsWith(folderName, Qt::CaseInsensitive) ||
+                    ti->text(0).compare(folderName, Qt::CaseInsensitive) == 0) {
+                    next = ti; break;
+                }
+            }
+            if (!next) return false;
+            current = next;
+        } else {
+            // Ensure children are loaded (expand triggers load)
+            if (!current->isExpanded()) {
+                current->setExpanded(true);
+                // If had a dummy, onTreeItemExpanded will populate
+            }
+            QCoreApplication::processEvents();
+            // Refresh to ensure children are accessible
+            QTreeWidgetItem *next = matchChildByName(current, folderName);
+            if (!next) {
+                // Try after forcing expansion signal to run population
+                onTreeItemExpanded(current);
+                QCoreApplication::processEvents();
+                next = matchChildByName(current, folderName);
+            }
+            if (!next) return false;
+            current = next;
+        }
+    }
+
+    // Now select the file within current
+    if (current && !current->isExpanded()) {
+        current->setExpanded(true);
+        onTreeItemExpanded(current);
+        QCoreApplication::processEvents();
+    }
+
+    QString baseName = fi.baseName();
+    QTreeWidgetItem *fileItem = nullptr;
+    if (!current) {
+        // Could be a file at top level
+        for (int i = 0; i < tw->topLevelItemCount(); ++i) {
+            QTreeWidgetItem *ti = tw->topLevelItem(i);
+            if (ti->data(0, Qt::UserRole).toString() == fi.absoluteFilePath() ||
+                ti->text(0).compare(baseName, Qt::CaseInsensitive) == 0) { fileItem = ti; break; }
+        }
+    } else {
+        for (int i = 0; i < current->childCount(); ++i) {
+            QTreeWidgetItem *c = current->child(i);
+            if (c->data(0, Qt::UserRole).toString() == fi.absoluteFilePath() ||
+                c->text(0).compare(baseName, Qt::CaseInsensitive) == 0) { fileItem = c; break; }
+        }
+    }
+    if (!fileItem) return false;
+
+    expandToItem(fileItem);
+    tw->setCurrentItem(fileItem);
+    tw->scrollToItem(fileItem, QAbstractItemView::PositionAtCenter);
+    return true;
+}
+
+void MainApplication::expandToItem(QTreeWidgetItem *item)
+{
+    if (!item) return;
+    QTreeWidgetItem *p = item->parent();
+    while (p) { p->setExpanded(true); p = p->parent(); }
 }
 
 void MainApplication::changeEvent(QEvent *event)
@@ -493,6 +825,7 @@ void MainApplication::loadLocalFiles()
     
     // Clear existing tree items
     m_treeWidget->clear();
+    m_searchResultsRoot = nullptr;
     
     // Check if root folder exists
     QDir rootDir(m_rootFolderPath);
@@ -506,6 +839,14 @@ void MainApplication::loadLocalFiles()
     
     // Populate tree from directory
     populateTreeFromDirectory(m_rootFolderPath);
+
+    // Add (collapsed) Search Results section
+    m_searchResultsRoot = new QTreeWidgetItem(m_treeWidget);
+    m_searchResultsRoot->setText(0, "Search Results");
+    m_searchResultsRoot->setIcon(0, style()->standardIcon(QStyle::SP_FileDialogContentsView));
+    m_searchResultsRoot->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
+    m_searchResultsRoot->setHidden(true);
+    m_searchResultsRoot->setExpanded(false);
     
     // Collapse all folders by default for a clean view
     m_treeWidget->collapseAll();
@@ -573,7 +914,7 @@ void MainApplication::openFileInTab(const QString &filePath)
     }
     
     // Check if it's a PCB file
-    if (extension == "xzz" || extension == "pcb" || extension == "xzzpcb" || extension == "brd" || extension == "brd2") {
+    if (extension == "xzz" || extension == "pcb" || extension == "xzzpcb") {
         openPCBInTab(filePath);
         return;
     }
@@ -581,7 +922,7 @@ void MainApplication::openFileInTab(const QString &filePath)
     // For non-PDF/PCB files, show a message
     statusBar()->showMessage("Only PDF and PCB files are supported in tabs");
     QMessageBox::information(this, "File Type Not Supported", 
-        "Only PDF files (.pdf) and PCB files (.xzz, .pcb, .xzzpcb, .brd, .brd2) can be opened in tabs.\n\n"
+        "Only PDF files (.pdf) and PCB files (.xzz, .pcb, .xzzpcb) can be opened in tabs.\n\n"
         "Selected file: " + fileInfo.fileName() + "\n"
         "File type: " + (extension.isEmpty() ? "Unknown" : extension.toUpper()));
 }
@@ -787,7 +1128,7 @@ void MainApplication::openPCBInTab(const QString &filePath)
                 "• Corrupted or invalid\n"
                 "• Incompatible with XZZPCB format\n" 
                 "• Not accessible due to permissions\n\n"
-                "Supported formats: .xzz, .pcb, .xzzpcb, .brd, .brd2"
+                "Supported formats: .xzz, .pcb, .xzzpcb"
             ).arg(fileInfo.fileName()).arg(filePath);
             
             QMessageBox::warning(this, "PCB Loading Error", errorMessage);
@@ -1278,8 +1619,8 @@ void MainApplication::onTreeItemClicked(QTreeWidgetItem *item, int column)
     QString folderPath = item->data(0, Qt::UserRole + 1).toString();
     
     if (!filePath.isEmpty()) {
-        // This is a file - just show selection status (don't open on single click)
-        statusBar()->showMessage(QString("Selected file: %1 (double-click to open)").arg(itemText));
+    // File (could be search result or real tree) - just show status
+    statusBar()->showMessage(QString("Selected: %1 (double-click to open)").arg(itemText));
     } else if (!folderPath.isEmpty()) {
     // Folder: toggle immediately for faster UX
     bool willExpand = !item->isExpanded();
@@ -1601,13 +1942,13 @@ void MainApplication::setTreeViewVisible(bool visible)
     
     if (visible) {
         // Show tree view - restore original sizes
-        m_treeWidget->show();
+    if (m_treePanel) m_treePanel->show();
         m_splitter->setSizes(m_splitterSizes);
         statusBar()->showMessage("Tree view shown");
     } else {
         // Hide tree view - save current sizes and collapse completely
         m_splitterSizes = m_splitter->sizes();
-        m_treeWidget->hide();
+    if (m_treePanel) m_treePanel->hide();
         
         // Force all space to the tab widget (PDF viewer)
         QList<int> fullScreenSizes;
