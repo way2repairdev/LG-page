@@ -453,16 +453,16 @@ void PCBViewerWidget::setupToolbar()
     // Theme-aware red accent (match tab styling: #E53935/#b71c1c family)
     const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
     const QString tbStyleLight =
-        "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:36px;}"
-        "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+        "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:30px;}"
+        "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(229,57,53,0.10);border-color:rgba(229,57,53,0.35);}" 
         "QToolBar QToolButton:pressed{background:rgba(229,57,53,0.18);border-color:#E53935;}"
         "QToolBar QToolButton:checked{background:rgba(229,57,53,0.14);border-color:#E53935;}"
         "QToolBar QToolButton:disabled{color:#9e9e9e;background:transparent;border-color:transparent;}"
         "QToolBar::separator{background:rgba(0,0,0,0.12);width:1px;margin:0 6px;}";
     const QString tbStyleDark =
-        "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:36px;}"
-        "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+        "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:30px;}"
+        "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(183,28,28,0.22);border-color:#cf6679;}"
         "QToolBar QToolButton:pressed{background:rgba(183,28,28,0.30);border-color:#b71c1c;}"
         "QToolBar QToolButton:checked{background:rgba(183,28,28,0.28);border-color:#cf6679;color:#e8eaed;}"
@@ -518,7 +518,7 @@ void PCBViewerWidget::setupToolbar()
     m_netCombo->setEditable(true); // user can type either net or component reference
     // Increased width for better usability and parity with PDF search
     m_netCombo->setMinimumWidth(260);
-    m_netCombo->setFixedHeight(28);
+    m_netCombo->setFixedHeight(26);
     m_netCombo->setInsertPolicy(QComboBox::NoInsert);
     m_netCombo->setToolTip("Type or pick a Net or Component name");
     // Professional drop-down styling with visible button and themed popup
@@ -560,6 +560,7 @@ void PCBViewerWidget::setupToolbar()
     m_toolbar->addWidget(m_netCombo);
     m_netSearchButton = new QPushButton("Go", m_toolbar);
     m_netSearchButton->setToolTip("Highlight & zoom to Net or Component");
+    m_netSearchButton->setFixedHeight(26);
     m_netSearchButton->setStyleSheet(QStringLiteral(
         "QPushButton{border:1px solid %1;border-radius:3px;padding:2px 8px;background:%2;color:%3;}"
         "QPushButton:hover{background:%4;}"
@@ -581,7 +582,7 @@ void PCBViewerWidget::setupToolbar()
 
     // Optional: Icon tinting to red on hover/checked similar to PDF (local inline since helpers are in PDF file)
     {
-        const QSize iconSz(18, 18);
+    const QSize iconSz(16, 16);
         const QColor accent = QColor(dark ? "#cf6679" : "#E53935");
         const QColor normal = dark ? QColor("#c7cacf") : QColor("#5f6368");
         const QColor disabled = dark ? QColor("#6f7379") : QColor("#9e9e9e");
@@ -616,16 +617,16 @@ void PCBViewerWidget::applyToolbarTheme()
     if (!m_toolbar) return;
     const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
     const QString tbStyleLight =
-        "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:36px;}"
-        "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+        "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:30px;}"
+        "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(229,57,53,0.10);border-color:rgba(229,57,53,0.35);}" 
         "QToolBar QToolButton:pressed{background:rgba(229,57,53,0.18);border-color:#E53935;}"
         "QToolBar QToolButton:checked{background:rgba(229,57,53,0.14);border-color:#E53935;}"
         "QToolBar QToolButton:disabled{color:#9e9e9e;background:transparent;border-color:transparent;}"
         "QToolBar::separator{background:rgba(0,0,0,0.12);width:1px;margin:0 6px;}";
     const QString tbStyleDark =
-        "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:36px;}"
-        "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+        "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:30px;}"
+        "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(183,28,28,0.22);border-color:#cf6679;}"
         "QToolBar QToolButton:pressed{background:rgba(183,28,28,0.30);border-color:#b71c1c;}"
         "QToolBar QToolButton:checked{background:rgba(183,28,28,0.28);border-color:#cf6679;color:#e8eaed;}"
@@ -679,7 +680,7 @@ void PCBViewerWidget::applyToolbarTheme()
               dark ? "#2b1f1f" : "#e8e8e8"));
     }
     // Retint icons for new theme (reuse local inline block logic)
-    const QSize iconSz(18, 18);
+    const QSize iconSz(16, 16);
     const QColor accent = QColor(dark ? "#cf6679" : "#E53935");
     const QColor normal = dark ? QColor("#c7cacf") : QColor("#5f6368");
     const QColor disabled = dark ? QColor("#6f7379") : QColor("#9e9e9e");
