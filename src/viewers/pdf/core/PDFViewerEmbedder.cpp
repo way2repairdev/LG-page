@@ -2387,6 +2387,8 @@ bool PDFViewerEmbedder::findText(const std::string& searchTerm)
     if (!m_scrollState) return false;
     
     m_scrollState->textSearch.searchTerm = searchTerm;
+    // Default to whole-word matching to avoid partial hits unless UI toggles it later
+    m_scrollState->textSearch.matchWholeWord = true;
     m_scrollState->textSearch.needsUpdate = true;
     m_scrollState->textSearch.searchChanged = true;
     
@@ -2448,6 +2450,9 @@ bool PDFViewerEmbedder::findTextFreshAndFocusFirst(const std::string& term)
 
     // 2) Set new term and request a fresh search
     m_scrollState->textSearch.searchTerm = term;
+    // For cross-tab searches, enforce whole-word/exact-token matching to avoid partial hits
+    // like matching "L001" inside "L001_1".
+    m_scrollState->textSearch.matchWholeWord = true;
     m_scrollState->textSearch.needsUpdate = true;
     m_scrollState->textSearch.searchChanged = true;
 
@@ -2481,6 +2486,8 @@ void PDFViewerEmbedder::clearSearchHighlights()
     m_scrollState->textSearch.currentResultIndex = 0;
     m_scrollState->textSearch.needsUpdate = false;
     m_scrollState->textSearch.searchChanged = false;
+    // Reset whole-word preference to default; callers will set it as needed
+    m_scrollState->textSearch.matchWholeWord = false;
 
     // Targeted repaint: only visible pages need redraw to remove overlays
     int firstVisible=-1, lastVisible=-1;
