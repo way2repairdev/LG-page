@@ -30,12 +30,12 @@ public:
         if (metric == PM_TabBarTabHSpace) {
             return 0; // no extra left/right spacing around the tab label
         }
-        if (metric == PM_TabBarIconSize) {
-            return 0; // ensure no implicit icon space
+        if (metric == PM_TabBarTabVSpace) {
+            return 0; // remove extra top/bottom spacing to reduce height
         }
         // Reserve a minimal space so text doesn't collide with our custom close button
         if (metric == PM_TabCloseIndicatorWidth || metric == PM_TabCloseIndicatorHeight) {
-            return 14; // matches custom close button size
+            return 12; // matches custom close button size (reduced)
         }
         return QProxyStyle::pixelMetric(metric, option, widget);
     }
@@ -57,8 +57,8 @@ public:
             // Keep a small safety inset; higher minimum to avoid clipping with bold fonts
             const int leftInset = qMax(4, (worstLb < 0) ? -worstLb : 0);
 
-            // Reserve space on the right for our custom close button (~14px) + tiny margin
-            const int rightReserve = 16; // 14px button + 2px gap
+            // Reserve space on the right for our custom close button (~12px) + tiny margin
+            const int rightReserve = 14; // 12px button + 2px gap
 
             r.adjust(leftInset, 0, -rightReserve, 0);
             if (r.width() < 0) r.setWidth(0);
@@ -69,13 +69,28 @@ public:
 
 static MinimalTabStyle g_minimalTabStyle;
 
+// Force a compact tab bar height derived from font metrics
+static void applyCompactTabBar(QTabBar* bar)
+{
+    if (!bar) return;
+    // Remove extra margins and ensure small, scrollable tabs
+    bar->setContentsMargins(0, 0, 0, 0);
+    bar->setExpanding(false);
+    bar->setUsesScrollButtons(true);
+    bar->setElideMode(Qt::ElideRight);
+    // Compute a compact height: font height + small vertical padding
+    const int fh = bar->fontMetrics().height();
+    const int target = qMax(20, fh + 6); // slightly taller: ~3px top/bottom padding
+    bar->setMinimumHeight(target);
+}
+
 // Create a small close button for a tab if the native one isn't available
 static QToolButton* makeCloseButton(QWidget* parent)
 {
     auto *btn = new QToolButton(parent);
     btn->setAutoRaise(true);
     btn->setCursor(Qt::PointingHandCursor);
-    btn->setFixedSize(14, 14);
+    btn->setFixedSize(12, 12);
     // Use a high-contrast text glyph for maximum visibility
     btn->setToolButtonStyle(Qt::ToolButtonTextOnly);
     btn->setText(QString::fromUtf16(u"✕"));
@@ -253,6 +268,19 @@ DualTabWidget::DualTabWidget(QWidget *parent)
     logDebug("DualTabWidget constructor completed");
 }
 
+// Create a flat, minimal-height page used only to host a tab label
+static QWidget* makeFlatTabPage()
+{
+    auto *w = new QWidget();
+    // Zero margins and minimal height so only the tab bar contributes to height
+    w->setContentsMargins(0, 0, 0, 0);
+    // Avoid strictly zero height to keep style/layout engines happy
+    w->setMinimumHeight(1);
+    w->setMaximumHeight(1);
+    w->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    return w;
+}
+
 void DualTabWidget::setupUI()
 {
     m_mainLayout = new QVBoxLayout(this);
@@ -265,6 +293,7 @@ void DualTabWidget::setupUI()
     m_pdfTabWidget->setTabsClosable(false);
     // Disable tab dragging/reordering for PDF tabs  
     m_pdfTabWidget->setMovable(false);
+    m_pdfTabWidget->setDocumentMode(true); // flatter tabs with less chrome
     // Apply minimal tab style to remove built-in label h-padding
     m_pdfTabWidget->tabBar()->setStyle(&g_minimalTabStyle);
     // Enable hover tracking
@@ -279,12 +308,14 @@ void DualTabWidget::setupUI()
     m_pdfTabWidget->tabBar()->setExpanding(false);
     // Disable icon space completely - this is critical for proper text alignment
     m_pdfTabWidget->setIconSize(QSize(0, 0));
+    applyCompactTabBar(m_pdfTabWidget->tabBar());
     // Styles will be applied by theme helper
     m_pcbTabWidget = new QTabWidget();
     // We'll manage close buttons ourselves (hover-only)
     m_pcbTabWidget->setTabsClosable(false);
     // Disable tab dragging/reordering for PCB tabs
     m_pcbTabWidget->setMovable(false);
+    m_pcbTabWidget->setDocumentMode(true); // flatter tabs with less chrome
     // Apply minimal tab style to remove built-in label h-padding
     m_pcbTabWidget->tabBar()->setStyle(&g_minimalTabStyle);
     // Show hover state events without pressing
@@ -297,6 +328,7 @@ void DualTabWidget::setupUI()
     m_pcbTabWidget->tabBar()->setExpanding(false);
     // Disable icon space completely - this is critical for proper text alignment
     m_pcbTabWidget->setIconSize(QSize(0, 0));
+    applyCompactTabBar(m_pcbTabWidget->tabBar());
     
     // Apply theme (default: light). This sets tab bar and content styles coherently.
     applyCurrentThemeStyles();
@@ -399,7 +431,7 @@ int DualTabWidget::addTab(QWidget *widget, const QIcon &/*icon*/, const QString 
         m_pdfWidgets.append(widget);
         
         // Add dummy widget to PDF tab bar (actual content is in PDF content area)
-    QWidget *dummyWidget = new QWidget();
+    QWidget *dummyWidget = makeFlatTabPage();
     // Show only the base file name without extension
     const QString cleanedFull = displayNameFromLabel(label); // shortened already
     const QString display = cleanedFull;
@@ -426,7 +458,7 @@ int DualTabWidget::addTab(QWidget *widget, const QIcon &/*icon*/, const QString 
         m_pcbWidgets.append(widget);
         
         // Add dummy widget to PCB tab bar
-    QWidget *dummyWidget = new QWidget();
+    QWidget *dummyWidget = makeFlatTabPage();
     // Show only the base file name without extension
     const QString cleanedFull = displayNameFromLabel(label);
     const QString display = cleanedFull;
@@ -1080,54 +1112,51 @@ void DualTabWidget::applyCurrentThemeStyles()
         "    background: #ffffff;"
         "    font-family: 'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif;"
         "}"
-        "QTabWidget::pane { border:2px solid #4A90E2; background:#ffffff; margin-top:6px; border-radius:0; }"
-        "QTabBar { qproperty-drawBase:0; qproperty-iconSize:0px 0px; background:#e8e8e8; }"
-    "QTabBar::tab { background:#f0f0f0; border:2px solid #666; color:#333; padding:4px 6px 4px 3px; margin:2px; min-height:22px; min-width:120px; max-width:250px; font-size:12px; font-weight:500; letter-spacing:0.2px; text-align:left; qproperty-alignment:'AlignLeft | AlignVCenter'; }"
-    "QTabBar::tab:selected { background:#ffffff; color:#0066cc; border:2px solid #4A90E2; font-weight:700; padding-left:6px; }"
-        "QTabBar::tab:hover:!selected { background:rgba(227,242,253,0.8); border:2px solid #90caf9; color:#1976d2; }"
-    "QTabBar::tab:pressed { transition:all .1s cubic-bezier(.4,0,.6,1); box-shadow:0 1px 4px rgba(74,144,226,.2); }"
-    "QTabBar::tab:first { margin-left:8px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
-        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 6px 0 4px; border-radius:2px; background:transparent; }"
+        // Collapse the pane so only the tab bar shows and content is handled by our switcher
+        "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
+        "QTabBar { qproperty-drawBase:0; background:#e8e8e8; }"
+    "QTabBar::tab { background:#f0f0f0; border:1px solid #888; color:#333; padding:3px 6px 3px 4px; margin:1px; min-height:20px; min-width:100px; max-width:250px; font-size:11px; font-weight:500; letter-spacing:0.2px; text-align:left; }"
+    "QTabBar::tab:selected { background:#ffffff; color:#0066cc; border:1px solid #4A90E2; font-weight:600; padding-left:5px; }"
+        "QTabBar::tab:hover:!selected { background:rgba(227,242,253,0.8); border:1px solid #90caf9; color:#1976d2; }"
+    "QTabBar::tab:first { margin-left:6px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
+        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 4px 0 2px; border-radius:2px; background:transparent; }"
         "QTabBar::close-button:hover { background: rgba(255,0,0,.1); border-radius:2px; }"
     ;
 
     const QString pcbLight =
         "QTabWidget { background:#ffffff; font-family:'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif; }"
-        "QTabWidget::pane { border:2px solid #666; background:#ffffff; margin-top:6px; border-radius:0; }"
-        "QTabBar { qproperty-drawBase:0; qproperty-iconSize:0px 0px; background:#e8e8e8; }"
-    "QTabBar::tab { background:#f0f0f0; border:2px solid #666; color:#333; padding:4px 6px 4px 3px; margin:2px; min-height:22px; min-width:120px; max-width:250px; font-size:12px; font-weight:500; letter-spacing:.2px; text-align:left; qproperty-alignment:'AlignLeft | AlignVCenter'; }"
-    "QTabBar::tab:selected { background:#ffffff; color:#c62828; border:2px solid #E53935; font-weight:700; padding-left:6px; }"
-        "QTabBar::tab:hover:!selected { background:rgba(255,235,238,.85); border:2px solid #ef9a9a; color:#d32f2f; }"
-    "QTabBar::tab:pressed { transition:all .1s cubic-bezier(.4,0,.6,1); box-shadow:0 1px 4px rgba(229,57,53,.2); }"
-    "QTabBar::tab:first { margin-left:8px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
-        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 6px 0 4px; border-radius:2px; background:transparent; }"
+        "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
+        "QTabBar { qproperty-drawBase:0; background:#e8e8e8; }"
+    "QTabBar::tab { background:#f8f8f8; border:1px solid #888; color:#333; padding:3px 6px 3px 4px; margin:1px; min-height:20px; min-width:100px; max-width:250px; font-size:11px; font-weight:500; letter-spacing:.2px; text-align:left; }"
+    "QTabBar::tab:selected { background:#ffffff; color:#c62828; border:1px solid #E53935; font-weight:600; padding-left:5px; }"
+        "QTabBar::tab:hover:!selected { background:rgba(255,235,238,.85); border:1px solid #ef9a9a; color:#d32f2f; }"
+    "QTabBar::tab:first { margin-left:6px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
+        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 4px 0 2px; border-radius:2px; background:transparent; }"
         "QTabBar::close-button:hover { background: rgba(255,0,0,.1); border-radius:2px; }"
     ;
 
     const QString pdfDark =
         "QTabWidget { background:#111; color:#e8eaed; font-family:'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif; }"
-        "QTabWidget::pane { border:2px solid #1976d2; background:#1a1a1a; margin-top:6px; border-radius:0; }"
-        "QTabBar { qproperty-drawBase:0; qproperty-iconSize:0px 0px; background:#202124; }"
-    "QTabBar::tab { background:#2a2b2d; border:2px solid rgba(255,255,255,0.35); color:#e8eaed; padding:4px 6px 4px 3px; margin:2px; min-height:22px; min-width:120px; max-width:260px; font-size:12px; font-weight:500; letter-spacing:.2px; text-align:left; qproperty-alignment:'AlignLeft | AlignVCenter'; }"
-    "QTabBar::tab:selected { background:#1f2937; color:#8ab4f8; border:2px solid #1976d2; font-weight:700; padding-left:6px; }"
-        "QTabBar::tab:hover:!selected { background:#263238; border:2px solid #4f89d3; color:#90caf9; }"
-    "QTabBar::tab:pressed { transition:all .1s cubic-bezier(.4,0,.6,1); box-shadow:0 1px 4px rgba(25,118,210,.25); }"
-    "QTabBar::tab:first { margin-left:8px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
-        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iI2VlZWVlZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjZWVlZWVlIiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 6px 0 4px; border-radius:2px; background:transparent; }"
+        "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
+        "QTabBar { qproperty-drawBase:0; background:#202124; }"
+    "QTabBar::tab { background:#2a2b2d; border:1px solid rgba(255,255,255,0.35); color:#e8eaed; padding:3px 6px 3px 4px; margin:1px; min-height:20px; min-width:100px; max-width:260px; font-size:11px; font-weight:500; letter-spacing:.2px; text-align:left; }"
+    "QTabBar::tab:selected { background:#1f2937; color:#8ab4f8; border:1px solid #1976d2; font-weight:600; padding-left:5px; }"
+        "QTabBar::tab:hover:!selected { background:#263238; border:1px solid #4f89d3; color:#90caf9; }"
+    "QTabBar::tab:first { margin-left:6px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
+        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iI2VlZWVlZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjZWVlZWVlIiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 4px 0 2px; border-radius:2px; background:transparent; }"
         "QTabBar::close-button:hover { background: rgba(255,255,255,.08); border-radius:2px; }"
         "QTabBar QToolButton:hover { background:#333 !important; color:#fff !important; }"
     ;
 
     const QString pcbDark =
         "QTabWidget { background:#111; color:#f8dddd; font-family:'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif; }"
-        "QTabWidget::pane { border:2px solid #b71c1c; background:#1a1a1a; margin-top:6px; border-radius:0; }"
-        "QTabBar { qproperty-drawBase:0; qproperty-iconSize:0px 0px; background:#202124; }"
-    "QTabBar::tab { background:#2a2b2d; border:2px solid rgba(255,255,255,0.35); color:#e8eaed; padding:4px 6px 4px 3px; margin:2px; min-height:22px; min-width:120px; max-width:260px; font-size:12px; font-weight:500; letter-spacing:.2px; text-align:left; qproperty-alignment:'AlignLeft | AlignVCenter'; }"
-    "QTabBar::tab:selected { background:#2b1f1f; color:#ff8a80; border:2px solid #b71c1c; font-weight:700; padding-left:6px; }"
-        "QTabBar::tab:hover:!selected { background:#332222; border:2px solid #cf6679; color:#ef9a9a; }"
-    "QTabBar::tab:pressed { transition:all .1s cubic-bezier(.4,0,.6,1); box-shadow:0 1px 4px rgba(183,28,28,.25); }"
-    "QTabBar::tab:first { margin-left:8px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
-        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iI2VlZWVlZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjZWVlZWVlIiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 6px 0 4px; border-radius:2px; background:transparent; }"
+        "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
+        "QTabBar { qproperty-drawBase:0; background:#202124; }"
+    "QTabBar::tab { background:#2a2b2d; border:1px solid rgba(255,255,255,0.35); color:#e8eaed; padding:3px 6px 3px 4px; margin:1px; min-height:20px; min-width:100px; max-width:260px; font-size:11px; font-weight:500; letter-spacing:.2px; text-align:left; }"
+    "QTabBar::tab:selected { background:#2b1f1f; color:#ff8a80; border:1px solid #b71c1c; font-weight:600; padding-left:5px; }"
+        "QTabBar::tab:hover:!selected { background:#332222; border:1px solid #cf6679; color:#ef9a9a; }"
+    "QTabBar::tab:first { margin-left:6px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
+        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iI2VlZWVlZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjZWVlZWVlIiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 4px 0 2px; border-radius:2px; background:transparent; }"
         "QTabBar::close-button:hover { background: rgba(255,255,255,.08); border-radius:2px; }"
         "QTabBar QToolButton:hover { background:#333 !important; color:#fff !important; }"
     ;
@@ -1153,6 +1182,9 @@ void DualTabWidget::applyCurrentThemeStyles()
     // Update custom close buttons theme
     updateCloseButtonsTheme(m_pdfTabWidget);
     updateCloseButtonsTheme(m_pcbTabWidget);
+    // Re-apply compact sizing after stylesheet changes
+    if (m_pdfTabWidget) applyCompactTabBar(m_pdfTabWidget->tabBar());
+    if (m_pcbTabWidget) applyCompactTabBar(m_pcbTabWidget->tabBar());
 }
 
 void DualTabWidget::updateCloseButtonsTheme(QTabWidget* w)
