@@ -306,7 +306,8 @@ void PDFViewerWidget::setupToolbar()
     m_toolbar->addWidget(m_searchLabel);
 
     m_searchInput = new QLineEdit(this);
-    m_searchInput->setFixedWidth(140);
+    // Increased width for better usability
+    m_searchInput->setFixedWidth(240);
     m_searchInput->setPlaceholderText("Search text...");
     m_searchInput->setStyleSheet(
         QStringLiteral(

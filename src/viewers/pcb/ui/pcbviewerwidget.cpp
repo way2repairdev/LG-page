@@ -513,7 +513,8 @@ void PCBViewerWidget::setupToolbar()
     m_toolbar->addSeparator();
     m_netCombo = new QComboBox(m_toolbar);
     m_netCombo->setEditable(true); // user can type either net or component reference
-    m_netCombo->setMinimumWidth(200);
+    // Increased width for better usability and parity with PDF search
+    m_netCombo->setMinimumWidth(260);
     m_netCombo->setInsertPolicy(QComboBox::NoInsert);
     m_netCombo->setToolTip("Type or pick a Net or Component name");
     // Match PDF viewer input styling
