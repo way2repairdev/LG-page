@@ -42,6 +42,50 @@ void BRDFileBase::GetBoundingBox(BRDPoint& min_point, BRDPoint& max_point) const
     max_point = {max_x, max_y};
 }
 
+void BRDFileBase::GetRenderingBoundingBox(BRDPoint& min_point, BRDPoint& max_point) const {
+    if (circles.empty() && outline_segments.empty() && part_outline_segments.empty()) {
+        // Fallback to original bounding box if no rendering geometry
+        GetBoundingBox(min_point, max_point);
+        return;
+    }
+
+    float min_x = std::numeric_limits<float>::max();
+    float max_x = std::numeric_limits<float>::min();
+    float min_y = std::numeric_limits<float>::max();
+    float max_y = std::numeric_limits<float>::min();
+
+    // Check circles (pins and nails with offsets applied)
+    for (const auto& circle : circles) {
+        float x = static_cast<float>(circle.center.x);
+        float y = static_cast<float>(circle.center.y);
+        float r = circle.radius;
+        
+        min_x = std::min(min_x, x - r);
+        max_x = std::max(max_x, x + r);
+        min_y = std::min(min_y, y - r);
+        max_y = std::max(max_y, y + r);
+    }
+
+    // Check outline segments (board outline for both sides)
+    for (const auto& segment : outline_segments) {
+        min_x = std::min({min_x, static_cast<float>(segment.first.x), static_cast<float>(segment.second.x)});
+        max_x = std::max({max_x, static_cast<float>(segment.first.x), static_cast<float>(segment.second.x)});
+        min_y = std::min({min_y, static_cast<float>(segment.first.y), static_cast<float>(segment.second.y)});
+        max_y = std::max({max_y, static_cast<float>(segment.first.y), static_cast<float>(segment.second.y)});
+    }
+
+    // Check part outline segments
+    for (const auto& segment : part_outline_segments) {
+        min_x = std::min({min_x, static_cast<float>(segment.first.x), static_cast<float>(segment.second.x)});
+        max_x = std::max({max_x, static_cast<float>(segment.first.x), static_cast<float>(segment.second.x)});
+        min_y = std::min({min_y, static_cast<float>(segment.first.y), static_cast<float>(segment.second.y)});
+        max_y = std::max({max_y, static_cast<float>(segment.first.y), static_cast<float>(segment.second.y)});
+    }
+
+    min_point = {static_cast<int>(min_x), static_cast<int>(min_y)};
+    max_point = {static_cast<int>(max_x), static_cast<int>(max_y)};
+}
+
 BRDPoint BRDFileBase::GetCenter() const {
     BRDPoint min_point, max_point;
     GetBoundingBox(min_point, max_point);

@@ -254,7 +254,7 @@ void PCBRenderer::ZoomToFit(int window_width, int window_height) {
     if (!pcb_data) return;
     
     BRDPoint min_point, max_point;
-    pcb_data->GetBoundingBox(min_point, max_point);
+    pcb_data->GetRenderingBoundingBox(min_point, max_point);
     
     float pcb_width = static_cast<float>(max_point.x - min_point.x);
     float pcb_height = static_cast<float>(max_point.y - min_point.y);

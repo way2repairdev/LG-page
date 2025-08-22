@@ -41,8 +41,11 @@ public:
     const std::string& GetErrorMessage() const { return error_msg; }
     void SetValid(bool v) { valid = v; }
     
-    // Get bounding box of the PCB
+    // Get bounding box of the PCB (original positions)
     void GetBoundingBox(BRDPoint& min_point, BRDPoint& max_point) const;
+    
+    // Get bounding box including rendered geometry (both top and bottom sides)
+    void GetRenderingBoundingBox(BRDPoint& min_point, BRDPoint& max_point) const;
     
     // Get center point of the PCB
     BRDPoint GetCenter() const;

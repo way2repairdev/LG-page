@@ -297,7 +297,7 @@ void BRDFile::GenerateRenderingGeometry() {
     float board_width = max_point.x - min_point.x;
     float board_height = max_point.y - min_point.y;
     
-    // Offset for bottom side components (place them below the top side)
+    // No offset - both sides overlap in the same position
     float bottom_side_offset_x = 0.0f;
     float bottom_side_offset_y = 0.0f;
     
