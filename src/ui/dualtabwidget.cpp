@@ -330,17 +330,8 @@ void DualTabWidget::setupUI()
     m_pcbTabWidget->setIconSize(QSize(0, 0));
     applyCompactTabBar(m_pcbTabWidget->tabBar());
     
-    // Apply theme (default: light). This sets tab bar and content styles coherently.
-    applyCurrentThemeStyles();
-    // Log initial tab bar state after startup style
-    logTabBarState(m_pdfTabWidget->tabBar(), "after-startup-style", "PDF");
-    logTabBarState(m_pcbTabWidget->tabBar(), "after-startup-style", "PCB");
-    // Ensure close buttons exist and are hidden initially
-    ensureCloseButtons(this, m_pdfTabWidget, [this](int idx){ onPdfTabCloseRequested(idx); });
-    ensureCloseButtons(this, m_pcbTabWidget, [this](int idx){ onPcbTabCloseRequested(idx); });
-    // Hide all close buttons initially (hover-only behavior)
-    setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
-    setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
+    // Apply theme and create close buttons deferred to avoid constructor-time style engine churn
+    QTimer::singleShot(0, this, [this]{ deferredStyleInit(); });
     // We only need hover on the tab bars (avoid global event filter churn)
     
     // DEBUG: Test with obvious colors (comment out after testing)
@@ -383,6 +374,27 @@ void DualTabWidget::setupUI()
     hideAllContent();
     updateVisibility();
     updateTabBarStates();
+}
+
+void DualTabWidget::deferredStyleInit()
+{
+    logDebug("deferredStyleInit: begin");
+    // Apply theme (default: light). This sets tab bar and content styles coherently.
+    applyCurrentThemeStyles();
+    // Log initial tab bar state after startup style
+    if (m_pdfTabWidget && m_pdfTabWidget->tabBar())
+        logTabBarState(m_pdfTabWidget->tabBar(), "after-startup-style", "PDF");
+    if (m_pcbTabWidget && m_pcbTabWidget->tabBar())
+        logTabBarState(m_pcbTabWidget->tabBar(), "after-startup-style", "PCB");
+    // Ensure close buttons exist and are hidden initially
+    ensureCloseButtons(this, m_pdfTabWidget, [this](int idx){ onPdfTabCloseRequested(idx); });
+    ensureCloseButtons(this, m_pcbTabWidget, [this](int idx){ onPcbTabCloseRequested(idx); });
+    // Hide all close buttons initially (hover-only behavior)
+    if (m_pdfTabWidget && m_pdfTabWidget->tabBar())
+        setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
+    if (m_pcbTabWidget && m_pcbTabWidget->tabBar())
+        setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
+    logDebug("deferredStyleInit: end");
 }
 
 void DualTabWidget::applyStyleWithTag(QWidget* w, const QString &style, const QString &tag)
@@ -1098,6 +1110,7 @@ void DualTabWidget::setDarkTheme(bool dark)
 
 void DualTabWidget::applyCurrentThemeStyles()
 {
+    logDebug("applyCurrentThemeStyles: begin");
     // Base palette-derived hint (optional): if not explicitly set, detect from app palette
     bool dark = m_darkTheme;
     if (!this->property("explicitTheme").toBool()) {
@@ -1185,6 +1198,7 @@ void DualTabWidget::applyCurrentThemeStyles()
     // Re-apply compact sizing after stylesheet changes
     if (m_pdfTabWidget) applyCompactTabBar(m_pdfTabWidget->tabBar());
     if (m_pcbTabWidget) applyCompactTabBar(m_pcbTabWidget->tabBar());
+    logDebug("applyCurrentThemeStyles: end");
 }
 
 void DualTabWidget::updateCloseButtonsTheme(QTabWidget* w)

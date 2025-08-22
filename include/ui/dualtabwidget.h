@@ -90,6 +90,8 @@ private:
     void updateTabBarVisualState();
     void applyCurrentThemeStyles();
     void updateCloseButtonsTheme(QTabWidget* w);
+    // Perform style application and close-button setup deferred to event loop
+    void deferredStyleInit();
     
     QVBoxLayout *m_mainLayout;
     QTabWidget *m_pdfTabWidget;    // Row 1: PDF tabs
