@@ -80,3 +80,4 @@ CMakeLists.txt.user*
 .uic/
 /build*/
 src/viewers/README.md
+build.zip
