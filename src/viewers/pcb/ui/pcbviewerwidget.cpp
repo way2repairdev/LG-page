@@ -19,6 +19,9 @@
 #include <QVBoxLayout>
 #include <QMenu>
 #include <QDateTime>
+// New includes for debug/resource checks and events
+#include <QFile>
+#include <QMouseEvent>
 // Toolbar/UI widgets used below
 #include <QToolBar>
 #include <QAction>
@@ -515,17 +518,45 @@ void PCBViewerWidget::setupToolbar()
     m_netCombo->setEditable(true); // user can type either net or component reference
     // Increased width for better usability and parity with PDF search
     m_netCombo->setMinimumWidth(260);
+    m_netCombo->setFixedHeight(28);
     m_netCombo->setInsertPolicy(QComboBox::NoInsert);
     m_netCombo->setToolTip("Type or pick a Net or Component name");
-    // Match PDF viewer input styling
-    m_netCombo->setStyleSheet(QStringLiteral(
-        "QComboBox{border:1px solid %1;border-radius:3px;padding:2px 4px;background:%2;color:%3;}"
-        "QComboBox:focus{border-color:%4;}"
-        "QComboBox::drop-down{border:none;}"
-    ).arg(dark ? "#5f6368" : "#ccc",
-          dark ? "#2a2b2d" : "white",
-          dark ? "#e8eaed" : "#111",
-          dark ? "#cf6679" : "#E53935"));
+    // Professional drop-down styling with visible button and themed popup
+    {
+        const QString border = dark ? "#5f6368" : "#ccc";
+        const QString bg = dark ? "#2a2b2d" : "white";
+        const QString fg = dark ? "#e8eaed" : "#111";
+        const QString focus = dark ? "#cf6679" : "#E53935";
+        // Make the drop-down visually integrated with the field (no separate-looking background)
+        const QString dropBg = bg; // same as field
+        const QString dropHover = dark ? "#2f3542" : "#e9eef7"; // subtle premium hover tint
+        const QString dropBorder = border; // same border so it feels like one control
+        const QString viewBg = dark ? "#1f2023" : "white";
+        const QString viewFg = fg;
+        const QString viewSelBg = dark ? "#3b1f22" : "#fdeaea";
+        const QString viewSelFg = fg;
+        const QString arrowRes = dark ? ":/icons/images/icons/chevron_down_light.svg"
+                                      : ":/icons/images/icons/chevron_down.svg";
+    const int dropW = 32;            // width of the drop-down clickable area (a bit wider for safety)
+    const int padR  = dropW + 12;    // extra right padding so text never goes under arrow
+        // Log resource presence for troubleshooting
+        WritePCBDebugToFile(QString("Chevron resource exists (dark=%1): %2 / %3")
+                                .arg(dark ? "true" : "false")
+                                .arg(QFile::exists(":/icons/images/icons/chevron_down.svg") ? "yes" : "no")
+                                .arg(QFile::exists(":/icons/images/icons/chevron_down_light.svg") ? "yes" : "no"));
+
+        QString comboStyle = QString(
+            "QComboBox, QComboBox:editable{border:1px solid %1;border-radius:3px;padding:2px %8px 2px 8px;background:%2;color:%3;}"
+            "QComboBox:focus, QComboBox:editable:focus{border-color:%4;}"
+            "QComboBox::drop-down, QComboBox::drop-down:editable{subcontrol-origin:border; subcontrol-position:top right; width:%9px; border-left:1px solid %1; background:%5; border-top-right-radius:3px; border-bottom-right-radius:3px;}"
+            "QComboBox::drop-down:hover, QComboBox::drop-down:editable:hover{background:%6;}"
+            "QComboBox::down-arrow, QComboBox::down-arrow:editable{image:url(%7); width:12px; height:12px; margin-right:8px;}"
+            "QComboBox QLineEdit{border:none; background:transparent; color:%3; padding:0; padding-right:%8px;}"
+        ).arg(border, bg, fg, focus, dropBg, dropHover, arrowRes, QString::number(padR), QString::number(dropW));
+        comboStyle += QString("QComboBox QAbstractItemView{background:%1; color:%2; border:1px solid %3; outline:0; selection-background-color:%4; selection-color:%5;}")
+                           .arg(viewBg, viewFg, border, viewSelBg, viewSelFg);
+        m_netCombo->setStyleSheet(comboStyle);
+    }
     m_toolbar->addWidget(m_netCombo);
     m_netSearchButton = new QPushButton("Go", m_toolbar);
     m_netSearchButton->setToolTip("Highlight & zoom to Net or Component");
@@ -603,14 +634,38 @@ void PCBViewerWidget::applyToolbarTheme()
     m_toolbar->setStyleSheet(dark ? tbStyleDark : tbStyleLight);
     // Update net combo and button styles to match theme
     if (m_netCombo) {
-        m_netCombo->setStyleSheet(QStringLiteral(
-            "QComboBox{border:1px solid %1;border-radius:3px;padding:2px 4px;background:%2;color:%3;}"
-            "QComboBox:focus{border-color:%4;}"
-            "QComboBox::drop-down{border:none;}"
-        ).arg(dark ? "#5f6368" : "#ccc",
-              dark ? "#2a2b2d" : "white",
-              dark ? "#e8eaed" : "#111",
-              dark ? "#cf6679" : "#E53935"));
+        const QString border = dark ? "#5f6368" : "#ccc";
+        const QString bg = dark ? "#2a2b2d" : "white";
+        const QString fg = dark ? "#e8eaed" : "#111";
+        const QString focus = dark ? "#cf6679" : "#E53935";
+        const QString dropBg = bg;
+        const QString dropHover = dark ? "#2f3542" : "#e9eef7";
+        const QString dropBorder = border;
+        const QString viewBg = dark ? "#1f2023" : "white";
+        const QString viewFg = fg;
+        const QString viewSelBg = dark ? "#3b1f22" : "#fdeaea";
+        const QString viewSelFg = fg;
+        const QString arrowRes = dark ? ":/icons/images/icons/chevron_down_light.svg"
+                                      : ":/icons/images/icons/chevron_down.svg";
+    const int dropW = 32;
+    const int padR  = dropW + 12;
+        // Log resource presence for troubleshooting
+        WritePCBDebugToFile(QString("Chevron resource exists (dark=%1): %2 / %3")
+                                .arg(dark ? "true" : "false")
+                                .arg(QFile::exists(":/icons/images/icons/chevron_down.svg") ? "yes" : "no")
+                                .arg(QFile::exists(":/icons/images/icons/chevron_down_light.svg") ? "yes" : "no"));
+
+        QString comboStyle = QString(
+            "QComboBox, QComboBox:editable{border:1px solid %1;border-radius:3px;padding:2px %8px 2px 8px;background:%2;color:%3;}"
+            "QComboBox:focus, QComboBox:editable:focus{border-color:%4;}"
+            "QComboBox::drop-down, QComboBox::drop-down:editable{subcontrol-origin:border; subcontrol-position:top right; width:%9px; border-left:1px solid %1; background:%5; border-top-right-radius:3px; border-bottom-right-radius:3px;}"
+            "QComboBox::drop-down:hover, QComboBox::drop-down:editable:hover{background:%6;}"
+            "QComboBox::down-arrow, QComboBox::down-arrow:editable{image:url(%7); width:12px; height:12px; margin-right:8px;}"
+            "QComboBox QLineEdit{border:none; background:transparent; color:%3; padding:0; padding-right:%8px;}"
+        ).arg(border, bg, fg, focus, dropBg, dropHover, arrowRes, QString::number(padR), QString::number(dropW));
+        comboStyle += QString("QComboBox QAbstractItemView{background:%1; color:%2; border:1px solid %3; outline:0; selection-background-color:%4; selection-color:%5;}")
+                           .arg(viewBg, viewFg, border, viewSelBg, viewSelFg);
+        m_netCombo->setStyleSheet(comboStyle);
     }
     if (m_netSearchButton) {
         m_netSearchButton->setStyleSheet(QStringLiteral(

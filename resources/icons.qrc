@@ -24,5 +24,7 @@
     <file>images/icons/tree_branch_open.svg</file>
     <file>images/icons/tree_branch_closed_light.svg</file>
     <file>images/icons/tree_branch_open_light.svg</file>
+    <file>images/icons/chevron_down.svg</file>
+    <file>images/icons/chevron_down_light.svg</file>
     </qresource>
 </RCC>
