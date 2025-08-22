@@ -2,8 +2,26 @@
 #include "ui_mainwindow.h"
 #include "ui/mainapplication.h"
 #include <QApplication>
+#include <QCoreApplication>
 #include <QMouseEvent>
 #include <QKeyEvent>
+#include <QFile>
+#include <QTextStream>
+#include <QDateTime>
+#include <QDir>
+
+namespace {
+// Append a timestamped line to build/tab_debug.txt (next to the exe)
+inline void writeTransitionLog(const QString &msg) {
+    const QString logPath = QCoreApplication::applicationDirPath() + "/tab_debug.txt";
+    QFile f(logPath);
+    if (f.open(QIODevice::Append | QIODevice::Text)) {
+        QTextStream ts(&f);
+        ts << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz")
+           << " [login] " << msg << '\n';
+    }
+}
+}
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -15,6 +33,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     setupLoginConnections();
     setupDatabaseConnection();
+    writeTransitionLog("Login window initialized");
     
     // Set window properties for compact dialog
     setWindowTitle("Way2Repair - Login System");
@@ -160,6 +179,7 @@ bool MainWindow::validateInput()
 
 void MainWindow::performLogin(const QString &username, const QString &password)
 {
+    writeTransitionLog(QString("performLogin start: user='%1'").arg(username));
     // Disable login controls during authentication
     enableLoginControls(false);
     ui->loginButton->setText("Authenticating...");
@@ -281,16 +301,21 @@ void MainWindow::launchMainApplication(const QString &username, const UserInfo &
     session.loginTime = QDateTime::currentDateTime();
     
     // Create and show main application
+    writeTransitionLog("launchMainApplication: constructing MainApplication");
     m_mainApp = new MainApplication(session, nullptr);
+    writeTransitionLog("launchMainApplication: MainApplication constructed");
     
     // Connect logout signal to close main app and show login again
     connect(m_mainApp, &MainApplication::logoutRequested, this, &MainWindow::closeLoginWindow);
+    writeTransitionLog("launchMainApplication: logoutRequested signal connected");
     
     // Show main application maximized
     m_mainApp->showMaximized();
+    writeTransitionLog("launchMainApplication: MainApplication shown (maximized)");
     
     // Hide login window
     this->hide();
+    writeTransitionLog("launchMainApplication: login window hidden");
     
     qDebug() << "Main application launched for user:" << username;
 }

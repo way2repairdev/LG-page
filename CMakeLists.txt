@@ -287,6 +287,11 @@ target_link_libraries(Way2RepairLoginSystem PRIVATE
     ${OPENGL_LIBRARIES}
 )
 
+# Link Windows DbgHelp for minidump generation
+if(WIN32)
+    target_link_libraries(Way2RepairLoginSystem PRIVATE Dbghelp)
+endif()
+
 # Link Qt PDF modules if available
 if(HAVE_QT_PDF)
     target_link_libraries(Way2RepairLoginSystem PRIVATE 

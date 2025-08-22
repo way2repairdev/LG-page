@@ -4,6 +4,7 @@
 #include "viewers/pdf/pdfviewerwidget.h"
 #include "viewers/pcb/PCBViewerWidget.h"
 #include <QApplication>
+#include <QCoreApplication>
 #include <QScreen>
 #include <QHeaderView>
 #include <QDateTime>
@@ -29,6 +30,18 @@
 #include <QPushButton>
 #include <QScrollBar>
 
+namespace {
+inline void writeTransitionLog(const QString &msg) {
+    const QString logPath = QCoreApplication::applicationDirPath() + "/tab_debug.txt";
+    QFile f(logPath);
+    if (f.open(QIODevice::Append | QIODevice::Text)) {
+        QTextStream ts(&f);
+        ts << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz")
+           << " [main] " << msg << '\n';
+    }
+}
+}
+
 MainApplication::MainApplication(const UserSession &userSession, QWidget *parent)
     : QMainWindow(parent)
     , m_userSession(userSession)
@@ -38,7 +51,9 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
     //, m_networkManager(new QNetworkAccessManager(this))
     //, m_baseUrl("http://localhost/api") // WAMP server API endpoint
 {
+    writeTransitionLog("ctor: begin");
     setupUI();
+    writeTransitionLog("ctor: after setupUI");
     setupMenuBar();
     setupStatusBar();
     updateUserInfo();
@@ -64,9 +79,12 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
     
     // Load initial file list from local folder
     loadLocalFiles();
+    writeTransitionLog("ctor: after loadLocalFiles");
     
     // Add welcome tab
     addWelcomeTab();
+    writeTransitionLog("ctor: after addWelcomeTab");
+    writeTransitionLog("ctor: end");
 }
 
 MainApplication::~MainApplication()
