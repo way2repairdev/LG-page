@@ -297,8 +297,8 @@ void BRDFile::GenerateRenderingGeometry() {
     float board_width = max_point.x - min_point.x;
     float board_height = max_point.y - min_point.y;
     
-    // Offset for bottom side components (place them to the right of top side)
-    float bottom_side_offset_x = board_width + 50.0f; // 50 unit gap between sides
+    // Offset for bottom side components (place them below the top side)
+    float bottom_side_offset_x = 0.0f;
     float bottom_side_offset_y = 0.0f;
     
     // Generate board outline segments from format points
@@ -309,11 +309,11 @@ void BRDFile::GenerateRenderingGeometry() {
             outline_segments.push_back({format[i], format[next_i]});
         }
         
-        // Bottom side outline (offset position)
+        // Bottom side outline (offset position and mirrored vertically)
         for (size_t i = 0; i < format.size(); ++i) {
             size_t next_i = (i + 1) % format.size();
-            BRDPoint p1_offset = {format[i].x + bottom_side_offset_x, format[i].y + bottom_side_offset_y};
-            BRDPoint p2_offset = {format[next_i].x + bottom_side_offset_x, format[next_i].y + bottom_side_offset_y};
+            BRDPoint p1_offset = {format[i].x + bottom_side_offset_x, -format[i].y + bottom_side_offset_y};
+            BRDPoint p2_offset = {format[next_i].x + bottom_side_offset_x, -format[next_i].y + bottom_side_offset_y};
             outline_segments.push_back({p1_offset, p2_offset});
         }
     }
@@ -326,20 +326,24 @@ void BRDFile::GenerateRenderingGeometry() {
         
         // Use p1 and p2 points to create part outline
         if (part.p1 != part.p2) {
-            // Create rectangle from p1 and p2
-            BRDPoint top_left = {std::min(part.p1.x, part.p2.x) + offset_x, std::max(part.p1.y, part.p2.y) + offset_y};
-            BRDPoint top_right = {std::max(part.p1.x, part.p2.x) + offset_x, std::max(part.p1.y, part.p2.y) + offset_y};
-            BRDPoint bottom_right = {std::max(part.p1.x, part.p2.x) + offset_x, std::min(part.p1.y, part.p2.y) + offset_y};
-            BRDPoint bottom_left = {std::min(part.p1.x, part.p2.x) + offset_x, std::min(part.p1.y, part.p2.y) + offset_y};
+            // Create rectangle from p1 and p2, mirror Y coordinates if bottom side
+            float p1_y = is_bottom_side ? -part.p1.y : part.p1.y;
+            float p2_y = is_bottom_side ? -part.p2.y : part.p2.y;
+            
+            BRDPoint top_left = {std::min(part.p1.x, part.p2.x) + offset_x, std::max(p1_y, p2_y) + offset_y};
+            BRDPoint top_right = {std::max(part.p1.x, part.p2.x) + offset_x, std::max(p1_y, p2_y) + offset_y};
+            BRDPoint bottom_right = {std::max(part.p1.x, part.p2.x) + offset_x, std::min(p1_y, p2_y) + offset_y};
+            BRDPoint bottom_left = {std::min(part.p1.x, part.p2.x) + offset_x, std::min(p1_y, p2_y) + offset_y};
             
             part_outline_segments.push_back({top_left, top_right});
             part_outline_segments.push_back({top_right, bottom_right});
             part_outline_segments.push_back({bottom_right, bottom_left});
             part_outline_segments.push_back({bottom_left, top_left});
         } else {
-            // Create a small square around the point
+            // Create a small square around the point, mirror Y coordinate if bottom side
             float part_size = 10.0f;
-            BRDPoint center = {part.p1.x + offset_x, part.p1.y + offset_y};
+            float center_y = is_bottom_side ? -part.p1.y : part.p1.y;
+            BRDPoint center = {part.p1.x + offset_x, center_y + offset_y};
             BRDPoint top_left = {center.x - part_size/2, center.y + part_size/2};
             BRDPoint top_right = {center.x + part_size/2, center.y + part_size/2};
             BRDPoint bottom_right = {center.x + part_size/2, center.y - part_size/2};
@@ -364,8 +368,9 @@ void BRDFile::GenerateRenderingGeometry() {
             radius = 6.5f; // Default radius similar to XZZPCBFile
         }
         
-        // Apply offset to pin position
-        BRDPoint pin_pos = {pin.pos.x + offset_x, pin.pos.y + offset_y};
+        // Apply offset to pin position, mirror Y coordinate if bottom side
+        float pin_y = is_bottom_side ? -pin.pos.y : pin.pos.y;
+        BRDPoint pin_pos = {pin.pos.x + offset_x, pin_y + offset_y};
         
         // Create circle for pin with red color (top) or blue color (bottom)
         float r = is_bottom_side ? 0.0f : 0.7f; // Blue for bottom, red for top
@@ -383,8 +388,9 @@ void BRDFile::GenerateRenderingGeometry() {
         
         float radius = 4.0f; // Fixed radius for test points
         
-        // Apply offset to nail position
-        BRDPoint nail_pos = {nail.pos.x + offset_x, nail.pos.y + offset_y};
+        // Apply offset to nail position, mirror Y coordinate if bottom side
+        float nail_y = is_bottom_side ? -nail.pos.y : nail.pos.y;
+        BRDPoint nail_pos = {nail.pos.x + offset_x, nail_y + offset_y};
         
         // Create circle for nail with green color (top) or cyan color (bottom)
         float r = 0.0f;
