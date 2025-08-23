@@ -264,6 +264,28 @@ bool BRDFile::Load(const std::vector<char>& buf, const std::string& /*filepath*/
         }
     }
 
+    // Apply Y-axis mirroring to bottom side pin positions for consistent text rendering
+    for (auto &pin : pins) {
+        if (pin.side == BRDPinSide::Bottom) {
+            pin.pos.y = -pin.pos.y;
+        }
+    }
+    
+    // Apply Y-axis mirroring to bottom side nail positions for consistency  
+    for (auto &nail : nails) {
+        if (nail.side == BRDPartMountingSide::Bottom) {
+            nail.pos.y = -nail.pos.y;
+        }
+    }
+    
+    // Apply Y-axis mirroring to bottom side part positions for consistency
+    for (auto &part : parts) {
+        if (part.mounting_side == BRDPartMountingSide::Bottom) {
+            part.p1.y = -part.p1.y;
+            part.p2.y = -part.p2.y;
+        }
+    }
+
     valid = current_block != 0;
     
     // Generate rendering geometry for pins
@@ -312,8 +334,8 @@ void BRDFile::GenerateRenderingGeometry() {
         // Bottom side outline (offset position and mirrored vertically)
         for (size_t i = 0; i < format.size(); ++i) {
             size_t next_i = (i + 1) % format.size();
-            BRDPoint p1_offset = {format[i].x + bottom_side_offset_x, -format[i].y + bottom_side_offset_y};
-            BRDPoint p2_offset = {format[next_i].x + bottom_side_offset_x, -format[next_i].y + bottom_side_offset_y};
+            BRDPoint p1_offset = {static_cast<int>(format[i].x + bottom_side_offset_x), static_cast<int>(-format[i].y + bottom_side_offset_y)};
+            BRDPoint p2_offset = {static_cast<int>(format[next_i].x + bottom_side_offset_x), static_cast<int>(-format[next_i].y + bottom_side_offset_y)};
             outline_segments.push_back({p1_offset, p2_offset});
         }
     }
@@ -325,29 +347,26 @@ void BRDFile::GenerateRenderingGeometry() {
         float offset_y = is_bottom_side ? bottom_side_offset_y : 0.0f;
         
         // Use p1 and p2 points to create part outline
+        // Note: Y coordinates are already mirrored for bottom side parts
         if (part.p1 != part.p2) {
-            // Create rectangle from p1 and p2, mirror Y coordinates if bottom side
-            float p1_y = is_bottom_side ? -part.p1.y : part.p1.y;
-            float p2_y = is_bottom_side ? -part.p2.y : part.p2.y;
-            
-            BRDPoint top_left = {std::min(part.p1.x, part.p2.x) + offset_x, std::max(p1_y, p2_y) + offset_y};
-            BRDPoint top_right = {std::max(part.p1.x, part.p2.x) + offset_x, std::max(p1_y, p2_y) + offset_y};
-            BRDPoint bottom_right = {std::max(part.p1.x, part.p2.x) + offset_x, std::min(p1_y, p2_y) + offset_y};
-            BRDPoint bottom_left = {std::min(part.p1.x, part.p2.x) + offset_x, std::min(p1_y, p2_y) + offset_y};
+            // Create rectangle from p1 and p2
+            BRDPoint top_left = {static_cast<int>(std::min(part.p1.x, part.p2.x) + offset_x), static_cast<int>(std::max(part.p1.y, part.p2.y) + offset_y)};
+            BRDPoint top_right = {static_cast<int>(std::max(part.p1.x, part.p2.x) + offset_x), static_cast<int>(std::max(part.p1.y, part.p2.y) + offset_y)};
+            BRDPoint bottom_right = {static_cast<int>(std::max(part.p1.x, part.p2.x) + offset_x), static_cast<int>(std::min(part.p1.y, part.p2.y) + offset_y)};
+            BRDPoint bottom_left = {static_cast<int>(std::min(part.p1.x, part.p2.x) + offset_x), static_cast<int>(std::min(part.p1.y, part.p2.y) + offset_y)};
             
             part_outline_segments.push_back({top_left, top_right});
             part_outline_segments.push_back({top_right, bottom_right});
             part_outline_segments.push_back({bottom_right, bottom_left});
             part_outline_segments.push_back({bottom_left, top_left});
         } else {
-            // Create a small square around the point, mirror Y coordinate if bottom side
+            // Create a small square around the point
             float part_size = 10.0f;
-            float center_y = is_bottom_side ? -part.p1.y : part.p1.y;
-            BRDPoint center = {part.p1.x + offset_x, center_y + offset_y};
-            BRDPoint top_left = {center.x - part_size/2, center.y + part_size/2};
-            BRDPoint top_right = {center.x + part_size/2, center.y + part_size/2};
-            BRDPoint bottom_right = {center.x + part_size/2, center.y - part_size/2};
-            BRDPoint bottom_left = {center.x - part_size/2, center.y - part_size/2};
+            BRDPoint center = {static_cast<int>(part.p1.x + offset_x), static_cast<int>(part.p1.y + offset_y)};
+            BRDPoint top_left = {static_cast<int>(center.x - part_size/2), static_cast<int>(center.y + part_size/2)};
+            BRDPoint top_right = {static_cast<int>(center.x + part_size/2), static_cast<int>(center.y + part_size/2)};
+            BRDPoint bottom_right = {static_cast<int>(center.x + part_size/2), static_cast<int>(center.y - part_size/2)};
+            BRDPoint bottom_left = {static_cast<int>(center.x - part_size/2), static_cast<int>(center.y - part_size/2)};
             
             part_outline_segments.push_back({top_left, top_right});
             part_outline_segments.push_back({top_right, bottom_right});
@@ -368,9 +387,8 @@ void BRDFile::GenerateRenderingGeometry() {
             radius = 6.5f; // Default radius similar to XZZPCBFile
         }
         
-        // Apply offset to pin position, mirror Y coordinate if bottom side
-        float pin_y = is_bottom_side ? -pin.pos.y : pin.pos.y;
-        BRDPoint pin_pos = {pin.pos.x + offset_x, pin_y + offset_y};
+        // Apply offset to pin position (Y coordinates are already mirrored for bottom side)
+        BRDPoint pin_pos = {static_cast<int>(pin.pos.x + offset_x), static_cast<int>(pin.pos.y + offset_y)};
         
         // Create circle for pin with red color (top) or blue color (bottom)
         float r = is_bottom_side ? 0.0f : 0.7f; // Blue for bottom, red for top
@@ -388,9 +406,8 @@ void BRDFile::GenerateRenderingGeometry() {
         
         float radius = 4.0f; // Fixed radius for test points
         
-        // Apply offset to nail position, mirror Y coordinate if bottom side
-        float nail_y = is_bottom_side ? -nail.pos.y : nail.pos.y;
-        BRDPoint nail_pos = {nail.pos.x + offset_x, nail_y + offset_y};
+        // Apply offset to nail position (Y coordinates are already mirrored for bottom side)
+        BRDPoint nail_pos = {static_cast<int>(nail.pos.x + offset_x), static_cast<int>(nail.pos.y + offset_y)};
         
         // Create circle for nail with green color (top) or cyan color (bottom)
         float r = 0.0f;
