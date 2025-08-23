@@ -30,6 +30,9 @@
 #include <QIcon>
 #include <QPixmap>
 #include <QImage>
+#include <QClipboard>
+#include <QGuiApplication>
+#include <QCursor>
 #include "viewers/pdf/PDFPreviewLoader.h"
 #ifdef _WIN32
 #include <windows.h>
@@ -872,7 +875,7 @@ bool PDFViewerWidget::eventFilter(QObject *watched, QEvent *event)
                     // Quick click -> context menu
                     QString sel = captureCurrentSelection();
                     if (!sel.isEmpty()) {
-                        showCrossContextMenu(me->globalPos(), sel);
+                        showCrossContextMenu(me->globalPosition().toPoint(), sel);
                         // Prevent further handling (optional) but allow existing panning to stop
                         return true;
                     }
@@ -933,7 +936,7 @@ QString PDFViewerWidget::captureCurrentSelection() const {
 
 void PDFViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QString &text) {
     QString target = m_linkedPcbFileName.isEmpty() ? QStringLiteral("Linked PCB") : m_linkedPcbFileName;
-        class ThemedMenu : public QMenu { public: ThemedMenu(QWidget* p=nullptr):QMenu(p) { setWindowFlags(windowFlags()|Qt::NoDropShadowWindowHint); setAttribute(Qt::WA_TranslucentBackground);} void apply(bool dark){ if(dark){ setStyleSheet(
+    class ThemedMenu : public QMenu { public: ThemedMenu(QWidget* p=nullptr):QMenu(p) { setWindowFlags(windowFlags()|Qt::NoDropShadowWindowHint); setAttribute(Qt::WA_TranslucentBackground);} void apply(bool dark){ if(dark){ setStyleSheet(
                 "QMenu { background:rgba(30,33,40,0.94); border:1px solid #3d4452; border-radius:8px; padding:6px; font:13px 'Segoe UI'; color:#dfe3ea; }"
                 "QMenu::item { background:transparent; padding:6px 14px; border-radius:5px; }"
                 "QMenu::item:selected { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #2563eb, stop:1 #1d4ed8); color:white; }"
@@ -942,16 +945,32 @@ void PDFViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QStrin
                 "QMenu { background:rgba(252,252,253,0.97); border:1px solid #d0d7e2; border-radius:8px; padding:6px; font:13px 'Segoe UI'; color:#2d3744; }"
                 "QMenu::item { background:transparent; padding:6px 14px; border-radius:5px; }"
                 "QMenu::item:selected { background: #1a73e8; color:white; }"
-                "QMenu::separator { height:1px; background:#e1e6ed; margin:6px 4px; }" ); } } }; ThemedMenu menu; bool dark = qApp->palette().color(QPalette::Window).lightness() < 128; menu.apply(dark);
-    QAction *title = menu.addAction(QString("Cross Search → %1").arg(target)); title->setEnabled(false);
+                "QMenu::separator { height:1px; background:#e1e6ed; margin:6px 4px; }" ); } } };
+    ThemedMenu menu;
+    bool dark = qApp->palette().color(QPalette::Window).lightness() < 128;
+    menu.apply(dark);
+    QAction *actCopy = menu.addAction(QIcon(":/icons/images/icons/copy.svg"), "Copy");
+    QAction *actPaste = menu.addAction(QIcon(":/icons/images/icons/paste.svg"), "Paste");
     menu.addSeparator();
-    QAction *actComp = menu.addAction(QIcon(":/icons/images/icons/find_component.svg"), QString("Find Component in %1").arg(target));
+    menu.addAction(QIcon(":/icons/images/icons/find_component.svg"), QString("Find Component in %1").arg(target));
     QAction *actNet  = menu.addAction(QIcon(":/icons/images/icons/find_net.svg"), QString("Find Net in %1").arg(target));
     menu.addSeparator();
     QAction *actCancel = menu.addAction("Cancel");
     QAction *chosen = menu.exec(globalPos);
-    if (!chosen || chosen==actCancel || chosen==title) return;
-    if (!chosen) return;
+    if (!chosen || chosen==actCancel) return;
+    if (chosen == actCopy) {
+        QClipboard *clipboard = QGuiApplication::clipboard();
+        clipboard->setText(text);
+        return;
+    }
+    if (chosen == actPaste) {
+        QClipboard *clipboard = QGuiApplication::clipboard();
+        QString pasteText = clipboard->text();
+        if (!pasteText.isEmpty()) {
+            emit crossSearchRequest(pasteText, false, true);
+        }
+        return;
+    }
     bool isNet = (chosen == actNet);
     emit crossSearchRequest(text, isNet, true);
 }
