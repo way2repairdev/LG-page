@@ -18,6 +18,7 @@
 #include <QStyleOption>
 #include <QApplication>
 #include <QPalette>
+#include <QFontDatabase>
 
 // Forward declaration for logging helper used below
 void logDebug(const QString &message);
@@ -27,23 +28,59 @@ class MinimalTabStyle : public QProxyStyle {
 public:
     using QProxyStyle::QProxyStyle;
     int pixelMetric(PixelMetric metric, const QStyleOption *option, const QWidget *widget) const override {
+        // Debug: Log key pixelMetric calls to verify our style is being used
+        static int pmDebugCount = 0;
+        if (pmDebugCount < 20) {
+            if (metric == PM_TabCloseIndicatorWidth || metric == PM_TabCloseIndicatorHeight || 
+                metric == PM_TabBarTabHSpace || metric == PM_TabBarTabVSpace) {
+                QString metricName = "Unknown";
+                switch (metric) {
+                    case PM_TabCloseIndicatorWidth: metricName = "PM_TabCloseIndicatorWidth"; break;
+                    case PM_TabCloseIndicatorHeight: metricName = "PM_TabCloseIndicatorHeight"; break;
+                    case PM_TabBarTabHSpace: metricName = "PM_TabBarTabHSpace"; break;
+                    case PM_TabBarTabVSpace: metricName = "PM_TabBarTabVSpace"; break;
+                    default: metricName = QString("PM_%1").arg(metric); break;
+                }
+                logDebug(QString("pixelMetric called: %1").arg(metricName));
+                pmDebugCount++;
+            }
+        }
+        
         if (metric == PM_TabBarTabHSpace) {
             return 0; // no extra left/right spacing around the tab label
         }
         if (metric == PM_TabBarTabVSpace) {
             return 0; // remove extra top/bottom spacing to reduce height
         }
-        // Reserve a minimal space so text doesn't collide with our custom close button
+    // Provide a sensible close indicator size for layout calculations
         if (metric == PM_TabCloseIndicatorWidth || metric == PM_TabCloseIndicatorHeight) {
-            return 12; // matches custom close button size (reduced)
+            return 12;
         }
-        return QProxyStyle::pixelMetric(metric, option, widget);
+    return QProxyStyle::pixelMetric(metric, option, widget);
     }
     // Provide a tiny safe inset for the text rect only (not full tab padding)
     // to avoid first-glyph clipping when visual left padding is 0.
     QRect subElementRect(SubElement element, const QStyleOption *option, const QWidget *widget) const override {
-        QRect r = QProxyStyle::subElementRect(element, option, widget);
-        if (element == SE_TabBarTabText) {
+    QRect r = QProxyStyle::subElementRect(element, option, widget);
+    
+    // Debug: Log all subElementRect calls to see what Qt is requesting
+    static int debugCallCount = 0;
+    if (debugCallCount < 50) { // Limit to first 50 calls to avoid spam
+        QString elementName = "Unknown";
+        switch (element) {
+            case SE_TabBarTabText: elementName = "SE_TabBarTabText"; break;
+            case SE_TabBarTabRightButton: elementName = "SE_TabBarTabRightButton"; break;
+            case SE_TabBarTabLeftButton: elementName = "SE_TabBarTabLeftButton"; break;
+            case SE_TabBarScrollLeftButton: elementName = "SE_TabBarScrollLeftButton"; break;
+            case SE_TabBarScrollRightButton: elementName = "SE_TabBarScrollRightButton"; break;
+            case SE_TabBarTearIndicator: elementName = "SE_TabBarTearIndicator"; break;
+            default: elementName = QString("Element_%1").arg(element); break;
+        }
+        logDebug(QString("subElementRect called: %1 widget=%2").arg(elementName).arg(widget ? widget->objectName() : "null"));
+        debugCallCount++;
+    }
+    
+    if (element == SE_TabBarTabText) {
             // Use the effective style-provided metrics (reflects QSS font and bold for selected)
             QFontMetrics fm = option ? option->fontMetrics : QFontMetrics(widget ? widget->font() : QFont());
 
@@ -57,10 +94,48 @@ public:
             // Keep a small safety inset; higher minimum to avoid clipping with bold fonts
             const int leftInset = qMax(4, (worstLb < 0) ? -worstLb : 0);
 
-            // Reserve space on the right for our custom close button (~12px) + tiny margin
-            const int rightReserve = 14; // 12px button + 2px gap
+            // Reserve space on the right for our custom close button using style metrics
+            const int btnW = pixelMetric(QStyle::PM_TabCloseIndicatorWidth, option, widget);
+            const int kRightMargin = 8; // updated to match SE_TabBarTabRightButton below
+            const int rightReserve = qMax(18, btnW + kRightMargin + 4); // extra padding for safety
 
             r.adjust(leftInset, 0, -rightReserve, 0);
+            if (r.width() < 0) r.setWidth(0);
+        } else if (element == SE_TabBarTabRightButton) {
+            // Compute a flush-right rect, centered vertically, with a small right margin
+            if (option) {
+                const QRect tabRect = option->rect;
+                const int pmW = pixelMetric(QStyle::PM_TabCloseIndicatorWidth, option, widget);
+                const int pmH = pixelMetric(QStyle::PM_TabCloseIndicatorHeight, option, widget);
+                const int rightMargin = 8; // increased margin to ensure it stays well inside tab bounds
+                
+                // Ensure button fits entirely within tab bounds with proper margins
+                const int availableWidth = tabRect.width() - rightMargin - 2; // extra 2px safety margin
+                const int buttonWidth = qMin(pmW, availableWidth);
+                const int x = tabRect.left() + tabRect.width() - rightMargin - buttonWidth;
+                const int y = tabRect.top() + (tabRect.height() - pmH) / 2;
+                
+                r = QRect(x, y, buttonWidth, pmH);
+                
+                // Strict bounds checking - ensure button is completely inside tab
+                if (r.right() >= tabRect.right()) {
+                    r.moveRight(tabRect.right() - 2); // 2px safety from edge
+                }
+                if (r.left() <= tabRect.left()) {
+                    r.moveLeft(tabRect.left() + 2); // 2px safety from edge
+                }
+                if (r.bottom() > tabRect.bottom()) {
+                    r.moveBottom(tabRect.bottom());
+                }
+                if (r.top() < tabRect.top()) {
+                    r.moveTop(tabRect.top());
+                }
+                
+                // Debug log the button rect calculation
+                logDebug(QString("SE_TabBarTabRightButton: tabRect=[%1,%2 %3x%4] buttonRect=[%5,%6 %7x%8]")
+                             .arg(tabRect.left()).arg(tabRect.top()).arg(tabRect.width()).arg(tabRect.height())
+                             .arg(r.left()).arg(r.top()).arg(r.width()).arg(r.height()));
+            }
             if (r.width() < 0) r.setWidth(0);
         }
         return r;
@@ -84,69 +159,16 @@ static void applyCompactTabBar(QTabBar* bar)
     bar->setMinimumHeight(target);
 }
 
-// Create a small close button for a tab if the native one isn't available
-static QToolButton* makeCloseButton(QWidget* parent)
-{
-    auto *btn = new QToolButton(parent);
-    btn->setAutoRaise(true);
-    btn->setCursor(Qt::PointingHandCursor);
-    btn->setFixedSize(12, 12);
-    // Use a high-contrast text glyph for maximum visibility
-    btn->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    btn->setText(QString::fromUtf16(u"✕"));
-    btn->setStyleSheet(
-        "QToolButton { margin:0; padding:0; border:none; background: transparent; color: #444; font-weight: 600; }"
-        "QToolButton:hover { background: rgba(0,0,0,0.12); border-radius: 3px; color: #b00020; }"
-    );
-    btn->setToolTip(QObject::tr("Close"));
-    return btn;
-}
+// Close button functionality removed
 
-// Helper: toggle visibility of built-in close buttons per tab index
-static void setCloseButtonsVisible(QTabBar* bar, int onlyIndex)
-{
-    if (!bar) return;
-    // Avoid spamming updates/logs when the hovered index hasn't changed
-    const int lastIdx = bar->property("lastCloseIdx").toInt();
-    if (lastIdx == onlyIndex) return;
+// Helper: toggle visibility removed
+// Close button visibility function removed
 
-    bool anyShown = false;
-    for (int i = 0; i < bar->count(); ++i) {
-        const bool vis = (i == onlyIndex);
-        if (QWidget* btn = bar->tabButton(i, QTabBar::RightSide)) {
-            btn->setVisible(vis);
-            if (vis) anyShown = true;
-        }
-        if (QWidget* btnL = bar->tabButton(i, QTabBar::LeftSide)) btnL->setVisible(vis);
-    }
-    bar->setProperty("lastCloseIdx", onlyIndex);
-    logDebug(QString("setCloseButtonsVisible: onlyIndex=%1, anyShown=%2, count=%3")
-                 .arg(onlyIndex).arg(anyShown).arg(bar->count()));
-}
+// Positioning function removed
+// Positioning function removed
 
-// Ensure each tab has a QWidget close button we can show/hide
-static void ensureCloseButtons(QWidget* owner, QTabWidget* tabWidget, std::function<void(int)> onClose)
-{
-    if (!tabWidget) return;
-    QTabBar* bar = tabWidget->tabBar();
-    if (!bar) return;
-    for (int i = 0; i < bar->count(); ++i) {
-        // Always replace with our own button to avoid style-specific quirks
-        QToolButton* btn = makeCloseButton(bar);
-        btn->setVisible(false);
-        // Resolve index at click time to handle dynamic tab indices
-        QObject::connect(btn, &QToolButton::clicked, owner, [bar, btn, onClose]() {
-            for (int j = 0; j < bar->count(); ++j) {
-                if (bar->tabButton(j, QTabBar::RightSide) == btn) {
-                    onClose(j);
-                    return;
-                }
-            }
-        });
-        bar->setTabButton(i, QTabBar::RightSide, btn);
-        logDebug(QString("ensureCloseButtons: injected button on tab %1").arg(i));
-    }
-}
+// Close button creation function removed
+// Close button creation function removed
 
 // Debug logging function
 void logDebug(const QString &message) {
@@ -289,7 +311,7 @@ void DualTabWidget::setupUI()
     
     // Create PDF tab widget (Row 1)
     m_pdfTabWidget = new QTabWidget();
-    // We'll manage close buttons ourselves (hover-only)
+    // We'll manage hover-only close buttons ourselves
     m_pdfTabWidget->setTabsClosable(false);
     // Disable tab dragging/reordering for PDF tabs  
     m_pdfTabWidget->setMovable(false);
@@ -311,7 +333,7 @@ void DualTabWidget::setupUI()
     applyCompactTabBar(m_pdfTabWidget->tabBar());
     // Styles will be applied by theme helper
     m_pcbTabWidget = new QTabWidget();
-    // We'll manage close buttons ourselves (hover-only)
+    // We'll manage hover-only close buttons ourselves
     m_pcbTabWidget->setTabsClosable(false);
     // Disable tab dragging/reordering for PCB tabs
     m_pcbTabWidget->setMovable(false);
@@ -386,14 +408,7 @@ void DualTabWidget::deferredStyleInit()
         logTabBarState(m_pdfTabWidget->tabBar(), "after-startup-style", "PDF");
     if (m_pcbTabWidget && m_pcbTabWidget->tabBar())
         logTabBarState(m_pcbTabWidget->tabBar(), "after-startup-style", "PCB");
-    // Ensure close buttons exist and are hidden initially
-    ensureCloseButtons(this, m_pdfTabWidget, [this](int idx){ onPdfTabCloseRequested(idx); });
-    ensureCloseButtons(this, m_pcbTabWidget, [this](int idx){ onPcbTabCloseRequested(idx); });
-    // Hide all close buttons initially (hover-only behavior)
-    if (m_pdfTabWidget && m_pdfTabWidget->tabBar())
-        setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
-    if (m_pcbTabWidget && m_pcbTabWidget->tabBar())
-        setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
+    // Close button functionality removed
     logDebug("deferredStyleInit: end");
 }
 
@@ -449,13 +464,9 @@ int DualTabWidget::addTab(QWidget *widget, const QIcon &/*icon*/, const QString 
     const QString display = cleanedFull;
     tabIndex = m_pdfTabWidget->addTab(dummyWidget, display); // icon intentionally ignored
     m_pdfTabWidget->setTabToolTip(tabIndex, label); // show full original path/label on hover
-    // Ensure close button exists for this tab and hide until hover
-    ensureCloseButtons(this, m_pdfTabWidget, [this](int idx){ onPdfTabCloseRequested(idx); });
-    setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
+    // Close button functionality removed
     // Log the state after adding a tab
     logTabBarState(m_pdfTabWidget->tabBar(), "after-add-tab", "PDF");
-    // Ensure close buttons remain hidden until hover
-    setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
         
         logDebug(QString("Added PDF tab - index: %1, total PDF tabs: %2").arg(tabIndex).arg(m_pdfWidgets.count()));
         
@@ -476,13 +487,9 @@ int DualTabWidget::addTab(QWidget *widget, const QIcon &/*icon*/, const QString 
     const QString display = cleanedFull;
     tabIndex = m_pcbTabWidget->addTab(dummyWidget, display); // icon intentionally ignored
     m_pcbTabWidget->setTabToolTip(tabIndex, label);
-    // Ensure close button exists for this tab and hide until hover
-    ensureCloseButtons(this, m_pcbTabWidget, [this](int idx){ onPcbTabCloseRequested(idx); });
-    setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
+    // Close button functionality removed
     // Log the state after adding a tab
     logTabBarState(m_pcbTabWidget->tabBar(), "after-add-tab", "PCB");
-    // Ensure close buttons remain hidden until hover
-    setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
         
         logDebug(QString("Added PCB tab - index: %1, total PCB tabs: %2").arg(tabIndex).arg(m_pcbWidgets.count()));
         
@@ -648,8 +655,11 @@ void DualTabWidget::setTabIcon(int index, const QIcon &icon, TabType type)
 
 void DualTabWidget::setTabsClosable(bool closable)
 {
-    m_pdfTabWidget->setTabsClosable(closable);
-    m_pcbTabWidget->setTabsClosable(closable);
+    Q_UNUSED(closable);
+    // Keep native close indicators disabled; we'll manage custom right-side buttons ourselves.
+    if (m_pdfTabWidget) m_pdfTabWidget->setTabsClosable(false);
+    if (m_pcbTabWidget) m_pcbTabWidget->setTabsClosable(false);
+    logDebug("setTabsClosable() override: using custom hover-only close buttons on the right");
 }
 
 void DualTabWidget::setMovable(bool /*movable*/)
@@ -854,12 +864,7 @@ void DualTabWidget::updateTabBarVisualState()
     // Keep icon space disabled; avoid re-assigning stylesheets here
     if (m_pdfTabWidget) m_pdfTabWidget->setIconSize(QSize(0, 0));
     if (m_pcbTabWidget) m_pcbTabWidget->setIconSize(QSize(0, 0));
-    // Ensure close buttons exist (no-op if already present)
-    ensureCloseButtons(this, m_pdfTabWidget, [this](int idx){ onPdfTabCloseRequested(idx); });
-    ensureCloseButtons(this, m_pcbTabWidget, [this](int idx){ onPcbTabCloseRequested(idx); });
-    // Reset hover state
-    setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
-    setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
+    // Close button functionality removed
 }
 
 // Slot methods for tab events
@@ -925,7 +930,7 @@ void DualTabWidget::updateVisibility()
 
 bool DualTabWidget::eventFilter(QObject *obj, QEvent *event)
 {
-    // Only handle hover inside the tab bars; avoid global cursor tracking
+    // Hover tracking for showing/hiding per-tab close buttons
     if (event->type() == QEvent::MouseMove || event->type() == QEvent::HoverMove || event->type() == QEvent::Enter) {
         auto computeIndex = [](QTabBar* bar, QEvent* ev) -> int {
             if (!bar) return -1;
@@ -949,25 +954,26 @@ bool DualTabWidget::eventFilter(QObject *obj, QEvent *event)
             const int idx = computeIndex(bar, event);
             if (idx != m_pdfHoveredIndex) {
                 m_pdfHoveredIndex = idx;
-                setCloseButtonsVisible(bar, idx);
+                // Close button functionality removed
+                logDebug(QString("hover-change: PDF idx=%1").arg(idx));
             }
         } else if (obj == m_pcbTabWidget->tabBar()) {
             auto *bar = m_pcbTabWidget->tabBar();
             const int idx = computeIndex(bar, event);
             if (idx != m_pcbHoveredIndex) {
                 m_pcbHoveredIndex = idx;
-                setCloseButtonsVisible(bar, idx);
+                // Close button functionality removed
+                logDebug(QString("hover-change: PCB idx=%1").arg(idx));
             }
         }
     }
-    // Ensure buttons hide immediately when cursor leaves a tab bar
     if (event->type() == QEvent::Leave) {
         if (m_pdfTabWidget && obj == m_pdfTabWidget->tabBar()) {
             m_pdfHoveredIndex = -1;
-            setCloseButtonsVisible(m_pdfTabWidget->tabBar(), -1);
+            // Close button functionality removed
         } else if (m_pcbTabWidget && obj == m_pcbTabWidget->tabBar()) {
             m_pcbHoveredIndex = -1;
-            setCloseButtonsVisible(m_pcbTabWidget->tabBar(), -1);
+            // Close button functionality removed
         }
     }
     // Log geometry/metrics on resize events for both tab bars
@@ -1108,6 +1114,14 @@ void DualTabWidget::setDarkTheme(bool dark)
     applyCurrentThemeStyles();
 }
 
+void DualTabWidget::setMaterialTheme(bool enabled)
+{
+    if (m_materialTheme == enabled) return;
+    m_materialTheme = enabled;
+    this->setProperty("explicitTheme", true);
+    applyCurrentThemeStyles();
+}
+
 void DualTabWidget::applyCurrentThemeStyles()
 {
     logDebug("applyCurrentThemeStyles: begin");
@@ -1120,63 +1134,117 @@ void DualTabWidget::applyCurrentThemeStyles()
         m_darkTheme = dark; // lock in
     }
 
-    const QString pdfLight =
-        "QTabWidget {"
-        "    background: #ffffff;"
-        "    font-family: 'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif;"
-        "}"
-        // Collapse the pane so only the tab bar shows and content is handled by our switcher
-        "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
-        "QTabBar { qproperty-drawBase:0; background:#e8e8e8; }"
-    "QTabBar::tab { background:#f0f0f0; border:1px solid #888; color:#333; padding:3px 6px 3px 4px; margin:1px; min-height:20px; min-width:100px; max-width:250px; font-size:11px; font-weight:500; letter-spacing:0.2px; text-align:left; }"
-    "QTabBar::tab:selected { background:#ffffff; color:#0066cc; border:1px solid #4A90E2; font-weight:600; padding-left:5px; }"
-        "QTabBar::tab:hover:!selected { background:rgba(227,242,253,0.8); border:1px solid #90caf9; color:#1976d2; }"
-    "QTabBar::tab:first { margin-left:6px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
-        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 4px 0 2px; border-radius:2px; background:transparent; }"
-        "QTabBar::close-button:hover { background: rgba(255,0,0,.1); border-radius:2px; }"
-    ;
+    // When Material theme is disabled, use the existing compact bordered style
+    if (!m_materialTheme) {
+        const QString pdfLight =
+            "QTabWidget {"
+            "    background: #ffffff;"
+            "    font-family: 'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif;"
+            "}"
+            "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
+            "QTabBar { qproperty-drawBase:0; background:#e8e8e8; }"
+            "QTabBar::tab { background:#f0f0f0; border:1px solid #888; color:#333;  margin:1px; min-height:20px; min-width:140px; max-width:300px; font-size:11px; font-weight:500; letter-spacing:0.2px; }"
+            "QTabBar::tab:selected { background:#ffffff; color:#0066cc; border:1px solid #4A90E2; font-weight:600; padding-left:5px; }"
+            "QTabBar::tab:hover:!selected { background:rgba(227,242,253,0.8); border:1px solid #90caf9; color:#1976d2; }"
+            "QTabBar::tab:first { margin-left:6px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
+            ;
 
-    const QString pcbLight =
-        "QTabWidget { background:#ffffff; font-family:'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif; }"
-        "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
-        "QTabBar { qproperty-drawBase:0; background:#e8e8e8; }"
-    "QTabBar::tab { background:#f8f8f8; border:1px solid #888; color:#333; padding:3px 6px 3px 4px; margin:1px; min-height:20px; min-width:100px; max-width:250px; font-size:11px; font-weight:500; letter-spacing:.2px; text-align:left; }"
-    "QTabBar::tab:selected { background:#ffffff; color:#c62828; border:1px solid #E53935; font-weight:600; padding-left:5px; }"
-        "QTabBar::tab:hover:!selected { background:rgba(255,235,238,.85); border:1px solid #ef9a9a; color:#d32f2f; }"
-    "QTabBar::tab:first { margin-left:6px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
-        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iIzk5OTk5OSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjOTk5OTk5IiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 4px 0 2px; border-radius:2px; background:transparent; }"
-        "QTabBar::close-button:hover { background: rgba(255,0,0,.1); border-radius:2px; }"
-    ;
+        const QString pcbLight =
+            "QTabWidget { background:#ffffff; font-family:'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif; }"
+            "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
+            "QTabBar { qproperty-drawBase:0; background:#e8e8e8; }"
+            "QTabBar::tab { background:#f8f8f8; border:1px solid #888; color:#333; padding:3px 6px 3px 4px; margin:1px; min-height:20px; min-width:140px; max-width:300px; font-size:11px; font-weight:500; letter-spacing:.2px; }"
+            "QTabBar::tab:selected { background:#ffffff; color:#c62828; border:1px solid #E53935; font-weight:600; padding-left:5px; }"
+            "QTabBar::tab:hover:!selected { background:rgba(255,235,238,.85); border:1px solid #ef9a9a; color:#d32f2f; }"
+            "QTabBar::tab:first { margin-left:6px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
+            ;
 
-    const QString pdfDark =
-        "QTabWidget { background:#111; color:#e8eaed; font-family:'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif; }"
-        "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
-        "QTabBar { qproperty-drawBase:0; background:#202124; }"
-    "QTabBar::tab { background:#2a2b2d; border:1px solid rgba(255,255,255,0.35); color:#e8eaed; padding:3px 6px 3px 4px; margin:1px; min-height:20px; min-width:100px; max-width:260px; font-size:11px; font-weight:500; letter-spacing:.2px; text-align:left; }"
-    "QTabBar::tab:selected { background:#1f2937; color:#8ab4f8; border:1px solid #1976d2; font-weight:600; padding-left:5px; }"
-        "QTabBar::tab:hover:!selected { background:#263238; border:1px solid #4f89d3; color:#90caf9; }"
-    "QTabBar::tab:first { margin-left:6px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
-        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iI2VlZWVlZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjZWVlZWVlIiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 4px 0 2px; border-radius:2px; background:transparent; }"
-        "QTabBar::close-button:hover { background: rgba(255,255,255,.08); border-radius:2px; }"
-        "QTabBar QToolButton:hover { background:#333 !important; color:#fff !important; }"
-    ;
+        const QString pdfDark =
+            "QTabWidget { background:#111; color:#e8eaed; font-family:'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif; }"
+            "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
+            "QTabBar { qproperty-drawBase:0; background:#202124; }"
+            "QTabBar::tab { background:#2a2b2d; border:1px solid rgba(255,255,255,0.35); color:#e8eaed; margin:1px; min-height:20px; min-width:140px; max-width:320px; font-size:11px; font-weight:500; letter-spacing:.2px; }"
+            "QTabBar::tab:selected { background:#1f2937; color:#8ab4f8; border:1px solid #1976d2; font-weight:600; padding-left:5px; }"
+            "QTabBar::tab:hover:!selected { background:#263238; border:1px solid #4f89d3; color:#90caf9; }"
+            "QTabBar::tab:first { margin-left:6px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
+            ;
 
-    const QString pcbDark =
-        "QTabWidget { background:#111; color:#f8dddd; font-family:'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif; }"
-        "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
-        "QTabBar { qproperty-drawBase:0; background:#202124; }"
-    "QTabBar::tab { background:#2a2b2d; border:1px solid rgba(255,255,255,0.35); color:#e8eaed; padding:3px 6px 3px 4px; margin:1px; min-height:20px; min-width:100px; max-width:260px; font-size:11px; font-weight:500; letter-spacing:.2px; text-align:left; }"
-    "QTabBar::tab:selected { background:#2b1f1f; color:#ff8a80; border:1px solid #b71c1c; font-weight:600; padding-left:5px; }"
-        "QTabBar::tab:hover:!selected { background:#332222; border:1px solid #cf6679; color:#ef9a9a; }"
-    "QTabBar::tab:first { margin-left:6px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
-        "QTabBar::close-button { image:url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAiIGhlaWdodD0iMTAiIHZpZXdCb3g9IjAgMCAxMCAxMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMkwyIDgiIHN0cm9rZT0iI2VlZWVlZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAyTDggOCIgc3Ryb2tlPSIjZWVlZWVlIiBzdHJva2Utd2lkdGg9IjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+Cjwvc3ZnPgo=); subcontrol-origin:content; subcontrol-position:center right; width:12px; height:12px; margin:0 4px 0 2px; border-radius:2px; background:transparent; }"
-        "QTabBar::close-button:hover { background: rgba(255,255,255,.08); border-radius:2px; }"
-        "QTabBar QToolButton:hover { background:#333 !important; color:#fff !important; }"
-    ;
+        const QString pcbDark =
+            "QTabWidget { background:#111; color:#f8dddd; font-family:'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif; }"
+            "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
+            "QTabBar { qproperty-drawBase:0; background:#202124; }"
+            "QTabBar::tab { background:#2a2b2d; border:1px solid rgba(255,255,255,0.35); color:#e8eaed; padding:3px 6px 3px 4px; margin:1px; min-height:20px; min-width:140px; max-width:320px; font-size:11px; font-weight:500; letter-spacing:.2px; }"
+            "QTabBar::tab:selected { background:#2b1f1f; color:#ff8a80; border:1px solid #b71c1c; font-weight:600; padding-left:5px; }"
+            "QTabBar::tab:hover:!selected { background:#332222; border:1px solid #cf6679; color:#ef9a9a; }"
+            "QTabBar::tab:first { margin-left:6px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
+            ;
 
-    // Apply to widgets
-    if (m_pdfTabWidget) applyStyleWithTag(m_pdfTabWidget, dark ? pdfDark : pdfLight, dark ? "pdfDark" : "pdfLight");
-    if (m_pcbTabWidget) applyStyleWithTag(m_pcbTabWidget, dark ? pcbDark : pcbLight, dark ? "pcbDark" : "pcbLight");
+        if (m_pdfTabWidget) applyStyleWithTag(m_pdfTabWidget, dark ? pdfDark : pdfLight, dark ? "pdfDark" : "pdfLight");
+        if (m_pcbTabWidget) applyStyleWithTag(m_pcbTabWidget, dark ? pcbDark : pcbLight, dark ? "pcbDark" : "pcbLight");
+    } else {
+        // Material Design-inspired QSS: flat tabs with premium typography applied via QFont
+    const QString baseFamily = "'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif";
+        const QString surfaceL = "#FAFAFA";
+        const QString surfaceD = "#121212";
+    const QString onSurfaceL = "#1F1F1F";
+        const QString onSurfaceD = "#EDEDED";
+        const QString pdfPrimaryL = "#1976D2"; // Blue 700
+        const QString pcbPrimaryL = "#D32F2F"; // Red 700
+        const QString pdfPrimaryD = "#90CAF9"; // Blue 200
+        const QString pcbPrimaryD = "#EF9A9A"; // Red 200
+    const QString hoverL = "rgba(0,0,0,0.06)";
+    const QString hoverD = "rgba(255,255,255,0.08)";
+    // Slightly darker neutral borders for inactive tabs (more definition)
+    const QString borderNeutralL = "#AFB8C1"; // was #D0D7DE
+    const QString borderNeutralD = "#2B3035"; // was #383838
+    // Emphasized hover border and pressed background for premium feedback
+    const QString hoverBorderL = "#8C96A0";   // a bit darker than neutral
+    const QString hoverBorderD = "#3A4046";   // a bit lighter than bg but darker than neutral
+    const QString pressedL = "rgba(0,0,0,0.10)";
+    const QString pressedD = "rgba(255,255,255,0.12)";
+
+        const QString commonPane =
+            "QTabWidget { background:%1; color:%2; }"
+            "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
+            "QTabBar { qproperty-drawBase:0; background:transparent; }"
+            "QTabBar::tear { width:0; height:0; }";
+
+        const QString tabsBase =
+            "QTabBar::tab { background: transparent; border:1px solid transparent; border-radius:2px;"
+            " padding:2px 10px; margin:0 6px; min-height:22px; min-width:150px; font-weight:500; color:%1; }"
+            "QTabBar::tab:hover { background:%2; }"
+            "QTabBar::tab:pressed { background:%3; }"
+            "QTabBar::tab:focus { outline: none; }"
+            "QTabBar::tab:!selected { background: transparent; }";
+
+        const QString pdfTabsL = tabsBase.arg(onSurfaceL, hoverL, pressedL) +
+            "QTabBar::tab:!selected { border-color:" + borderNeutralL + "; }"
+            "QTabBar::tab:hover:!selected { border-color:" + hoverBorderL + "; }"
+            "QTabBar::tab:selected { background:" + pdfPrimaryL + "; color:#FFFFFF; border-color:" + pdfPrimaryL + "; font-weight:600; }"
+            "QTabBar::tab:focus:!selected { border-color:" + hoverBorderL + "; }";
+        const QString pcbTabsL = tabsBase.arg(onSurfaceL, hoverL, pressedL) +
+            "QTabBar::tab:!selected { border-color:" + borderNeutralL + "; }"
+            "QTabBar::tab:hover:!selected { border-color:" + hoverBorderL + "; }"
+            "QTabBar::tab:selected { background:" + pcbPrimaryL + "; color:#FFFFFF; border-color:" + pcbPrimaryL + "; font-weight:600; }"
+            "QTabBar::tab:focus:!selected { border-color:" + hoverBorderL + "; }";
+
+        const QString pdfTabsD = tabsBase.arg(onSurfaceD, hoverD, pressedD) +
+            "QTabBar::tab:!selected { border-color:" + borderNeutralD + "; }"
+            "QTabBar::tab:hover:!selected { border-color:" + hoverBorderD + "; }"
+            "QTabBar::tab:selected { background:" + pdfPrimaryD + "; color:#FFFFFF; border-color:" + pdfPrimaryD + "; font-weight:600; }"
+            "QTabBar::tab:focus:!selected { border-color:" + hoverBorderD + "; }";
+        const QString pcbTabsD = tabsBase.arg(onSurfaceD, hoverD, pressedD) +
+            "QTabBar::tab:!selected { border-color:" + borderNeutralD + "; }"
+            "QTabBar::tab:hover:!selected { border-color:" + hoverBorderD + "; }"
+            "QTabBar::tab:selected { background:" + pcbPrimaryD + "; color:#FFFFFF; border-color:" + pcbPrimaryD + "; font-weight:600; }"
+            "QTabBar::tab:focus:!selected { border-color:" + hoverBorderD + "; }";
+
+        const QString pdfQss = (commonPane.arg(dark ? surfaceD : surfaceL, dark ? onSurfaceD : onSurfaceL)) + (dark ? pdfTabsD : pdfTabsL);
+        const QString pcbQss = (commonPane.arg(dark ? surfaceD : surfaceL, dark ? onSurfaceD : onSurfaceL)) + (dark ? pcbTabsD : pcbTabsL);
+
+    if (m_pdfTabWidget) applyStyleWithTag(m_pdfTabWidget, pdfQss, dark ? "pdfMaterialDark" : "pdfMaterialLight");
+    if (m_pcbTabWidget) applyStyleWithTag(m_pcbTabWidget, pcbQss, dark ? "pcbMaterialDark" : "pcbMaterialLight");
+    }
 
     // Content areas
     if (m_pdfContentArea) {
@@ -1192,33 +1260,63 @@ void DualTabWidget::applyCurrentThemeStyles()
               dark ? "#111111" : "#ffffff"));
     }
 
-    // Update custom close buttons theme
-    updateCloseButtonsTheme(m_pdfTabWidget);
-    updateCloseButtonsTheme(m_pcbTabWidget);
-    // Re-apply compact sizing after stylesheet changes
-    if (m_pdfTabWidget) applyCompactTabBar(m_pdfTabWidget->tabBar());
-    if (m_pcbTabWidget) applyCompactTabBar(m_pcbTabWidget->tabBar());
+    // No close buttons to theme
+    
+    // Apply premium font to tab bars (family, size, spacing) after styles for maximum effect
+    auto applyPremiumTabFont = [](QTabBar* bar){
+        if (!bar) return;
+        QFontDatabase db;
+        const QStringList preferred = {
+            QStringLiteral("Segoe UI Variable Text"),
+            QStringLiteral("Segoe UI Variable Display"),
+            QStringLiteral("Segoe UI"),
+            QStringLiteral("Inter"),
+            QStringLiteral("Roboto"),
+            QStringLiteral("Noto Sans"),
+            QStringLiteral("Calibri"),
+            QStringLiteral("Arial")
+        };
+        QString chosen = QStringLiteral("Segoe UI");
+        const QStringList families = db.families();
+        for (const auto &cand : preferred) {
+            if (families.contains(cand)) { chosen = cand; break; }
+        }
+        QFont f(chosen);
+        // Pixel size keeps consistency with our compact 22px tab height
+        f.setPixelSize(12);
+        f.setWeight(QFont::Medium); // base weight; selected will go to 600 via QSS
+        f.setKerning(true);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+        f.setHintingPreference(QFont::PreferFullHinting);
+#endif
+    f.setStyleStrategy(QFont::PreferAntialias);
+        // Subtle tracking improves clarity without crowding
+        f.setLetterSpacing(QFont::PercentageSpacing, 102.0);
+        bar->setFont(f);
+    };
+
+    if (m_pdfTabWidget && m_pdfTabWidget->tabBar()) applyPremiumTabFont(m_pdfTabWidget->tabBar());
+    if (m_pcbTabWidget && m_pcbTabWidget->tabBar()) applyPremiumTabFont(m_pcbTabWidget->tabBar());
+    // Re-apply sizing after stylesheet changes
+    if (m_pdfTabWidget) {
+        if (m_materialTheme) {
+            const int target = 22;
+            m_pdfTabWidget->tabBar()->setMinimumHeight(target);
+        } else {
+            applyCompactTabBar(m_pdfTabWidget->tabBar());
+        }
+    }
+    if (m_pcbTabWidget) {
+        if (m_materialTheme) {
+            const int target = 22;
+            m_pcbTabWidget->tabBar()->setMinimumHeight(target);
+        } else {
+            applyCompactTabBar(m_pcbTabWidget->tabBar());
+        }
+    }
     logDebug("applyCurrentThemeStyles: end");
 }
 
-void DualTabWidget::updateCloseButtonsTheme(QTabWidget* w)
-{
-    if (!w) return;
-    QTabBar* bar = w->tabBar();
-    if (!bar) return;
-    for (int i = 0; i < bar->count(); ++i) {
-        if (auto* btn = qobject_cast<QToolButton*>(bar->tabButton(i, QTabBar::RightSide))) {
-            if (m_darkTheme) {
-                btn->setStyleSheet(
-                    "QToolButton { margin:0; padding:0; border:none; background: transparent; color: #ddd; font-weight:600; }"
-                    "QToolButton:hover { background: rgba(255,255,255,0.10); border-radius: 3px; color: #ff8a80; }"
-                );
-            } else {
-                btn->setStyleSheet(
-                    "QToolButton { margin:0; padding:0; border:none; background: transparent; color: #444; font-weight:600; }"
-                    "QToolButton:hover { background: rgba(0,0,0,0.12); border-radius: 3px; color: #b00020; }"
-                );
-            }
-        }
-    }
-}
+// Close button functionality removed - resizeEvent no longer needed
+
+// (Removed) updateCloseButtonsTheme: no longer needed
