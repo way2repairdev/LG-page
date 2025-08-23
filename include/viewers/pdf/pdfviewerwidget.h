@@ -77,6 +77,16 @@ public:
      */
     bool isReady() const;
 
+    /**
+     * Explicitly save the current view state (zoom, scroll position, etc.)
+     */
+    void saveViewState();
+
+    /**
+     * Explicitly restore the saved view state
+     */
+    void restoreViewState();
+
     // Cross-viewer linking helpers
     void setLinkedPcbFileName(const QString &name) { m_linkedPcbFileName = name; }
     QString linkedPcbFileName() const { return m_linkedPcbFileName; }

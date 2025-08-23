@@ -1052,20 +1052,34 @@ PDFViewerEmbedder::ViewState PDFViewerEmbedder::captureViewState() const {
 }
 
 void PDFViewerEmbedder::restoreViewState(const ViewState &state) {
-    if (!m_initialized || !m_pdfLoaded || !m_scrollState || !state.valid) return;
+    if (!m_initialized || !m_pdfLoaded || !m_scrollState || !state.valid) {
+        std::cout << "PDFViewerEmbedder: Cannot restore view state - initialized:" << m_initialized 
+                  << " pdfLoaded:" << m_pdfLoaded << " scrollState:" << (m_scrollState != nullptr) 
+                  << " stateValid:" << state.valid << std::endl;
+        return;
+    }
+    
+    std::cout << "PDFViewerEmbedder: Restoring view state - zoom:" << state.zoom 
+              << " scrollOffset:" << state.scrollOffset << " page:" << state.page << std::endl;
+    
     // Clamp and apply zoom first so offsets are in same scale
     float targetZoom = state.zoom;
     if (targetZoom < 0.35f) targetZoom = 0.35f;
     if (targetZoom > 15.0f) targetZoom = 15.0f;
     // Apply zoom by delta to preserve focal behavior
     float currentZoom = m_scrollState->zoomScale;
+    
+    std::cout << "PDFViewerEmbedder: Current zoom:" << currentZoom << " Target zoom:" << targetZoom << std::endl;
+    
     if (std::abs(currentZoom - targetZoom) > 1e-3f) {
         float centerX = m_windowWidth / 2.0f;
         float centerY = m_windowHeight / 2.0f;
         float delta = targetZoom / std::max(1e-6f, currentZoom);
+        std::cout << "PDFViewerEmbedder: Applying zoom delta:" << delta << std::endl;
         HandleZoom(*m_scrollState, delta, centerX, centerY,
                    (float)m_windowWidth, (float)m_windowHeight,
                    m_pageHeights, m_pageWidths);
+        std::cout << "PDFViewerEmbedder: Zoom after HandleZoom:" << m_scrollState->zoomScale << std::endl;
     }
     // Recompute scroll state bounds and then set offsets
     UpdateScrollState(*m_scrollState, (float)m_windowHeight, m_pageHeights);

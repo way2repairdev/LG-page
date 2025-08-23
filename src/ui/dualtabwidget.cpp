@@ -1,4 +1,5 @@
 #include "ui/dualtabwidget.h"
+#include "viewers/pdf/pdfviewerwidget.h"
 #include <QIcon>
 #include <QDebug>
 #include <QFile>
@@ -697,6 +698,17 @@ void DualTabWidget::activateTab(int index, TabType type)
 
     // Set active tab type and activate the specific tab
     logDebug("Setting active tab type");
+    
+    // Save state of currently active PDF viewer before switching
+    if (m_hasActiveTab && m_activeTabType == PDF_TAB && m_activePdfIndex >= 0 && m_activePdfIndex < m_pdfWidgets.count()) {
+        QWidget* currentWidget = m_pdfWidgets.at(m_activePdfIndex);
+        PDFViewerWidget* currentPdfViewer = qobject_cast<PDFViewerWidget*>(currentWidget);
+        if (currentPdfViewer) {
+            logDebug(QString("Saving state for PDF tab %1 before switching").arg(m_activePdfIndex));
+            currentPdfViewer->saveViewState();
+        }
+    }
+    
     setActiveTabType(type);
     
     if (type == PDF_TAB) {
@@ -704,6 +716,17 @@ void DualTabWidget::activateTab(int index, TabType type)
         m_activePdfIndex = index;
         m_pdfTabWidget->setCurrentIndex(index);
         m_pdfContentArea->setCurrentWidget(m_pdfWidgets.at(index));
+        
+        // Restore state of the newly activated PDF viewer
+        QWidget* newWidget = m_pdfWidgets.at(index);
+        PDFViewerWidget* newPdfViewer = qobject_cast<PDFViewerWidget*>(newWidget);
+        if (newPdfViewer) {
+            logDebug(QString("Restoring state for PDF tab %1 after switching").arg(index));
+            // Use a timer to ensure the widget switch is complete
+            QTimer::singleShot(100, [newPdfViewer]() {
+                newPdfViewer->restoreViewState();
+            });
+        }
     } else {
         logDebug(QString("Setting PCB tab as active - index: %1").arg(index));
         m_activePcbIndex = index;

@@ -847,17 +847,23 @@ void PDFViewerWidget::showEvent(QShowEvent *event)
     }
     // Resume updates
     if (m_updateTimer && !m_updateTimer->isActive()) m_updateTimer->start();
-    // Restore last view state if we have one
+    // Restore last view state if we have one - with proper timing
     if (m_pdfEmbedder && m_viewerInitialized && m_lastViewState.valid) {
-        PDFViewerEmbedder::ViewState s;
-        s.zoom = m_lastViewState.zoom;
-        s.scrollOffset = m_lastViewState.scrollOffset;
-        s.horizontalOffset = m_lastViewState.horizontalOffset;
-        s.page = m_lastViewState.page;
-        s.valid = m_lastViewState.valid;
-        m_pdfEmbedder->restoreViewState(s);
-        // Clear to avoid reapplying repeatedly
-        m_lastViewState = {};
+        // Use a timer to ensure the viewer is fully ready before restoring state
+        QTimer::singleShot(50, this, [this]() {
+            if (m_pdfEmbedder && m_viewerInitialized && m_lastViewState.valid) {
+                PDFViewerEmbedder::ViewState s;
+                s.zoom = m_lastViewState.zoom;
+                s.scrollOffset = m_lastViewState.scrollOffset;
+                s.horizontalOffset = m_lastViewState.horizontalOffset;
+                s.page = m_lastViewState.page;
+                s.valid = m_lastViewState.valid;
+                qDebug() << "Restoring PDF view state - zoom:" << s.zoom << "page:" << s.page;
+                m_pdfEmbedder->restoreViewState(s);
+                // Clear to avoid reapplying repeatedly
+                m_lastViewState = {};
+            }
+        });
     }
 }
 
@@ -867,11 +873,14 @@ void PDFViewerWidget::hideEvent(QHideEvent *event)
     // Capture current view and pause heavy updates when hidden
     if (m_pdfEmbedder && m_viewerInitialized) {
         auto s = m_pdfEmbedder->captureViewState();
-        m_lastViewState.zoom = s.zoom;
-        m_lastViewState.scrollOffset = s.scrollOffset;
-        m_lastViewState.horizontalOffset = s.horizontalOffset;
-        m_lastViewState.page = s.page;
-        m_lastViewState.valid = s.valid;
+        if (s.valid) {
+            m_lastViewState.zoom = s.zoom;
+            m_lastViewState.scrollOffset = s.scrollOffset;
+            m_lastViewState.horizontalOffset = s.horizontalOffset;
+            m_lastViewState.page = s.page;
+            m_lastViewState.valid = s.valid;
+            qDebug() << "Capturing PDF view state - zoom:" << s.zoom << "page:" << s.page;
+        }
     }
     if (m_updateTimer && m_updateTimer->isActive()) m_updateTimer->stop();
 }
@@ -1022,4 +1031,39 @@ bool PDFViewerWidget::externalFindText(const QString &term) {
         emit errorOccurred(QString("No matches found for '%1'").arg(t));
     }
     return ok;
+}
+
+void PDFViewerWidget::saveViewState()
+{
+    if (m_pdfEmbedder && m_viewerInitialized) {
+        auto s = m_pdfEmbedder->captureViewState();
+        if (s.valid) {
+            m_lastViewState.zoom = s.zoom;
+            m_lastViewState.scrollOffset = s.scrollOffset;
+            m_lastViewState.horizontalOffset = s.horizontalOffset;
+            m_lastViewState.page = s.page;
+            m_lastViewState.valid = s.valid;
+            qDebug() << "Explicitly saving PDF view state - zoom:" << s.zoom << "page:" << s.page;
+        }
+    }
+}
+
+void PDFViewerWidget::restoreViewState()
+{
+    if (m_pdfEmbedder && m_viewerInitialized && m_lastViewState.valid) {
+        // Use a timer to ensure the viewer is fully ready before restoring state
+        QTimer::singleShot(100, this, [this]() {
+            if (m_pdfEmbedder && m_viewerInitialized && m_lastViewState.valid) {
+                PDFViewerEmbedder::ViewState s;
+                s.zoom = m_lastViewState.zoom;
+                s.scrollOffset = m_lastViewState.scrollOffset;
+                s.horizontalOffset = m_lastViewState.horizontalOffset;
+                s.page = m_lastViewState.page;
+                s.valid = m_lastViewState.valid;
+                qDebug() << "Explicitly restoring PDF view state - zoom:" << s.zoom << "page:" << s.page;
+                m_pdfEmbedder->restoreViewState(s);
+                // Don't clear the state here - let it persist until next save
+            }
+        });
+    }
 }
