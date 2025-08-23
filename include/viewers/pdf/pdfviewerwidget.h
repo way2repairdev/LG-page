@@ -163,6 +163,8 @@ private:
     
     // Core PDF viewer component (your existing renderer)
     std::unique_ptr<PDFViewerEmbedder> m_pdfEmbedder;
+    // Persist view state across tab switches (local mirror to avoid heavy include in header)
+    struct PdfViewState { float zoom{1.0f}; float scrollOffset{0.0f}; float horizontalOffset{0.0f}; int page{1}; bool valid{false}; } m_lastViewState{};
     
     // UI Components
     QVBoxLayout* m_mainLayout;

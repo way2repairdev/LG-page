@@ -101,6 +101,17 @@ public:
     float getCurrentZoom() const;
     int getCurrentPage() const;
 
+    // Lightweight snapshot of current viewport state (for tab switch resume)
+    struct ViewState {
+        float zoom {1.0f};
+        float scrollOffset {0.0f};
+        float horizontalOffset {0.0f};
+        int   page {1};
+        bool  valid {false};
+    };
+    ViewState captureViewState() const;
+    void restoreViewState(const ViewState &state);
+
     /**
      * Text operations
      */

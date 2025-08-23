@@ -434,6 +434,13 @@ void PDFViewerEmbedder::update()
 {
     if (!m_initialized || !m_pdfLoaded) return;
 
+    // Skip work if our framebuffer would be zero-sized (hidden or not laid out yet)
+    int fbw = 0, fbh = 0;
+    glfwGetFramebufferSize(m_glfwWindow, &fbw, &fbh);
+    if (fbw <= 0 || fbh <= 0) {
+        return;
+    }
+
     // If globals point elsewhere (another active tab), skip heavy work to avoid race
     if (!(g_scrollState == m_scrollState.get() && g_renderer == m_renderer.get())) {
         // Try to detect if this viewer should become the active one. Conditions:
@@ -604,6 +611,10 @@ void PDFViewerEmbedder::update()
 
 void PDFViewerEmbedder::resize(int width, int height)
 {
+    if (width <= 0 || height <= 0) {
+        // Ignore transient zero-size resizes during tab switches/layout
+        return;
+    }
     m_windowWidth = width;
     m_windowHeight = height;
 
@@ -1026,6 +1037,51 @@ int PDFViewerEmbedder::getCurrentPage() const
     }
     
     return m_pageHeights.size(); // Return last page if scrolled to bottom
+}
+
+// --- View state snapshot/restore ---
+PDFViewerEmbedder::ViewState PDFViewerEmbedder::captureViewState() const {
+    ViewState s;
+    if (!m_initialized || !m_pdfLoaded || !m_scrollState) return s;
+    s.zoom = m_scrollState->zoomScale;
+    s.scrollOffset = m_scrollState->scrollOffset;
+    s.horizontalOffset = m_scrollState->horizontalOffset;
+    s.page = getCurrentPage();
+    s.valid = true;
+    return s;
+}
+
+void PDFViewerEmbedder::restoreViewState(const ViewState &state) {
+    if (!m_initialized || !m_pdfLoaded || !m_scrollState || !state.valid) return;
+    // Clamp and apply zoom first so offsets are in same scale
+    float targetZoom = state.zoom;
+    if (targetZoom < 0.35f) targetZoom = 0.35f;
+    if (targetZoom > 15.0f) targetZoom = 15.0f;
+    // Apply zoom by delta to preserve focal behavior
+    float currentZoom = m_scrollState->zoomScale;
+    if (std::abs(currentZoom - targetZoom) > 1e-3f) {
+        float centerX = m_windowWidth / 2.0f;
+        float centerY = m_windowHeight / 2.0f;
+        float delta = targetZoom / std::max(1e-6f, currentZoom);
+        HandleZoom(*m_scrollState, delta, centerX, centerY,
+                   (float)m_windowWidth, (float)m_windowHeight,
+                   m_pageHeights, m_pageWidths);
+    }
+    // Recompute scroll state bounds and then set offsets
+    UpdateScrollState(*m_scrollState, (float)m_windowHeight, m_pageHeights);
+    m_scrollState->scrollOffset = std::max(0.0f, std::min(state.scrollOffset, m_scrollState->maxOffset));
+    // Clamp horizontal offset based on current width and page widths
+    float zoomedPageWidthMax = 0.0f;
+    for (int w : m_pageWidths) zoomedPageWidthMax = std::max(zoomedPageWidthMax, w * m_scrollState->zoomScale);
+    float minHoriz = (m_windowWidth - zoomedPageWidthMax) * 0.5f;
+    float maxHoriz = (zoomedPageWidthMax - m_windowWidth) * 0.5f;
+    if (zoomedPageWidthMax <= m_windowWidth) {
+        m_scrollState->horizontalOffset = 0.0f;
+    } else {
+        m_scrollState->horizontalOffset = std::max(minHoriz, std::min(state.horizontalOffset, maxHoriz));
+    }
+    // Mark to regenerate visible pages promptly
+    m_needsVisibleRegeneration = true;
 }
 
 // Private helper methods

@@ -532,7 +532,10 @@ void PDFViewerWidget::initializePDFViewer()
 #else
     void* hwnd = m_viewerContainer->winId();
 #endif
-    if (!m_pdfEmbedder->initialize(hwnd, m_viewerContainer->width(), m_viewerContainer->height())) {
+    int w = m_viewerContainer->width();
+    int h = m_viewerContainer->height();
+    if (w <= 0 || h <= 0) { globalInitInProgress = false; return; }
+    if (!m_pdfEmbedder->initialize(hwnd, w, h)) {
         emit errorOccurred("Failed to initialize PDF viewer");
         return;
     }
@@ -817,8 +820,14 @@ void PDFViewerWidget::findPrevious()
 
 void PDFViewerWidget::ensureViewportSync()
 {
-    if (m_pdfEmbedder && m_viewerInitialized && m_viewerContainer)
-        m_pdfEmbedder->resize(m_viewerContainer->width(), m_viewerContainer->height());
+    if (!isVisible()) return; // avoid zero-size/hidden resizes
+    if (m_pdfEmbedder && m_viewerInitialized && m_viewerContainer) {
+        const int w = m_viewerContainer->width();
+        const int h = m_viewerContainer->height();
+        if (w > 0 && h > 0) {
+            m_pdfEmbedder->resize(w, h);
+        }
+    }
 }
 
 void PDFViewerWidget::resizeEvent(QResizeEvent *event)
@@ -836,11 +845,35 @@ void PDFViewerWidget::showEvent(QShowEvent *event)
                 initializePDFViewer();
         });
     }
+    // Resume updates
+    if (m_updateTimer && !m_updateTimer->isActive()) m_updateTimer->start();
+    // Restore last view state if we have one
+    if (m_pdfEmbedder && m_viewerInitialized && m_lastViewState.valid) {
+        PDFViewerEmbedder::ViewState s;
+        s.zoom = m_lastViewState.zoom;
+        s.scrollOffset = m_lastViewState.scrollOffset;
+        s.horizontalOffset = m_lastViewState.horizontalOffset;
+        s.page = m_lastViewState.page;
+        s.valid = m_lastViewState.valid;
+        m_pdfEmbedder->restoreViewState(s);
+        // Clear to avoid reapplying repeatedly
+        m_lastViewState = {};
+    }
 }
 
 void PDFViewerWidget::hideEvent(QHideEvent *event)
 {
     QWidget::hideEvent(event);
+    // Capture current view and pause heavy updates when hidden
+    if (m_pdfEmbedder && m_viewerInitialized) {
+        auto s = m_pdfEmbedder->captureViewState();
+        m_lastViewState.zoom = s.zoom;
+        m_lastViewState.scrollOffset = s.scrollOffset;
+        m_lastViewState.horizontalOffset = s.horizontalOffset;
+        m_lastViewState.page = s.page;
+        m_lastViewState.valid = s.valid;
+    }
+    if (m_updateTimer && m_updateTimer->isActive()) m_updateTimer->stop();
 }
 
 void PDFViewerWidget::focusInEvent(QFocusEvent *event)
