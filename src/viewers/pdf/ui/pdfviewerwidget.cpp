@@ -712,11 +712,18 @@ void PDFViewerWidget::checkForSelectedText()
     QString sel = QString::fromStdString(selStd);
     if (!sel.isEmpty() && sel != m_lastSelectedText) {
         m_lastSelectedText = sel;
-        bool old = m_searchInput->blockSignals(true);
-        m_searchInput->setText(sel);
-        m_searchInput->blockSignals(old);
-        m_pdfEmbedder->findText(selStd);
-    m_lastSearchTerm = sel;
+        // Only auto-update search input if it's not already showing this text
+        // This prevents interference with external/cross-searches
+        if (m_searchInput->text().trimmed() != sel) {
+            bool old = m_searchInput->blockSignals(true);
+            m_searchInput->setText(sel);
+            m_searchInput->blockSignals(old);
+            // Only search if this isn't already our last search term
+            if (sel != m_lastSearchTerm) {
+                m_pdfEmbedder->findText(selStd);
+                m_lastSearchTerm = sel;
+            }
+        }
         // Enable next/previous search buttons now that we have selected text
         syncToolbarStates();
     } else if (sel.isEmpty()) {
@@ -848,9 +855,11 @@ void PDFViewerWidget::showEvent(QShowEvent *event)
     // Resume updates
     if (m_updateTimer && !m_updateTimer->isActive()) m_updateTimer->start();
     // Restore last view state if we have one - with proper timing
+    // BUT: Skip restoration if we're in the middle of a cross-search operation
     if (m_pdfEmbedder && m_viewerInitialized && m_lastViewState.valid) {
         // Use a timer to ensure the viewer is fully ready before restoring state
         QTimer::singleShot(50, this, [this]() {
+            // Double-check that state is still valid and not cleared by external search
             if (m_pdfEmbedder && m_viewerInitialized && m_lastViewState.valid) {
                 PDFViewerEmbedder::ViewState s;
                 s.zoom = m_lastViewState.zoom;
@@ -1021,13 +1030,43 @@ bool PDFViewerWidget::externalFindText(const QString &term) {
     if (!isPDFLoaded() || !m_pdfEmbedder) return false;
     QString t = term.trimmed();
     if (t.isEmpty()) return false;
-    // Always clear previous highlights/state before a cross-tab search
+    
+    // CRITICAL: Clear any pending view state restoration that could interfere
+    m_lastViewState = {};  // Clear saved state to prevent restoration conflicts
+    
+    // Stop any pending debounced searches that might interfere
+    if (m_searchDebounceTimer && m_searchDebounceTimer->isActive()) {
+        m_searchDebounceTimer->stop();
+    }
+    
+    // Clear previous highlights/state and search term tracking
     m_pdfEmbedder->clearSearchHighlights();
+    m_lastSearchTerm.clear();  // Reset to avoid confusion with internal searches
+    
+    // Update search input to reflect the external search term (for UI consistency)
+    if (m_searchInput) {
+        m_searchInput->blockSignals(true);  // Prevent triggering internal search
+        m_searchInput->setText(t);
+        m_searchInput->blockSignals(false);
+    }
+    
+    // Perform the fresh search and focus on first result
     bool ok = m_pdfEmbedder->findTextFreshAndFocusFirst(t.toStdString());
-    if (!ok) {
+    if (ok) {
+        // Update our tracking to match the successful external search
+        m_lastSearchTerm = t;
+        // Force UI updates
+        syncToolbarStates();
+        updateStatusInfo();
+    } else {
         // No matches: ensure no stale highlights remain
         m_pdfEmbedder->clearSearchHighlights();
-        // Optional: emit a lightweight toast via errorOccurred without being intrusive
+        if (m_searchInput) {
+            m_searchInput->blockSignals(true);
+            m_searchInput->clear();  // Clear the search box if no results
+            m_searchInput->blockSignals(false);
+        }
+        m_lastSearchTerm.clear();
         emit errorOccurred(QString("No matches found for '%1'").arg(t));
     }
     return ok;
