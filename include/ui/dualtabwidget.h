@@ -92,6 +92,7 @@ private:
     void showActiveContent();
     void updateTabBarStates();
     void updateTabBarVisualState();
+    void updateCloseButtonVisibility(TabType type);
     void applyCurrentThemeStyles();
     // Perform style application and close-button setup deferred to event loop
     void deferredStyleInit();
