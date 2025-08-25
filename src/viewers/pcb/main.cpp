@@ -423,7 +423,8 @@ private:
         float mouse_world_y = camera.y + (height * 0.5f - static_cast<float>(mouse_y)) / camera.zoom;
         
         // Apply zoom
-        float zoom_factor = 1.0f + static_cast<float>(yoffset) * 0.1f;
+    // Use exponential scaling for smooth & responsive zoom steps (1 notch ~ x1.2)
+    float zoom_factor = std::pow(1.2f, static_cast<float>(yoffset));
         
         // Call zoom function with the world point that should stay under the cursor
         renderer.Zoom(zoom_factor, mouse_world_x, mouse_world_y);

@@ -567,10 +567,13 @@ void PCBViewerEmbedder::handleMouseScroll(double xOffset, double yOffset)
         // Get mouse world position for zoom center
         const auto& camera = m_renderer->GetCamera();
         float mouseWorldX = camera.x + (static_cast<float>(mouseX) - m_windowWidth * 0.5f) / camera.zoom;
-        float mouseWorldY = camera.y + (m_windowHeight * 0.5f - static_cast<float>(mouseY)) / camera.zoom;
-        
-        float zoomFactor = 1.0f + static_cast<float>(yOffset) * 0.1f;
-        m_renderer->Zoom(zoomFactor, mouseWorldX, mouseWorldY);
+    float mouseWorldY = camera.y + (m_windowHeight * 0.5f - static_cast<float>(mouseY)) / camera.zoom;
+
+    // Faster and smoother zoom: use exponential scaling so multiple or fractional wheel deltas feel fluent.
+    // One vertical notch (~1.0) => ~20% zoom step. Fractional deltas map to smaller smooth steps.
+    const float base = 1.2f;
+    const float zoomFactor = std::pow(base, static_cast<float>(yOffset));
+    m_renderer->Zoom(zoomFactor, mouseWorldX, mouseWorldY);
         onZoomChanged();
     }
 }
