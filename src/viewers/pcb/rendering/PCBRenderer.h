@@ -101,6 +101,8 @@ public:
     void ZoomToFit(int window_width, int window_height);
     void Pan(float dx, float dy);
     void Zoom(float factor, float center_x = 0.0f, float center_y = 0.0f);
+    // Compute the minimum zoom that keeps the whole board visible in the current rotation
+    float ComputeFitZoom(int window_width, int window_height) const;
     // Rotation (90-degree increments). Automatically re-fit view to keep entire board visible.
     void RotateLeft();   // 90 degrees counter-clockwise
     void RotateRight();  // 90 degrees clockwise

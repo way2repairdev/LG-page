@@ -205,8 +205,13 @@ void PCBRenderer::Zoom(float factor, float center_x, float center_y) {
     camera.zoom *= factor;
     
     // Limit zoom range
-    if (camera.zoom < 0.01f) camera.zoom = 0.01f;
     if (camera.zoom > 100.0f) camera.zoom = 100.0f;
+    // Clamp the minimal zoom to the current fit-to-view level so you can't zoom out beyond fit
+    // Use current ImGui display size as the render target size
+    int ww = ImGui::GetIO().DisplaySize.x > 0 ? (int)ImGui::GetIO().DisplaySize.x : 800;
+    int wh = ImGui::GetIO().DisplaySize.y > 0 ? (int)ImGui::GetIO().DisplaySize.y : 600;
+    float min_fit = ComputeFitZoom(ww, wh);
+    if (min_fit > 0.0f && camera.zoom < min_fit) camera.zoom = min_fit;
     
     // If a center point is specified, adjust camera so that world point stays in same screen position
     if (center_x != 0.0f || center_y != 0.0f) {
@@ -273,6 +278,24 @@ void PCBRenderer::ZoomToFit(int window_width, int window_height) {
     // Center the view
     camera.x = (min_point.x + max_point.x) * 0.5f;
     camera.y = (min_point.y + max_point.y) * 0.5f;
+}
+
+float PCBRenderer::ComputeFitZoom(int window_width, int window_height) const {
+    if (!pcb_data) return 0.0f;
+    BRDPoint min_point, max_point;
+    pcb_data->GetRenderingBoundingBox(min_point, max_point);
+    float pcb_width = static_cast<float>(max_point.x - min_point.x);
+    float pcb_height = static_cast<float>(max_point.y - min_point.y);
+    if (pcb_width <= 0.0f || pcb_height <= 0.0f) return 0.0f;
+    bool swap_wh = (camera.rotation_steps % 2) == 1;
+    float effective_width  = swap_wh ? pcb_height : pcb_width;
+    float effective_height = swap_wh ? pcb_width  : pcb_height;
+    float zoom_x = window_width  / (effective_width  * 1.2f);
+    float zoom_y = window_height / (effective_height * 1.2f);
+    float z = std::min(zoom_x, zoom_y);
+    // Guard against extremely tiny fit due to degenerate bbox
+    if (!(z > 0.0f) || std::isinf(z) || std::isnan(z)) return 0.0f;
+    return z;
 }
 
 // Legacy OpenGL shader functions - kept for reference but not needed for ImGui rendering

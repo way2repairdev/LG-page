@@ -397,8 +397,8 @@ void PCBViewerEmbedder::zoomIn()
 void PCBViewerEmbedder::zoomOut()
 {
     if (m_renderer) {
-        const auto& camera = m_renderer->GetCamera();
-        m_renderer->Zoom(0.8f, camera.x, camera.y);
+    const auto& camera = m_renderer->GetCamera();
+    m_renderer->Zoom(0.8f, camera.x, camera.y);
         onZoomChanged();
     }
 }
@@ -694,8 +694,15 @@ double PCBViewerEmbedder::getZoomLevel() const
 void PCBViewerEmbedder::setZoomLevel(double zoom)
 {
     if (m_renderer) {
-        const auto& camera = m_renderer->GetCamera();
-        m_renderer->SetCamera(camera.x, camera.y, static_cast<float>(zoom));
+    const auto& camera = m_renderer->GetCamera();
+    // Clamp requested zoom to not go below fit-to-view level
+    int ww = m_windowWidth > 0 ? m_windowWidth : 800;
+    int wh = m_windowHeight > 0 ? m_windowHeight : 600;
+    float min_fit = m_renderer->ComputeFitZoom(ww, wh);
+    float z = static_cast<float>(zoom);
+    if (min_fit > 0.0f && z < min_fit) z = min_fit;
+    if (z > 100.0f) z = 100.0f;
+    m_renderer->SetCamera(camera.x, camera.y, z);
         onZoomChanged();
     }
 }
