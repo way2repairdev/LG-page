@@ -68,12 +68,17 @@ std::unique_ptr<PCBRenderer> PCBViewerEmbedder::createRenderer(const std::string
 {
     std::string ext = Utils::ToLower(fileExtension);
     
+    // BRD and BRD2 support disabled - use generic renderer for all formats
+    /*
     if (ext == "brd" || ext == "brd2") {
         return std::make_unique<BRDRenderer>();
     } else {
-        // Use generic PCBRenderer for other formats (xzz, pcb, xzzpcb, etc.)
+    */
+        // Use generic PCBRenderer for all formats (xzz, pcb, xzzpcb, etc.)
         return std::make_unique<PCBRenderer>();
+    /*
     }
+    */
 }
 
 bool PCBViewerEmbedder::initialize(void* parentWindowHandle, int width, int height)
@@ -190,6 +195,8 @@ bool PCBViewerEmbedder::loadPCB(const std::string& filePath)
         std::string ext = Utils::ToLower(Utils::GetFileExtension(filePath));
         std::shared_ptr<BRDFileBase> pcbFile = nullptr;
         
+        // BRD and BRD2 support disabled - parsing code kept for reference
+        /*
         if (ext == "brd") {
             // Load BRD file
             auto brd = BRDFile::LoadFromFile(filePath);
@@ -203,12 +210,15 @@ bool PCBViewerEmbedder::loadPCB(const std::string& filePath)
                 pcbFile = std::shared_ptr<BRDFileBase>(brd2.release());
             }
         } else {
-            // Load XZZPCB file (default for .xzz, .pcb, .xzzpcb)
+        */
+            // Load XZZPCB file (for .xzz, .pcb, .xzzpcb)
             auto xzzpcb = XZZPCBFile::LoadFromFile(filePath);
             if (xzzpcb) {
                 pcbFile = std::shared_ptr<BRDFileBase>(xzzpcb.release());
             }
+        /*
         }
+        */
         
         if (!pcbFile) {
             handleError("Failed to load PCB file: " + filePath);
