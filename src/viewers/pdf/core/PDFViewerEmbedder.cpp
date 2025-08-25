@@ -2247,10 +2247,12 @@ void PDFViewerEmbedder::onScroll(double xoffset, double yoffset)
     
     // Otherwise, handle cursor-based zooming with mouse wheel
     if (std::abs(yoffset) > 0.01) {
-        // Use a stronger but bounded delta so high zoom stays responsive
-        float stepUp = 1.2f;
-        float rawDelta = (yoffset > 0) ? stepUp : 1.0f / stepUp;
-        float zoomDelta = std::clamp(rawDelta, 0.85f, 1.25f);
+        // Use a gentler, symmetric exponential step for smoother zoom-out/in
+        // Smaller per-notch change improves perceived fluency, especially on zoom-out.
+        const float baseStep = 1.12f; // ~12% per notch (was ~20%)
+        float zoomDelta = std::pow(baseStep, (float)yoffset);
+        // Clamp to reasonable bounds in case of high-precision wheels
+        zoomDelta = std::clamp(zoomDelta, 1.0f / baseStep, baseStep);
 
         // (Disabled heavy per-tick file logging – it was causing I/O stalls during fast wheel zoom)
         // If needed for deep debugging, wrap the logging block in an #ifdef and re-enable.
@@ -2271,10 +2273,11 @@ void PDFViewerEmbedder::onScroll(double xoffset, double yoffset)
         if (m_scrollState->lastRenderedZoom > 0.0f) {
             float ratio = m_scrollState->zoomScale / m_scrollState->lastRenderedZoom;
             bool zoomingIn = ratio > 1.0f;
-            float upThreshold = 1.5f;
-            float downThreshold = 0.55f;
+            // Trigger preview regen a bit earlier on zoom-out for smoother feedback
+            float upThreshold = 1.35f;     // previously 1.5f
+            float downThreshold = 1.0f / upThreshold; // ~0.74 (previously 0.55f)
             if (((zoomingIn && ratio > upThreshold) || (!zoomingIn && ratio < downThreshold)) &&
-                (now - m_lastScrollRegenTime) > 0.095) {
+                (now - m_lastScrollRegenTime) > 0.065) { // slightly faster cadence
                 scheduleVisibleRegeneration(false); // quick preview regen
                 m_lastScrollRegenTime = now;
                 triggeredPreview = true;
