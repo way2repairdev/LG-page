@@ -15,6 +15,9 @@
 #include <GLFW/glfw3native.h>
 #include <GL/glew.h>
 
+// Qt includes for optimized cross-search
+#include <QTimer>
+
 #include <iostream>
 #include <algorithm>
 #include <cmath>
@@ -2545,6 +2548,44 @@ bool PDFViewerEmbedder::findTextFreshAndFocusFirst(const std::string& term)
     }
 }
 
+// Optimized version for cross-search that reduces latency and cursor interference
+bool PDFViewerEmbedder::findTextFreshAndFocusFirstOptimized(const std::string& term)
+{
+    if (!m_scrollState || !m_pdfLoaded) return false;
+
+    // 1) Clear any existing selection/search highlights and cached matches
+    clearSearchHighlights();
+
+    // 2) Set new term and request a fresh search
+    m_scrollState->textSearch.searchTerm = term;
+    // For cross-tab searches, enforce whole-word/exact-token matching to avoid partial hits
+    m_scrollState->textSearch.matchWholeWord = true;
+    m_scrollState->textSearch.needsUpdate = true;
+    m_scrollState->textSearch.searchChanged = true;
+
+    // Perform immediately to have results ready this frame
+    PerformTextSearch(*m_scrollState, m_pageHeights, m_pageWidths);
+
+    // 3) Navigate to first occurrence (if any)
+    if (!m_scrollState->textSearch.results.empty()) {
+        // Reset index then focus first result precisely
+        m_scrollState->textSearch.currentResultIndex = 0;
+        NavigateToSearchResultPreciseOptimized(*m_scrollState, m_pageHeights, 0);
+        // OPTIMIZATION: Defer expensive regeneration to prevent cursor lag
+        // Use a delayed regeneration with lower priority
+        QTimer::singleShot(100, [this]() {
+            if (m_scrollState && m_pdfLoaded) {
+                scheduleVisibleRegeneration(true); // High quality, settled
+            }
+        });
+        return true;
+    } else {
+        // Just force light redraw without expensive regeneration
+        m_scrollState->forceRedraw = true;
+        return false;
+    }
+}
+
 void PDFViewerEmbedder::clearSearchHighlights()
 {
     if (!m_scrollState) return;
@@ -2559,15 +2600,12 @@ void PDFViewerEmbedder::clearSearchHighlights()
     // Reset whole-word preference to default; callers will set it as needed
     m_scrollState->textSearch.matchWholeWord = false;
 
-    // Targeted repaint: only visible pages need redraw to remove overlays
-    int firstVisible=-1, lastVisible=-1;
-    GetVisiblePageRange(*m_scrollState, m_pageHeights, firstVisible, lastVisible);
-    if (firstVisible >= 0 && lastVisible >= firstVisible) {
-        // No need to regenerate textures; overlays are drawn on top. Just force redraw.
-        m_scrollState->forceRedraw = true;
-    } else {
-        m_scrollState->forceRedraw = true;
-    }
+    // OPTIMIZATION: For cross-search performance, use lighter redraw approach
+    // Only force redraw instead of heavy regeneration unless actually needed
+    m_scrollState->forceRedraw = true;
+    
+    // Skip expensive visible page regeneration during cross-search clearing
+    // The optimized cross-search will handle regeneration with proper timing
 }
 
 // --- Async visible regeneration helpers ---

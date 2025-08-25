@@ -1039,6 +1039,12 @@ bool PDFViewerWidget::externalFindText(const QString &term) {
         m_searchDebounceTimer->stop();
     }
     
+    // Pause update timer during cross-search to prevent cursor interference
+    bool wasUpdateTimerActive = m_updateTimer && m_updateTimer->isActive();
+    if (wasUpdateTimerActive) {
+        m_updateTimer->stop();
+    }
+    
     // Clear previous highlights/state and search term tracking
     m_pdfEmbedder->clearSearchHighlights();
     m_lastSearchTerm.clear();  // Reset to avoid confusion with internal searches
@@ -1050,14 +1056,23 @@ bool PDFViewerWidget::externalFindText(const QString &term) {
         m_searchInput->blockSignals(false);
     }
     
-    // Perform the fresh search and focus on first result
-    bool ok = m_pdfEmbedder->findTextFreshAndFocusFirst(t.toStdString());
+    // Perform the optimized cross-search (deferred regeneration for performance)
+    bool ok = m_pdfEmbedder->findTextFreshAndFocusFirstOptimized(t.toStdString());
     if (ok) {
         // Update our tracking to match the successful external search
         m_lastSearchTerm = t;
         // Force UI updates
         syncToolbarStates();
         updateStatusInfo();
+        
+        // Resume update timer after successful navigation with slight delay
+        if (wasUpdateTimerActive) {
+            QTimer::singleShot(150, this, [this]() {
+                if (m_updateTimer && !m_updateTimer->isActive()) {
+                    m_updateTimer->start();
+                }
+            });
+        }
     } else {
         // No matches: ensure no stale highlights remain
         m_pdfEmbedder->clearSearchHighlights();
@@ -1068,6 +1083,11 @@ bool PDFViewerWidget::externalFindText(const QString &term) {
         }
         m_lastSearchTerm.clear();
         emit errorOccurred(QString("No matches found for '%1'").arg(t));
+        
+        // Resume update timer immediately if search failed
+        if (wasUpdateTimerActive && m_updateTimer && !m_updateTimer->isActive()) {
+            m_updateTimer->start();
+        }
     }
     return ok;
 }

@@ -215,6 +215,7 @@ void PerformTextSearch(PDFScrollState& state, const std::vector<int>& pageHeight
 void NavigateToNextSearchResult(PDFScrollState& state, const std::vector<int>& pageHeights);
 void NavigateToPreviousSearchResult(PDFScrollState& state, const std::vector<int>& pageHeights);
 void NavigateToSearchResultPrecise(PDFScrollState& state, const std::vector<int>& pageHeights, int resultIndex);
+void NavigateToSearchResultPreciseOptimized(PDFScrollState& state, const std::vector<int>& pageHeights, int resultIndex);
 void ClearSearchResults(PDFScrollState& state);
 void DrawSearchResultsHighlighting(const PDFScrollState& state, const std::vector<int>& pageHeights, const std::vector<int>& pageWidths, float winWidth, float winHeight);
 void HandleSearchInput(PDFScrollState& state, int key, int mods);

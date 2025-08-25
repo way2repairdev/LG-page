@@ -131,6 +131,8 @@ public:
     // Clears old highlights/state and performs a brand new search for term,
     // immediately focusing the first match (if any). Returns true if matches found.
     bool findTextFreshAndFocusFirst(const std::string& term);
+    // Optimized version for cross-search: defers expensive regeneration to prevent cursor lag
+    bool findTextFreshAndFocusFirstOptimized(const std::string& term);
     // Clears all search highlights/handles/state and triggers a light repaint.
     void clearSearchHighlights();
 

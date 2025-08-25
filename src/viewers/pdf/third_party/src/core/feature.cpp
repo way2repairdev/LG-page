@@ -2305,3 +2305,218 @@ void NavigateToSearchResultPrecise(PDFScrollState& state, const std::vector<int>
     logFile3.close();
 }
 
+// OPTIMIZED NAVIGATION FUNCTION FOR CROSS-SEARCH (REDUCED LATENCY)
+void NavigateToSearchResultPreciseOptimized(PDFScrollState& state, const std::vector<int>& pageHeights, int resultIndex) {
+    if (resultIndex < 0 || resultIndex >= (int)state.textSearch.results.size()) return;
+    
+    const SearchResult& result = state.textSearch.results[resultIndex];
+    if (!result.isValid || result.pageIndex >= (int)pageHeights.size()) return;
+    
+    // OPTIMIZATION: Disable heavy debug logging for cross-search performance
+    // (Optional lightweight logging for critical issues only)
+    
+    // SIMPLIFIED AND ROBUST NAVIGATION ALGORITHM (same as full version but optimized)
+    // This uses the SAME coordinate system as your goToPage() function for consistency
+    
+    // Step 1: Calculate page offset
+    float targetPageOffset = 0.0f;
+    for (int i = 0; i < result.pageIndex && i < (int)pageHeights.size(); ++i) {
+        targetPageOffset += pageHeights[i] * state.zoomScale;
+    }
+    
+    // Step 2: Get text position within the page (use rect center for stability at high zoom)
+    float textOffsetInPage = 0.0f;
+    float selectionHeightInPage = 0.0f; // in screen pixels at current zoom
+    
+    // Get the text page for this result
+    if (result.pageIndex < (int)state.textPages.size() && state.textPages[result.pageIndex].isLoaded) {
+        FPDF_TEXTPAGE textPage = state.textPages[result.pageIndex].textPage;
+        if (textPage) {
+            // Get text rectangles for this search result
+            int rectCount = FPDFText_CountRects(textPage, result.charIndex, result.charCount);
+            double left = 0.0, top = 0.0, right = 0.0, bottom = 0.0;
+            bool gotRect = false;
+            if (rectCount > 0) {
+                // Use UNION of all rects for robust placement (handles ligatures/wrap)
+                double uL = std::numeric_limits<double>::infinity();
+                double uR = -std::numeric_limits<double>::infinity();
+                double uT = -std::numeric_limits<double>::infinity();
+                double uB = std::numeric_limits<double>::infinity();
+                for (int ridx = 0; ridx < rectCount; ++ridx) {
+                    double l, t, r, b;
+                    if (FPDFText_GetRect(textPage, ridx, &l, &t, &r, &b)) {
+                        uL = std::min(uL, l);
+                        uR = std::max(uR, r);
+                        uT = std::max(uT, t); // top is larger Y in PDF coords
+                        uB = std::min(uB, b); // bottom is smaller Y
+                        gotRect = true;
+                    }
+                }
+                if (gotRect) { left = uL; right = uR; top = uT; bottom = uB; }
+            }
+
+            // Fallback: if no rects were returned (rare), approximate from char boxes
+            if (!gotRect) {
+                int startChar = std::max(0, result.charIndex);
+                int endChar = std::max(startChar, std::min(state.textPages[result.pageIndex].charCount - 1, result.charIndex + result.charCount - 1));
+                double sL, sT, sR, sB, eL, eT, eR, eB;
+                if (FPDFText_GetCharBox(textPage, startChar, &sL, &sT, &sR, &sB) &&
+                    FPDFText_GetCharBox(textPage, endChar, &eL, &eT, &eR, &eB)) {
+                    left = std::min(sL, eL);
+                    right = std::max(sR, eR);
+                    top = std::max(sT, eT);
+                    bottom = std::min(sB, eB);
+                    gotRect = true;
+                }
+            }
+
+            if (gotRect && state.originalPageHeights && result.pageIndex < (int)state.originalPageHeights->size()) {
+                double originalPageHeight = (*state.originalPageHeights)[result.pageIndex];
+                float renderedPageHeight = pageHeights[result.pageIndex] * state.zoomScale;
+                // Horizontal centering inputs
+                double originalPageWidth = (state.originalPageWidths && result.pageIndex < (int)state.originalPageWidths->size())
+                    ? (*state.originalPageWidths)[result.pageIndex] : 0.0;
+                float renderedPageWidth = (state.pageWidths && result.pageIndex < (int)state.pageWidths->size())
+                    ? (float)((*state.pageWidths)[result.pageIndex] * state.zoomScale) : 0.0f;
+
+                // Compute center Y of the rect in PDF units (bottom-up), then convert to top-down relative
+                double rectCenterY = (top + bottom) * 0.5; // still bottom-up units
+                double relativeCenterY = (originalPageHeight - rectCenterY) / originalPageHeight; // 0=top
+                textOffsetInPage = (float)(relativeCenterY * renderedPageHeight);
+
+                // Also compute selection height in pixels to keep it fully visible if possible
+                double rectHeightPDF = std::max(0.0, top - bottom);
+                selectionHeightInPage = (float)((rectHeightPDF / originalPageHeight) * renderedPageHeight);
+
+                // Compute relative center X and defer horizontal centering to embedder
+                if (originalPageWidth > 0.0 && renderedPageWidth > 0.0f) {
+                    double rectCenterX = (left + right) * 0.5; // PDF coords
+                    double relativeCenterX = rectCenterX / originalPageWidth; // 0..1 from left
+                    state.pendingHorizCenter = true;
+                    state.pendingHorizPage = result.pageIndex;
+                    state.pendingHorizRelX = (float)relativeCenterX;
+                }
+            }
+        }
+    }
+    
+    // Step 3: Calculate final scroll offset to place text near upper-middle of viewport
+    float centerY = state.viewportHeight * 0.42f; // slight shift for better readability
+    
+    // Total offset to the text = page offset + text offset within page
+    float totalTextOffset = targetPageOffset + textOffsetInPage;
+    
+    // To center the text: scrollOffset should position text at centerY
+    float targetScrollOffset = totalTextOffset - centerY;
+    
+    // Try to keep the entire selection rect visible when possible, especially at high zoom
+    if (selectionHeightInPage > 0.0f) {
+        // Compute the selection's top and bottom in document pixels
+        float selectionTop = totalTextOffset - (selectionHeightInPage * 0.5f);
+        float selectionBottom = totalTextOffset + (selectionHeightInPage * 0.5f);
+
+        float marginTop = std::max(8.0f, state.viewportHeight * 0.05f);
+        float marginBottom = std::max(8.0f, state.viewportHeight * 0.05f);
+
+        // Adjust targetScrollOffset minimally to satisfy visibility constraints
+        float topOnScreen = selectionTop - targetScrollOffset;
+        float bottomOnScreen = selectionBottom - targetScrollOffset;
+
+        if (topOnScreen < marginTop) {
+            targetScrollOffset -= (marginTop - topOnScreen);
+        }
+        if (bottomOnScreen > (state.viewportHeight - marginBottom)) {
+            targetScrollOffset += (bottomOnScreen - (state.viewportHeight - marginBottom));
+        }
+    } else if (state.zoomScale > 2.0f) {
+        // If we don't know the selection height, add a small context-only adjustment at high zoom
+        float zoomAdjustment = std::min(50.0f, 25.0f * (state.zoomScale - 2.0f));
+        targetScrollOffset -= zoomAdjustment;
+    }
+    
+    // Step 4: Clamp to valid scroll range
+    float totalDocumentHeight = 0.0f;
+    for (int h : pageHeights) {
+        totalDocumentHeight += h * state.zoomScale;
+    }
+    float bottomPadding = state.viewportHeight * 0.1f; // 10% of viewport height
+    float maxScrollOffset = std::max(0.0f, totalDocumentHeight - state.viewportHeight + bottomPadding);
+    
+    // Clamp the target scroll offset
+    if (targetScrollOffset < 0.0f) targetScrollOffset = 0.0f;
+    if (targetScrollOffset > maxScrollOffset) targetScrollOffset = maxScrollOffset;
+
+    // Post-clamp visibility correction
+    if (selectionHeightInPage > 0.0f && maxScrollOffset > 0.0f) {
+        float marginTop = std::max(8.0f, state.viewportHeight * 0.05f);
+        float marginBottom = std::max(8.0f, state.viewportHeight * 0.05f);
+        float selectionTop = totalTextOffset - (selectionHeightInPage * 0.5f);
+        float selectionBottom = totalTextOffset + (selectionHeightInPage * 0.5f);
+        float topOnScreen = selectionTop - targetScrollOffset;
+        float bottomOnScreen = selectionBottom - targetScrollOffset;
+
+        float slackUp = targetScrollOffset;
+        float slackDown = maxScrollOffset - targetScrollOffset;
+
+        if (topOnScreen < marginTop) {
+            float needed = (marginTop - topOnScreen);
+            float adjust = std::min(needed, slackDown);
+            targetScrollOffset += adjust;
+        }
+        topOnScreen = selectionTop - targetScrollOffset;
+        bottomOnScreen = selectionBottom - targetScrollOffset;
+        if (bottomOnScreen > (state.viewportHeight - marginBottom)) {
+            float needed = bottomOnScreen - (state.viewportHeight - marginBottom);
+            float adjust = std::min(needed, targetScrollOffset);
+            targetScrollOffset -= adjust;
+        }
+
+        if (targetScrollOffset < 0.0f) targetScrollOffset = 0.0f;
+        if (targetScrollOffset > maxScrollOffset) targetScrollOffset = maxScrollOffset;
+    }
+    
+    // Step 5: Apply the navigation
+    state.scrollOffset = targetScrollOffset;
+    state.maxOffset = maxScrollOffset;
+    state.preventScrollOffsetOverride = true;
+    state.forceRedraw = true;
+    // OPTIMIZATION: Do NOT request high-quality regeneration immediately
+    // This reduces latency and cursor interference during cross-search
+    // state.requestHighQualityVisibleRegen = true; // COMMENTED OUT FOR PERFORMANCE
+    
+    // Also set active text selection to current result so it renders in blue only
+    if (result.pageIndex < (int)state.textPages.size() && state.textPages[result.pageIndex].isLoaded) {
+        int pageCharCount = state.textPages[result.pageIndex].charCount;
+        int selStart = std::max(0, result.charIndex);
+        int selEnd = std::min(pageCharCount - 1, result.charIndex + result.charCount - 1);
+        if (pageCharCount > 0 && selStart <= selEnd) {
+            state.textSelection.isActive = true;
+            state.textSelection.isDragging = false;
+            state.textSelection.startPageIndex = result.pageIndex;
+            state.textSelection.endPageIndex = result.pageIndex;
+            state.textSelection.startCharIndex = selStart;
+            state.textSelection.endCharIndex = selEnd;
+
+            // Populate selection bounds (optional, improves accuracy for rendering and copy)
+            double sL, sT, sR, sB;
+            double eL, eT, eR, eB;
+            FPDF_TEXTPAGE tp = state.textPages[result.pageIndex].textPage;
+            if (tp && FPDFText_GetCharBox(tp, selStart, &sL, &sT, &sR, &sB) &&
+                    FPDFText_GetCharBox(tp, selEnd, &eL, &eT, &eR, &eB)) {
+                state.textSelection.startX = sL; state.textSelection.startY = sT;
+                state.textSelection.endX = eR;   state.textSelection.endY = eB;
+            }
+
+            state.textSelection.selectionZoomScale = state.zoomScale;
+            state.textSelection.selectionScrollOffset = state.scrollOffset;
+            state.textSelection.selectionHorizontalOffset = state.horizontalOffset;
+            state.textSelection.needsCoordinateUpdate = true;
+            state.textSelection.isDoubleClick = false;
+        }
+    }
+    
+    // OPTIMIZATION: Light event trigger instead of forced event
+    // Force immediate redraw but don't overwhelm event queue
+    glfwPostEmptyEvent();
+}
+
