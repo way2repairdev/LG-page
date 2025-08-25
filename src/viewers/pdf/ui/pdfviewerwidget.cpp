@@ -30,6 +30,9 @@
 #include <QIcon>
 #include <QPixmap>
 #include <QImage>
+#include <QClipboard>
+#include <QGuiApplication>
+#include <QCursor>
 #include "viewers/pdf/PDFPreviewLoader.h"
 #ifdef _WIN32
 #include <windows.h>
@@ -82,7 +85,7 @@ private:
 static void installPremiumButtonStyling(QToolBar *bar, const QColor &accent, bool dark)
 {
     if (!bar) return;
-    const QSize iconSz(18, 18);
+    const QSize iconSz(16, 16);
     const QColor normal = dark ? QColor("#c7cacf") : QColor("#5f6368");
     const QColor disabled = dark ? QColor("#6f7379") : QColor("#9e9e9e");
 
@@ -216,16 +219,16 @@ void PDFViewerWidget::setupToolbar()
     // Theme-aware blue accent (match tab styling: #1976d2/#4A90E2 family)
     const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
     const QString tbStyleLight =
-        "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:36px;}"
-        "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+    "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:30px;}"
+    "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(25,118,210,0.12);border-color:rgba(25,118,210,0.35);}" 
         "QToolBar QToolButton:pressed{background:rgba(25,118,210,0.20);border-color:#1976d2;}"
         "QToolBar QToolButton:checked{background:rgba(25,118,210,0.16);border-color:#1976d2;}"
         "QToolBar QToolButton:disabled{color:#9e9e9e;background:transparent;border-color:transparent;}"
-        "QToolBar::separator{background:rgba(0,0,0,0.12);width:1px;margin:0 6px;}";
+    "QToolBar::separator{background:rgba(0,0,0,0.12);width:1px;margin:0 6px;}";
     const QString tbStyleDark =
-        "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:36px;}"
-        "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+    "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:30px;}"
+    "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(25,118,210,0.20);border-color:#4f89d3;}"
         "QToolBar QToolButton:pressed{background:rgba(25,118,210,0.30);border-color:#1976d2;}"
         "QToolBar QToolButton:checked{background:rgba(25,118,210,0.28);border-color:#4f89d3;color:#e8eaed;}"
@@ -259,6 +262,7 @@ void PDFViewerWidget::setupToolbar()
 
     m_pageInput = new QLineEdit(this);
     m_pageInput->setFixedWidth(60);
+    m_pageInput->setFixedHeight(26);
     m_pageInput->setAlignment(Qt::AlignCenter);
     m_pageInput->setText("1");
     m_pageInput->setStyleSheet(
@@ -308,6 +312,7 @@ void PDFViewerWidget::setupToolbar()
     m_searchInput = new QLineEdit(this);
     // Increased width for better usability
     m_searchInput->setFixedWidth(240);
+    m_searchInput->setFixedHeight(26);
     m_searchInput->setPlaceholderText("Search text...");
     m_searchInput->setStyleSheet(
         QStringLiteral(
@@ -349,16 +354,16 @@ void PDFViewerWidget::applyToolbarTheme()
     if (!m_toolbar) return;
     const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
     const QString tbStyleLight =
-        "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:36px;}"
-        "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+    "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:30px;}"
+    "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(25,118,210,0.12);border-color:rgba(25,118,210,0.35);}"
         "QToolBar QToolButton:pressed{background:rgba(25,118,210,0.20);border-color:#1976d2;}"
         "QToolBar QToolButton:checked{background:rgba(25,118,210,0.16);border-color:#1976d2;}"
         "QToolBar QToolButton:disabled{color:#9e9e9e;background:transparent;border-color:transparent;}"
         "QToolBar::separator{background:rgba(0,0,0,0.12);width:1px;margin:0 6px;}";
     const QString tbStyleDark =
-        "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:36px;}"
-        "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:6px;margin:3px;}"
+    "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:30px;}"
+    "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(25,118,210,0.20);border-color:#4f89d3;}"
         "QToolBar QToolButton:pressed{background:rgba(25,118,210,0.30);border-color:#1976d2;}"
         "QToolBar QToolButton:checked{background:rgba(25,118,210,0.28);border-color:#4f89d3;color:#e8eaed;}"
@@ -527,7 +532,10 @@ void PDFViewerWidget::initializePDFViewer()
 #else
     void* hwnd = m_viewerContainer->winId();
 #endif
-    if (!m_pdfEmbedder->initialize(hwnd, m_viewerContainer->width(), m_viewerContainer->height())) {
+    int w = m_viewerContainer->width();
+    int h = m_viewerContainer->height();
+    if (w <= 0 || h <= 0) { globalInitInProgress = false; return; }
+    if (!m_pdfEmbedder->initialize(hwnd, w, h)) {
         emit errorOccurred("Failed to initialize PDF viewer");
         return;
     }
@@ -812,8 +820,14 @@ void PDFViewerWidget::findPrevious()
 
 void PDFViewerWidget::ensureViewportSync()
 {
-    if (m_pdfEmbedder && m_viewerInitialized && m_viewerContainer)
-        m_pdfEmbedder->resize(m_viewerContainer->width(), m_viewerContainer->height());
+    if (!isVisible()) return; // avoid zero-size/hidden resizes
+    if (m_pdfEmbedder && m_viewerInitialized && m_viewerContainer) {
+        const int w = m_viewerContainer->width();
+        const int h = m_viewerContainer->height();
+        if (w > 0 && h > 0) {
+            m_pdfEmbedder->resize(w, h);
+        }
+    }
 }
 
 void PDFViewerWidget::resizeEvent(QResizeEvent *event)
@@ -831,11 +845,44 @@ void PDFViewerWidget::showEvent(QShowEvent *event)
                 initializePDFViewer();
         });
     }
+    // Resume updates
+    if (m_updateTimer && !m_updateTimer->isActive()) m_updateTimer->start();
+    // Restore last view state if we have one - with proper timing
+    if (m_pdfEmbedder && m_viewerInitialized && m_lastViewState.valid) {
+        // Use a timer to ensure the viewer is fully ready before restoring state
+        QTimer::singleShot(50, this, [this]() {
+            if (m_pdfEmbedder && m_viewerInitialized && m_lastViewState.valid) {
+                PDFViewerEmbedder::ViewState s;
+                s.zoom = m_lastViewState.zoom;
+                s.scrollOffset = m_lastViewState.scrollOffset;
+                s.horizontalOffset = m_lastViewState.horizontalOffset;
+                s.page = m_lastViewState.page;
+                s.valid = m_lastViewState.valid;
+                qDebug() << "Restoring PDF view state - zoom:" << s.zoom << "page:" << s.page;
+                m_pdfEmbedder->restoreViewState(s);
+                // Clear to avoid reapplying repeatedly
+                m_lastViewState = {};
+            }
+        });
+    }
 }
 
 void PDFViewerWidget::hideEvent(QHideEvent *event)
 {
     QWidget::hideEvent(event);
+    // Capture current view and pause heavy updates when hidden
+    if (m_pdfEmbedder && m_viewerInitialized) {
+        auto s = m_pdfEmbedder->captureViewState();
+        if (s.valid) {
+            m_lastViewState.zoom = s.zoom;
+            m_lastViewState.scrollOffset = s.scrollOffset;
+            m_lastViewState.horizontalOffset = s.horizontalOffset;
+            m_lastViewState.page = s.page;
+            m_lastViewState.valid = s.valid;
+            qDebug() << "Capturing PDF view state - zoom:" << s.zoom << "page:" << s.page;
+        }
+    }
+    if (m_updateTimer && m_updateTimer->isActive()) m_updateTimer->stop();
 }
 
 void PDFViewerWidget::focusInEvent(QFocusEvent *event)
@@ -870,7 +917,7 @@ bool PDFViewerWidget::eventFilter(QObject *watched, QEvent *event)
                     // Quick click -> context menu
                     QString sel = captureCurrentSelection();
                     if (!sel.isEmpty()) {
-                        showCrossContextMenu(me->globalPos(), sel);
+                        showCrossContextMenu(me->globalPosition().toPoint(), sel);
                         // Prevent further handling (optional) but allow existing panning to stop
                         return true;
                     }
@@ -931,7 +978,7 @@ QString PDFViewerWidget::captureCurrentSelection() const {
 
 void PDFViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QString &text) {
     QString target = m_linkedPcbFileName.isEmpty() ? QStringLiteral("Linked PCB") : m_linkedPcbFileName;
-        class ThemedMenu : public QMenu { public: ThemedMenu(QWidget* p=nullptr):QMenu(p) { setWindowFlags(windowFlags()|Qt::NoDropShadowWindowHint); setAttribute(Qt::WA_TranslucentBackground);} void apply(bool dark){ if(dark){ setStyleSheet(
+    class ThemedMenu : public QMenu { public: ThemedMenu(QWidget* p=nullptr):QMenu(p) { setWindowFlags(windowFlags()|Qt::NoDropShadowWindowHint); setAttribute(Qt::WA_TranslucentBackground);} void apply(bool dark){ if(dark){ setStyleSheet(
                 "QMenu { background:rgba(30,33,40,0.94); border:1px solid #3d4452; border-radius:8px; padding:6px; font:13px 'Segoe UI'; color:#dfe3ea; }"
                 "QMenu::item { background:transparent; padding:6px 14px; border-radius:5px; }"
                 "QMenu::item:selected { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #2563eb, stop:1 #1d4ed8); color:white; }"
@@ -940,16 +987,32 @@ void PDFViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QStrin
                 "QMenu { background:rgba(252,252,253,0.97); border:1px solid #d0d7e2; border-radius:8px; padding:6px; font:13px 'Segoe UI'; color:#2d3744; }"
                 "QMenu::item { background:transparent; padding:6px 14px; border-radius:5px; }"
                 "QMenu::item:selected { background: #1a73e8; color:white; }"
-                "QMenu::separator { height:1px; background:#e1e6ed; margin:6px 4px; }" ); } } }; ThemedMenu menu; bool dark = qApp->palette().color(QPalette::Window).lightness() < 128; menu.apply(dark);
-    QAction *title = menu.addAction(QString("Cross Search → %1").arg(target)); title->setEnabled(false);
+                "QMenu::separator { height:1px; background:#e1e6ed; margin:6px 4px; }" ); } } };
+    ThemedMenu menu;
+    bool dark = qApp->palette().color(QPalette::Window).lightness() < 128;
+    menu.apply(dark);
+    QAction *actCopy = menu.addAction(QIcon(":/icons/images/icons/copy.svg"), "Copy");
+    QAction *actPaste = menu.addAction(QIcon(":/icons/images/icons/paste.svg"), "Paste");
     menu.addSeparator();
-    QAction *actComp = menu.addAction(QIcon(":/icons/images/icons/find_component.svg"), QString("Find Component in %1").arg(target));
+    menu.addAction(QIcon(":/icons/images/icons/find_component.svg"), QString("Find Component in %1").arg(target));
     QAction *actNet  = menu.addAction(QIcon(":/icons/images/icons/find_net.svg"), QString("Find Net in %1").arg(target));
     menu.addSeparator();
     QAction *actCancel = menu.addAction("Cancel");
     QAction *chosen = menu.exec(globalPos);
-    if (!chosen || chosen==actCancel || chosen==title) return;
-    if (!chosen) return;
+    if (!chosen || chosen==actCancel) return;
+    if (chosen == actCopy) {
+        QClipboard *clipboard = QGuiApplication::clipboard();
+        clipboard->setText(text);
+        return;
+    }
+    if (chosen == actPaste) {
+        QClipboard *clipboard = QGuiApplication::clipboard();
+        QString pasteText = clipboard->text();
+        if (!pasteText.isEmpty()) {
+            emit crossSearchRequest(pasteText, false, true);
+        }
+        return;
+    }
     bool isNet = (chosen == actNet);
     emit crossSearchRequest(text, isNet, true);
 }
@@ -968,4 +1031,39 @@ bool PDFViewerWidget::externalFindText(const QString &term) {
         emit errorOccurred(QString("No matches found for '%1'").arg(t));
     }
     return ok;
+}
+
+void PDFViewerWidget::saveViewState()
+{
+    if (m_pdfEmbedder && m_viewerInitialized) {
+        auto s = m_pdfEmbedder->captureViewState();
+        if (s.valid) {
+            m_lastViewState.zoom = s.zoom;
+            m_lastViewState.scrollOffset = s.scrollOffset;
+            m_lastViewState.horizontalOffset = s.horizontalOffset;
+            m_lastViewState.page = s.page;
+            m_lastViewState.valid = s.valid;
+            qDebug() << "Explicitly saving PDF view state - zoom:" << s.zoom << "page:" << s.page;
+        }
+    }
+}
+
+void PDFViewerWidget::restoreViewState()
+{
+    if (m_pdfEmbedder && m_viewerInitialized && m_lastViewState.valid) {
+        // Use a timer to ensure the viewer is fully ready before restoring state
+        QTimer::singleShot(100, this, [this]() {
+            if (m_pdfEmbedder && m_viewerInitialized && m_lastViewState.valid) {
+                PDFViewerEmbedder::ViewState s;
+                s.zoom = m_lastViewState.zoom;
+                s.scrollOffset = m_lastViewState.scrollOffset;
+                s.horizontalOffset = m_lastViewState.horizontalOffset;
+                s.page = m_lastViewState.page;
+                s.valid = m_lastViewState.valid;
+                qDebug() << "Explicitly restoring PDF view state - zoom:" << s.zoom << "page:" << s.page;
+                m_pdfEmbedder->restoreViewState(s);
+                // Don't clear the state here - let it persist until next save
+            }
+        });
+    }
 }

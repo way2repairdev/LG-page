@@ -1875,49 +1875,10 @@ void ClearSearchResults(PDFScrollState& state) {
             FPDFText_FindClose(handle);
         }
     }
-    
-    state.textSearch.searchHandles.clear();    state.textSearch.results.clear();
+
+    state.textSearch.searchHandles.clear();
+    state.textSearch.results.clear();
     state.textSearch.currentResultIndex = -1;
-}
-
-
-
-
-
-
-
-void PopulateSearchFromSelection(PDFScrollState& state) {
-    std::cout << "PopulateSearchFromSelection called" << std::endl;
-    
-    if (state.textSelection.isActive) {
-        std::string selectedText = GetSelectedText(state);
-        
-        std::cout << "PopulateSearchFromSelection: GetSelectedText returned '" << selectedText << "' (length: " << selectedText.length() << ")" << std::endl;
-        
-        if (!selectedText.empty()) {
-            // Limit search term length for performance
-            if (selectedText.length() > 100) {
-                selectedText = selectedText.substr(0, 100);
-                std::cout << "PopulateSearchFromSelection: Truncated to '" << selectedText << "'" << std::endl;
-            }
-            
-            // Update search term and trigger search
-            state.textSearch.searchTerm = selectedText;
-            state.textSearch.needsUpdate = true;
-            state.textSearch.searchChanged = true;
-            
-            std::cout << "PopulateSearchFromSelection: Set search term to '" << state.textSearch.searchTerm << "'" << std::endl;
-            
-            // Show search box if not already visible
-            if (!state.textSearch.isSearchBoxVisible) {
-                ToggleSearchBox(state);
-            }
-        } else {
-            std::cout << "PopulateSearchFromSelection: Selected text is empty" << std::endl;
-        }
-    } else {
-        std::cout << "PopulateSearchFromSelection: No active text selection" << std::endl;
-    }
 }
 
 bool HandleSearchButtonClick(PDFScrollState& state, double mouseX, double mouseY, float winWidth, float winHeight) {

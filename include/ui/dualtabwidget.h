@@ -21,6 +21,9 @@ public:
     // Theme control
     void setDarkTheme(bool dark);
     bool isDarkTheme() const { return m_darkTheme; }
+    // Enable/disable Material-style tabs (underlined indicator, surface/primary tokens)
+    void setMaterialTheme(bool enabled);
+    bool isMaterialTheme() const { return m_materialTheme; }
     
     // Main interface methods (similar to QTabWidget)
     int addTab(QWidget *widget, const QString &label, TabType type);
@@ -67,6 +70,7 @@ public:
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
+    // resizeEvent removed - close button functionality removed
 
 signals:
     void tabCloseRequested(int index, TabType type);
@@ -89,7 +93,8 @@ private:
     void updateTabBarStates();
     void updateTabBarVisualState();
     void applyCurrentThemeStyles();
-    void updateCloseButtonsTheme(QTabWidget* w);
+    // Perform style application and close-button setup deferred to event loop
+    void deferredStyleInit();
     
     QVBoxLayout *m_mainLayout;
     QTabWidget *m_pdfTabWidget;    // Row 1: PDF tabs
@@ -122,6 +127,8 @@ private:
 
     // Theme flag (default: light)
     bool m_darkTheme = false;
+    // Material theme flag (default: enabled)
+    bool m_materialTheme = true;
 };
 
 #endif // DUALTABWIDGET_H
