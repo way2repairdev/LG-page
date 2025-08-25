@@ -1,0 +1,35 @@
+cmake_minimum_required(VERSION 3.16)
+
+# Simple test executable
+add_executable(test_brd_renderer 
+    test_brd_renderer.cpp
+    src/viewers/pcb/rendering/BRDRenderer.cpp
+    src/viewers/pcb/rendering/PCBRenderer.cpp
+    src/viewers/pcb/format/BRDFileBase.cpp
+    src/viewers/pcb/format/BRDFile.cpp
+    src/viewers/pcb/format/BRD2File.cpp
+)
+
+# Include directories
+target_include_directories(test_brd_renderer PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pcb/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+# Find required packages  
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GLFW3 REQUIRED glfw3)
+find_package(OpenGL REQUIRED)
+find_package(GLEW REQUIRED)
+
+# Link libraries
+target_link_libraries(test_brd_renderer 
+    ${GLFW3_LIBRARIES}
+    ${OPENGL_LIBRARIES}
+    GLEW::GLEW
+)
+
+# Set C++ standard
+set_property(TARGET test_brd_renderer PROPERTY CXX_STANDARD 17)

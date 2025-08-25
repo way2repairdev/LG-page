@@ -2,6 +2,7 @@
 
 // Include PCB viewer components - using relative paths like the PCB main.cpp
 #include "../rendering/PCBRenderer.h"
+#include "../rendering/BRDRenderer.h"
 #include "../format/BRDFileBase.h"
 #include "../format/XZZPCBFile.h"
 #include "../format/BRDFile.h"
@@ -39,7 +40,7 @@ PCBViewerEmbedder::PCBViewerEmbedder()
     , m_childHwnd(nullptr)
     , m_imguiContext(nullptr)
     , m_imguiUIEnabled(false)
-    , m_renderer(std::make_unique<PCBRenderer>())
+    , m_renderer(nullptr) // Will be created dynamically based on file type
     , m_pcbData(nullptr)
     , m_initialized(false)
     , m_pdfLoaded(false) // Keep same name for compatibility
@@ -61,6 +62,23 @@ PCBViewerEmbedder::PCBViewerEmbedder()
 PCBViewerEmbedder::~PCBViewerEmbedder()
 {
     cleanup();
+}
+
+std::unique_ptr<PCBRenderer> PCBViewerEmbedder::createRenderer(const std::string& fileExtension)
+{
+    std::string ext = Utils::ToLower(fileExtension);
+    
+    // BRD and BRD2 support disabled - use generic renderer for all formats
+    /*
+    if (ext == "brd" || ext == "brd2") {
+        return std::make_unique<BRDRenderer>();
+    } else {
+    */
+        // Use generic PCBRenderer for all formats (xzz, pcb, xzzpcb, etc.)
+        return std::make_unique<PCBRenderer>();
+    /*
+    }
+    */
 }
 
 bool PCBViewerEmbedder::initialize(void* parentWindowHandle, int width, int height)
@@ -177,6 +195,8 @@ bool PCBViewerEmbedder::loadPCB(const std::string& filePath)
         std::string ext = Utils::ToLower(Utils::GetFileExtension(filePath));
         std::shared_ptr<BRDFileBase> pcbFile = nullptr;
         
+        // BRD and BRD2 support disabled - parsing code kept for reference
+        /*
         if (ext == "brd") {
             // Load BRD file
             auto brd = BRDFile::LoadFromFile(filePath);
@@ -190,15 +210,31 @@ bool PCBViewerEmbedder::loadPCB(const std::string& filePath)
                 pcbFile = std::shared_ptr<BRDFileBase>(brd2.release());
             }
         } else {
-            // Load XZZPCB file (default for .xzz, .pcb, .xzzpcb)
+        */
+            // Load XZZPCB file (for .xzz, .pcb, .xzzpcb)
             auto xzzpcb = XZZPCBFile::LoadFromFile(filePath);
             if (xzzpcb) {
                 pcbFile = std::shared_ptr<BRDFileBase>(xzzpcb.release());
             }
+        /*
         }
+        */
         
         if (!pcbFile) {
             handleError("Failed to load PCB file: " + filePath);
+            return false;
+        }
+
+        // Create appropriate renderer based on file type
+        m_renderer = createRenderer(ext);
+        if (!m_renderer) {
+            handleError("Failed to create renderer for file type: " + ext);
+            return false;
+        }
+        
+        // Initialize the new renderer if the viewer is already initialized
+        if (m_initialized && !initializeRenderer()) {
+            handleError("Failed to initialize renderer");
             return false;
         }
 
@@ -819,9 +855,9 @@ bool PCBViewerEmbedder::initializeGLFW(void* parentHandle, int width, int height
 
 bool PCBViewerEmbedder::initializeRenderer()
 {
+    // If no renderer exists yet (no file loaded), create a default renderer
     if (!m_renderer) {
-        handleError("PCB renderer not available");
-        return false;
+        m_renderer = std::make_unique<PCBRenderer>();
     }
 
     // Initialize renderer - matching PCBRenderer::Initialize() from the standalone version

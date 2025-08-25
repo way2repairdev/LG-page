@@ -181,6 +181,9 @@ private:
     void onPinSelected(int pinIndex);
     void onPartSelected(int partIndex);
     void onZoomChanged();
+    
+    // Renderer factory method
+    std::unique_ptr<PCBRenderer> createRenderer(const std::string& fileExtension);
 
     // GLFW callback wrappers
     static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
