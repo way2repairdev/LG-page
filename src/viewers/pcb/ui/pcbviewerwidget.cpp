@@ -598,6 +598,31 @@ void PCBViewerWidget::setupToolbar()
     connect(m_netSearchButton, &QPushButton::clicked, this, &PCBViewerWidget::onNetSearchClicked);
     // Auto trigger navigation when user picks from list (but still allow manual typing then Enter/Go)
     connect(m_netCombo, QOverload<int>::of(&QComboBox::activated), this, &PCBViewerWidget::onNetComboActivated);
+
+    // Color scheme dropdown (shows placeholder menu for now) — placed after search controls
+    {
+        QMenu *colorMenu = new QMenu(m_toolbar);
+        QAction *placeholder = colorMenu->addAction("Under construction…");
+        placeholder->setEnabled(false);
+        // Prefer a palette icon if available; fall back to text label
+        QIcon paletteIcon;
+        const QString palettePath = ":/icons/images/icons/palette.svg";
+        if (QFile::exists(palettePath)) {
+            paletteIcon = QIcon(palettePath);
+            WritePCBDebugToFile("Palette icon found for Color Scheme dropdown");
+        } else {
+            WritePCBDebugToFile("Palette icon NOT found; using text label for Color Scheme dropdown");
+        }
+        QAction *actionColorScheme = m_toolbar->addAction(paletteIcon, paletteIcon.isNull() ? QString("Colors") : QString());
+        actionColorScheme->setToolTip("Color scheme (under construction)");
+        actionColorScheme->setMenu(colorMenu);
+        // Also open the menu when the main button area is clicked
+        connect(actionColorScheme, &QAction::triggered, this, [this, actionColorScheme, colorMenu]() {
+            QWidget *w = m_toolbar->widgetForAction(actionColorScheme);
+            QPoint pos = w ? w->mapToGlobal(QPoint(w->width()/2, w->height())) : QCursor::pos();
+            colorMenu->exec(pos);
+        });
+    }
     m_toolbar->addSeparator();
 
     WritePCBDebugToFile("Zoom and rotation/flip actions added to PCB toolbar");
