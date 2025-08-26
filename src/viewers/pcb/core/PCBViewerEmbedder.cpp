@@ -1074,7 +1074,12 @@ void PCBViewerEmbedder::mouseButtonCallback(GLFWwindow* window, int button, int 
                         // Render once so visual state matches the menu
                         embedder->render();
 
-                        if ((!part.empty() || !net.empty()) && embedder->m_quickRightClickCallback) {
+                        // Skip quick menu for ground nets
+                        auto isGroundNet2 = [](const std::string& n){
+                            if (n.empty()) return false; std::string u=n; std::transform(u.begin(), u.end(), u.begin(), ::toupper);
+                            return u=="GND" || u=="GROUND" || u=="VSS" || u=="AGND" || u=="DGND" || u=="PGND" || u=="SGND" || u.rfind("GND",0)==0 || u.rfind("GROUND",0)==0;
+                        };
+                        if ((!part.empty() || !net.empty()) && !isGroundNet2(net) && embedder->m_quickRightClickCallback) {
                             embedder->m_quickRightClickCallback(part, net);
                         }
                     }
@@ -1139,6 +1144,13 @@ void PCBViewerEmbedder::highlightNet(const std::string& netName)
 {
     if (!m_renderer || !m_pcbData) return;
     if (netName.empty()) { clearHighlights(); return; }
+    // Skip highlighting for ground nets
+    auto isGroundNet = [](std::string n){
+        std::transform(n.begin(), n.end(), n.begin(), ::toupper);
+        if (n.empty()) return false;
+        return n=="GND" || n=="GROUND" || n=="VSS" || n=="AGND" || n=="DGND" || n=="PGND" || n=="SGND" || n.rfind("GND",0)==0 || n.rfind("GROUND",0)==0;
+    };
+    if (isGroundNet(netName)) { handleStatus("Skipping highlight for ground net"); return; }
     m_renderer->SetHighlightedNet(netName);
     handleStatus("Highlight net: " + netName);
 }
@@ -1174,7 +1186,9 @@ std::vector<std::string> PCBViewerEmbedder::getNetNames() const {
     nets.reserve(m_pcbData->pins.size());
     std::unordered_set<std::string> uniq;
     for (const auto &p: m_pcbData->pins) {
-        if (p.net.empty() || p.net=="UNCONNECTED") continue;
+    if (p.net.empty() || p.net=="UNCONNECTED") continue;
+    std::string up = p.net; std::transform(up.begin(), up.end(), up.begin(), ::toupper);
+    if (up=="GND" || up=="GROUND" || up=="VSS" || up=="AGND" || up=="DGND" || up=="PGND" || up=="SGND" || up.rfind("GND",0)==0 || up.rfind("GROUND",0)==0) continue;
         if (uniq.insert(p.net).second) nets.push_back(p.net);
     }
     std::sort(nets.begin(), nets.end());

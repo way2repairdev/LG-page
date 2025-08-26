@@ -851,6 +851,8 @@ void PCBRenderer::RenderCirclePinsImGui(ImDrawList* draw_list, float zoom, float
     } else if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
         selected_net = pcb_data->pins[selected_pin_index].net;
     }
+    // Do not highlight ground nets
+    if (IsGroundNet(selected_net)) selected_net.clear();
     
     // Render all circles with optimized visibility culling
     for (size_t circle_idx = 0; circle_idx < pcb_data->circles.size(); ++circle_idx) {
@@ -932,6 +934,8 @@ void PCBRenderer::RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, fl
     } else if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
         selected_net = pcb_data->pins[selected_pin_index].net;
     }
+    // Do not highlight ground nets
+    if (IsGroundNet(selected_net)) selected_net.clear();
     
     // Render all rectangles with optimized visibility culling
     for (size_t rect_idx = 0; rect_idx < pcb_data->rectangles.size(); ++rect_idx) {
@@ -1053,6 +1057,8 @@ void PCBRenderer::RenderOvalPinsImGui(ImDrawList* draw_list, float zoom, float o
     } else if (selected_pin_index >= 0 && selected_pin_index < (int)pcb_data->pins.size()) {
         selected_net = pcb_data->pins[selected_pin_index].net;
     }
+    // Do not highlight ground nets
+    if (IsGroundNet(selected_net)) selected_net.clear();
     
     // Render all ovals as stadium shapes (rounded rectangles) with optimized visibility culling
     for (size_t oval_idx = 0; oval_idx < pcb_data->ovals.size(); ++oval_idx) {
@@ -1182,6 +1188,21 @@ bool PCBRenderer::IsGroundPin(const BRDPin& pin) {
             net_upper.find("GROUND") == 0); // Starts with GROUND
 }
 
+bool PCBRenderer::IsGroundNet(const std::string& net) const {
+    if (net.empty()) return false;
+    std::string upper = net;
+    std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+    return (upper == "GND" ||
+            upper == "GROUND" ||
+            upper == "VSS" ||
+            upper == "AGND" ||
+            upper == "DGND" ||
+            upper == "PGND" ||
+            upper == "SGND" ||
+            upper.rfind("GND", 0) == 0 ||
+            upper.rfind("GROUND", 0) == 0);
+}
+
 bool PCBRenderer::IsNCPin(const BRDPin& pin) {
     // Check if pin is a No Connect (NC) pin based on net name
     if (pin.net.empty()) return false;
@@ -1300,8 +1321,8 @@ bool PCBRenderer::HandleMouseClick(float screen_x, float screen_y, int window_wi
         const auto& pin = pcb_data->pins[i];
         const auto& cache = pin_geometry_cache[i];
         
-        // Skip only NC pins; allow selecting ground pins
-        if (cache.is_nc) {
+    // Skip NC pins and GND-family pins from selection
+    if (cache.is_nc || cache.is_ground) {
             continue;
         }
 
@@ -1516,8 +1537,8 @@ int PCBRenderer::GetHoveredPin(float screen_x, float screen_y, int window_width,
         const auto& pin = pcb_data->pins[i];
         const auto& cache = pin_geometry_cache[i];
         
-    // Skip only NC pins; allow hovering ground pins
-    if (cache.is_nc) {
+    // Skip NC pins and GND-family pins from hover/highlight
+    if (cache.is_nc || cache.is_ground) {
             continue;
         }
 

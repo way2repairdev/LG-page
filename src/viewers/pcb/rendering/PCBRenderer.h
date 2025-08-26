@@ -177,6 +177,9 @@ private:
     bool CreateShaderProgram();
     GLuint CompileShader(const char* source, GLenum type);
     
+    // Utility helpers
+    bool IsGroundNet(const std::string& net) const;
+    
     // Rendering methods
     void RenderBackground();
     void RenderOutline();
