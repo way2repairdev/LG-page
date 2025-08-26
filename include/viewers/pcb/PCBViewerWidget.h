@@ -76,6 +76,7 @@ public slots:
     void zoomOut();
     void zoomToFit();
     void toggleDiodeReadings();
+    void togglePadRatsnet();
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -114,6 +115,7 @@ private:
     QAction *m_actionZoomOut{nullptr};
     QAction *m_actionZoomFit{nullptr};
     QAction *m_actionToggleDiode{nullptr};
+    QAction *m_actionPadRatsnet{nullptr};
     // Net navigation UI
     QComboBox *m_netCombo{nullptr};
     QPushButton *m_netSearchButton{nullptr};

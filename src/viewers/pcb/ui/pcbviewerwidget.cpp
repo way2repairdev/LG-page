@@ -536,6 +536,13 @@ void PCBViewerWidget::setupToolbar()
     m_actionToggleDiode->setToolTip("Toggle Diode Readings");
     connect(m_actionToggleDiode, &QAction::triggered, this, &PCBViewerWidget::toggleDiodeReadings);
 
+    // Pad Ratsnet toggle
+    m_actionPadRatsnet = m_toolbar->addAction(QIcon(":/icons/images/icons/pad_ratsnet.svg"), "");
+    m_actionPadRatsnet->setCheckable(true);
+    m_actionPadRatsnet->setChecked(false);
+    m_actionPadRatsnet->setToolTip("Toggle Pad Ratsnet");
+    connect(m_actionPadRatsnet, &QAction::triggered, this, &PCBViewerWidget::togglePadRatsnet);
+
     // Net / Component selection combo box + search button
     m_toolbar->addSeparator();
     m_netCombo = new QComboBox(m_toolbar);
@@ -958,6 +965,18 @@ void PCBViewerWidget::toggleDiodeReadings()
         m_pcbEmbedder->toggleDiodeReadings();
         bool enabled = m_pcbEmbedder->isDiodeReadingsEnabled();
         if (m_actionToggleDiode) m_actionToggleDiode->setChecked(enabled);
+    }
+}
+
+void PCBViewerWidget::togglePadRatsnet()
+{
+    WritePCBDebugToFile("Pad Ratsnet toggle clicked");
+    
+    if (m_pcbEmbedder && m_pcbLoaded) {
+        m_pcbEmbedder->toggleRatsnet();
+        bool enabled = m_pcbEmbedder->isRatsnetEnabled();
+        if (m_actionPadRatsnet) m_actionPadRatsnet->setChecked(enabled);
+        WritePCBDebugToFile(QString("Pad Ratsnet %1").arg(enabled ? "enabled" : "disabled"));
     }
 }
 

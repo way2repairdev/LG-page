@@ -496,6 +496,25 @@ bool PCBViewerEmbedder::isDiodeReadingsEnabled() const
     return m_renderer ? m_renderer->IsDiodeReadingsEnabled() : false;
 }
 
+void PCBViewerEmbedder::toggleRatsnet()
+{
+    if (m_renderer) {
+        m_renderer->ToggleRatsnet();
+    }
+}
+
+void PCBViewerEmbedder::setRatsnetEnabled(bool enabled)
+{
+    if (m_renderer) {
+        m_renderer->SetRatsnetEnabled(enabled);
+    }
+}
+
+bool PCBViewerEmbedder::isRatsnetEnabled() const
+{
+    return m_renderer ? m_renderer->IsRatsnetEnabled() : false;
+}
+
 void PCBViewerEmbedder::handleMouseMove(int x, int y)
 {
     if (m_renderer) {
