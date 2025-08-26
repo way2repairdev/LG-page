@@ -94,6 +94,9 @@ private:
     void initializePCBViewer();
     void setupUI();
     void setupToolbar();
+    void setupLayerBar();            // left-side 1..10, ALL
+    void updateLayerBarVisibility(); // show when filename contains "layer"
+    void positionLayerBar();         // overlay position within viewer container
     void connectSignals();
     void applyToolbarTheme(); // reapply styles for current dark/light theme
 
@@ -116,6 +119,10 @@ private:
     QPushButton *m_netSearchButton{nullptr};
     QWidget *m_viewerContainer;
     QTimer *m_updateTimer;
+    // Left-side layer bar
+    QWidget *m_layerBar { nullptr };
+    QList<class QToolButton*> m_layerButtons; // 1..10 + ALL
+    int m_activeLayerFilter { -1 }; // -1 ALL, else 1..10
     
     // Split view components removed
 

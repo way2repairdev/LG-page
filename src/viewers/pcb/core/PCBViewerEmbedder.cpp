@@ -727,6 +727,22 @@ void PCBViewerEmbedder::setCameraPosition(float x, float y)
     }
 }
 
+void PCBViewerEmbedder::setLayerFilter(int layerIndex)
+{
+    // Clamp: -1 (ALL) or 1..10
+    if (layerIndex != -1) {
+        if (layerIndex < 1) layerIndex = 1;
+        if (layerIndex > 10) layerIndex = 10;
+    }
+    m_activeLayerFilter = layerIndex;
+    // Renderer currently doesn't filter by layer; this is a UI hint for now.
+    if (layerIndex == -1) {
+        handleStatus("Layer filter: ALL");
+    } else {
+        handleStatus(std::string("Layer filter set to ") + std::to_string(layerIndex));
+    }
+}
+
 // Private methods
 
 bool PCBViewerEmbedder::initializeGLFW(void* parentHandle, int width, int height)
@@ -794,6 +810,9 @@ bool PCBViewerEmbedder::initializeGLFW(void* parentHandle, int width, int height
     
     // Enable V-sync for better performance (from Window.cpp)
     glfwSwapInterval(1);
+
+    // Default to black background for the framebuffer to match the Qt side
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
     // Initialize GLEW - exactly like Window.cpp
     if (glewInit() != GLEW_OK) {

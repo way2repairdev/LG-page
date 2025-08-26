@@ -76,6 +76,9 @@ PCBViewerWidget::PCBViewerWidget(QWidget *parent)
     setFocusPolicy(Qt::StrongFocus);
     setAttribute(Qt::WA_OpaquePaintEvent, true);
     setAttribute(Qt::WA_NoSystemBackground, true);
+    setAttribute(Qt::WA_StyledBackground, true);
+    setAutoFillBackground(false);
+    setStyleSheet("background: transparent;");
     
     // Setup UI
     setupUI();
@@ -133,7 +136,9 @@ bool PCBViewerWidget::loadPCB(const QString &filePath)
     if (success) {
         m_pcbLoaded = true;
         m_currentFilePath = filePath;
-    populateNetAndComponentList();
+        updateLayerBarVisibility();
+        if (m_pcbEmbedder) m_pcbEmbedder->setLayerFilter(-1);
+        populateNetAndComponentList();
         
         // Start update timer if not already running
         if (!m_updateTimer->isActive()) {
@@ -214,6 +219,7 @@ void PCBViewerWidget::closePCB()
     
     m_pcbLoaded = false;
     m_currentFilePath.clear();
+    updateLayerBarVisibility();
     
     emit pcbClosed();
     
@@ -300,6 +306,7 @@ void PCBViewerWidget::showEvent(QShowEvent *event)
     if (!m_updateTimer->isActive() && m_pcbLoaded) {
         m_updateTimer->start();
     }
+    updateLayerBarVisibility();
 }
 
 void PCBViewerWidget::hideEvent(QHideEvent *event)
@@ -318,8 +325,8 @@ void PCBViewerWidget::hideEvent(QHideEvent *event)
 
 void PCBViewerWidget::paintEvent(QPaintEvent *event)
 {
-    QPainter painter(this);
-    painter.fillRect(rect(), Qt::white);
+    // Don’t force a white background; keep it transparent so the viewer’s
+    // content/color shows through next to the layer toolbar.
     QWidget::paintEvent(event);
 }
 
@@ -409,6 +416,7 @@ void PCBViewerWidget::initializePCBViewer()
         m_usingFallback = m_pcbEmbedder->isUsingFallback();
         
         WritePCBDebugToFile("PCB viewer initialized successfully");
+    updateLayerBarVisibility();
     } else {
         WritePCBDebugToFile("Failed to initialize PCB viewer");
         m_usingFallback = true;
@@ -427,17 +435,33 @@ void PCBViewerWidget::setupUI()
     // Setup main toolbar
     setupToolbar();
     
-    // Single viewer container (split view removed)
+    // Viewer container with optional left layer bar
     m_viewerContainer = new QWidget(this);
-    m_viewerContainer->setMinimumSize(400, 300);
+    m_viewerContainer->setMinimumSize(300, 300); // leave room for the left layer bar
     m_viewerContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_viewerContainer->setFocusPolicy(Qt::StrongFocus);
     m_viewerContainer->installEventFilter(this);
+    m_viewerContainer->setAttribute(Qt::WA_StyledBackground, true);
+    m_viewerContainer->setAutoFillBackground(false); // will be set true when layer bar shows
+    m_viewerContainer->setStyleSheet("background: transparent;");
+    // Add a left-side layer bar similar to the screenshot (hidden by default)
+    setupLayerBar();
     // Add toolbar and viewer container to main layout
     if (m_toolbar) {
         m_mainLayout->addWidget(m_toolbar);
     }
-    m_mainLayout->addWidget(m_viewerContainer, 1);
+    // Wrap viewer and layer bar in a horizontal layout (no overlay to avoid native window z-order issues)
+    {
+        auto *h = new QHBoxLayout();
+        h->setContentsMargins(0,0,0,0);
+        h->setSpacing(0);
+        if (m_layerBar) {
+            m_layerBar->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+            h->addWidget(m_layerBar);
+        }
+        h->addWidget(m_viewerContainer, 1);
+        m_mainLayout->addLayout(h, 1);
+    }
     
     WritePCBDebugToFile("PCB viewer UI setup completed (single-pane)");
 }
@@ -453,7 +477,7 @@ void PCBViewerWidget::setupToolbar()
     // Theme-aware red accent (match tab styling: #E53935/#b71c1c family)
     const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
     const QString tbStyleLight =
-        "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:30px;}"
+        "QToolBar{background:transparent;border:none;min-height:30px;}"
         "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(229,57,53,0.10);border-color:rgba(229,57,53,0.35);}" 
         "QToolBar QToolButton:pressed{background:rgba(229,57,53,0.18);border-color:#E53935;}"
@@ -461,7 +485,7 @@ void PCBViewerWidget::setupToolbar()
         "QToolBar QToolButton:disabled{color:#9e9e9e;background:transparent;border-color:transparent;}"
         "QToolBar::separator{background:rgba(0,0,0,0.12);width:1px;margin:0 6px;}";
     const QString tbStyleDark =
-        "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:30px;}"
+        "QToolBar{background:transparent;border:none;min-height:30px;}"
         "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(183,28,28,0.22);border-color:#cf6679;}"
         "QToolBar QToolButton:pressed{background:rgba(183,28,28,0.30);border-color:#b71c1c;}"
@@ -612,12 +636,147 @@ void PCBViewerWidget::setupToolbar()
     }
 }
 
+void PCBViewerWidget::positionLayerBar()
+{
+    if (!m_layerBar || !m_layerBar->isVisible()) return;
+    // Pin the layer bar to the left edge with a small inset
+    const int inset = 4;
+    int h = m_viewerContainer ? m_viewerContainer->height() : height();
+    // Determine preferred width based on button size
+    int w = 40; // enough for 32px button width + margins
+    m_layerBar->setGeometry(inset, inset, w, h - inset*2);
+}
+
+// Create the vertical bar with 1..10 and ALL buttons on the left
+void PCBViewerWidget::setupLayerBar()
+{
+    if (m_layerBar) {
+        WritePCBDebugToFile("setupLayerBar called but m_layerBar already exists");
+        return;
+    }
+    const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+    m_layerBar = new QWidget(this);
+    // Paint this widget fully (no translucency) so its black background is solid
+    m_layerBar->setAttribute(Qt::WA_StyledBackground, true);
+    m_layerBar->setAutoFillBackground(true);
+    m_layerBar->setObjectName("LayerBar");
+    m_layerBar->setMinimumWidth(44); // ensure it isn't squeezed to zero width
+    m_layerBar->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    auto *v = new QVBoxLayout(m_layerBar);
+    v->setContentsMargins(4,4,4,4);
+    v->setSpacing(6);
+
+    const QColor textColor = dark ? QColor("#e8eaed") : QColor("#111111");
+
+    // Material palette accents for each button (11 total inc. ALL)
+    const QList<QColor> colors = {
+        QColor("#F44336"), // 1  Red
+        QColor("#E91E63"), // 2  Pink
+        QColor("#9C27B0"), // 3  Purple
+        QColor("#673AB7"), // 4  Deep Purple
+        QColor("#3F51B5"), // 5  Indigo
+        QColor("#2196F3"), // 6  Blue
+        QColor("#03A9F4"), // 7  Light Blue
+        QColor("#00BCD4"), // 8  Cyan
+        QColor("#009688"), // 9  Teal
+        QColor("#4CAF50"), // 10 Green
+        QColor("#FF9800")  // ALL Orange
+    };
+
+    auto mkBtn = [&](const QString &text, const QColor &accent){
+        auto *b = new QToolButton(m_layerBar);
+        b->setText(text);
+        b->setCheckable(true);
+        b->setFixedSize(32, 24);
+        b->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        b->setAutoRaise(true);
+        // Light white background for all states with subtle changes; keep colored borders per button
+        const QString bgNormal = dark ? "rgba(255,255,255,0.12)" : "#FAFAFA";
+        const QString bgHover  = dark ? "rgba(255,255,255,0.18)" : "#F2F2F2";
+        const QString base = QString(
+            "QToolButton{background:%1;border:1px solid %2;color:%3;border-radius:6px;}"
+            "QToolButton:hover{background:%4;}"
+            // When active, fill with the accent color (same as border) and use white text for contrast
+            "QToolButton:checked{background:%2;border-color:%2;color:#FFFFFF;font-weight:600;}"
+        ).arg(bgNormal, accent.name(), textColor.name(), bgHover);
+        b->setStyleSheet(base);
+        return b;
+    };
+
+    // Buttons 1..10 with distinct Material colors
+    for (int i=1;i<=10;++i){
+        auto *b = mkBtn(QString::number(i), colors[i-1]);
+        v->addWidget(b);
+        m_layerButtons.append(b);
+        connect(b, &QToolButton::clicked, this, [this,i](){
+            m_activeLayerFilter = i;
+            for (int j=0;j<m_layerButtons.size();++j) m_layerButtons[j]->setChecked((j+1)==i);
+            if (m_pcbEmbedder) m_pcbEmbedder->setLayerFilter(i);
+        });
+    }
+
+    // ALL button gets its own color
+    auto *bAll = mkBtn("ALL", colors.last());
+    v->addWidget(bAll);
+    m_layerButtons.append(bAll);
+    connect(bAll, &QToolButton::clicked, this, [this,bAll](){
+        m_activeLayerFilter = -1;
+        for (auto *btn : std::as_const(m_layerButtons)) btn->setChecked(btn==bAll);
+        if (m_pcbEmbedder) m_pcbEmbedder->setLayerFilter(-1);
+    });
+    v->addStretch(1);
+
+    // Solid black background on the container only; buttons keep their own transparent styles
+    m_layerBar->setStyleSheet("#LayerBar{background:#000000;border:none;margin:0;padding:0;}");
+    WritePCBDebugToFile("LayerBar style applied: container background=#000000");
+    m_layerBar->setVisible(false); // only show when file name contains "layer"
+    WritePCBDebugToFile(QString("LayerBar created: ptr=%1 minW=%2")
+                        .arg(reinterpret_cast<quintptr>(m_layerBar))
+                        .arg(m_layerBar->minimumWidth()));
+}
+
+void PCBViewerWidget::updateLayerBarVisibility()
+{
+    // Ensure the layer bar exists; log state either way
+    if (!m_layerBar) {
+        WritePCBDebugToFile("updateLayerBarVisibility: m_layerBar is null; creating now");
+        setupLayerBar();
+    }
+    if (!m_layerBar) {
+        WritePCBDebugToFile("updateLayerBarVisibility: m_layerBar still null after setup; aborting");
+        return;
+    }
+    const QString fp = m_currentFilePath;
+    const bool show = fp.contains("layer", Qt::CaseInsensitive);
+    m_layerBar->setVisible(show);
+    // When showing the left bar, also ensure the viewer container paints black,
+    // so there's no white seam beside the native OpenGL surface.
+    if (m_viewerContainer) {
+        if (show) {
+            m_viewerContainer->setAttribute(Qt::WA_StyledBackground, true);
+            m_viewerContainer->setAutoFillBackground(true);
+            m_viewerContainer->setStyleSheet("background:#000000;");
+        } else {
+            // Restore original transparent background when the bar is hidden
+            m_viewerContainer->setAttribute(Qt::WA_StyledBackground, true);
+            m_viewerContainer->setAutoFillBackground(false);
+            m_viewerContainer->setStyleSheet("background: transparent;");
+        }
+    }
+    WritePCBDebugToFile(QString("LayerBar visibility check: file='%1' show=%2 width=%3")
+                        .arg(fp)
+                        .arg(show ? "true" : "false")
+                        .arg(m_layerBar->width()));
+    if (layout()) layout()->invalidate();
+    updateGeometry();
+}
+
 void PCBViewerWidget::applyToolbarTheme()
 {
     if (!m_toolbar) return;
     const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
     const QString tbStyleLight =
-        "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:30px;}"
+        "QToolBar{background:transparent;border:none;min-height:30px;}"
         "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(229,57,53,0.10);border-color:rgba(229,57,53,0.35);}" 
         "QToolBar QToolButton:pressed{background:rgba(229,57,53,0.18);border-color:#E53935;}"
@@ -625,7 +784,7 @@ void PCBViewerWidget::applyToolbarTheme()
         "QToolBar QToolButton:disabled{color:#9e9e9e;background:transparent;border-color:transparent;}"
         "QToolBar::separator{background:rgba(0,0,0,0.12);width:1px;margin:0 6px;}";
     const QString tbStyleDark =
-        "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:30px;}"
+        "QToolBar{background:transparent;border:none;min-height:30px;}"
         "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(183,28,28,0.22);border-color:#cf6679;}"
         "QToolBar QToolButton:pressed{background:rgba(183,28,28,0.30);border-color:#b71c1c;}"
@@ -893,6 +1052,7 @@ void PCBViewerWidget::onNetComboActivated(int index) {
 
 bool PCBViewerWidget::eventFilter(QObject *watched, QEvent *event) {
     if (watched == m_viewerContainer) {
+    // No overlay positioning required in layout mode
         if (event->type() == QEvent::MouseButtonPress) {
             QMouseEvent *me = static_cast<QMouseEvent*>(event);
             if (me->button() == Qt::RightButton) {

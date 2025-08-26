@@ -102,6 +102,10 @@ public:
     void getCameraPosition(float& x, float& y) const;
     void setCameraPosition(float x, float y);
 
+    // Simple numeric layer filter (UI-only; renderer may ignore). -1 means ALL
+    void setLayerFilter(int layerIndex); // 1..10, -1 for ALL
+    int  getLayerFilter() const { return m_activeLayerFilter; }
+
     // Callbacks for Qt widget integration
     void setErrorCallback(ErrorCallback callback) { m_errorCallback = callback; }
     void setStatusCallback(StatusCallback callback) { m_statusCallback = callback; }
@@ -191,4 +195,7 @@ private:
     static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
     static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
     static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
+
+    // Layer/state
+    int m_activeLayerFilter { -1 }; // -1 = ALL; 1..10 for specific layer buttons
 };
