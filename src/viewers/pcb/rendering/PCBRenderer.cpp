@@ -4,9 +4,11 @@
 #include <cmath>
 #include <vector>
 #include <set>
+#include <unordered_map>
 #include <imgui.h>
 #include <cctype>
 #include <GL/glew.h>
+#include <iostream>
 
 // Simple vertex shader - kept for reference but not used in ImGui rendering
 const char* vertex_shader_source = R"(
@@ -171,6 +173,11 @@ void PCBRenderer::Render(int window_width, int window_height) {
     RenderCirclePinsImGui(draw_list, zoom, offset_x, offset_y, window_width, window_height);
     RenderRectanglePinsImGui(draw_list, zoom, offset_x, offset_y, window_width, window_height);
     RenderOvalPinsImGui(draw_list, zoom, offset_x, offset_y, window_width, window_height);
+
+    // Render ratsnet/airwires if enabled
+    if (settings.show_ratsnet) {
+        RenderRatsnetImGui(draw_list, zoom, offset_x, offset_y, window_width, window_height);
+    }
 
     // Collect part names for rendering on top
     CollectPartNamesForRendering(zoom, offset_x, offset_y);
@@ -836,6 +843,95 @@ void PCBRenderer::RenderPartHighlighting(ImDrawList* draw_list, float zoom, floa
         ImU32 border_col = IM_COL32(255, 255, 0, 255);
         draw_list->AddRectFilled(top_left, bottom_right, fill_col);
         draw_list->AddRect(top_left, bottom_right, border_col, 0.f, 0, 2.f);
+    }
+}
+
+void PCBRenderer::RenderRatsnetImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y, int window_width, int window_height) {
+    if (!pcb_data || pcb_data->pins.empty()) {
+        return;
+    }
+    
+    if (!settings.show_ratsnet) {
+        return; // Ratsnet disabled, don't render anything
+    }
+
+    // Only show ratsnet when a pin is specifically selected
+    if (selected_pin_index < 0 || selected_pin_index >= (int)pcb_data->pins.size()) {
+        return;
+    }
+    
+    const auto& selected_pin = pcb_data->pins[selected_pin_index];
+    std::string target_net = selected_pin.net;
+    
+    // If the selected pin has no valid net, don't show ratsnet
+    if (target_net.empty() || target_net == "UNCONNECTED" || target_net == "NC") {
+        return;
+    }
+
+    // Build a list of pins for the target net (excluding the selected pin itself)
+    std::vector<size_t> connected_pin_indices;
+    for (size_t i = 0; i < pcb_data->pins.size(); ++i) {
+        if ((int)i == selected_pin_index) continue; // Skip the selected pin itself
+        
+        const auto& pin = pcb_data->pins[i];
+        if (pin.net == target_net) {
+            connected_pin_indices.push_back(i);
+        }
+    }
+
+    // Need at least 1 other pin to draw connections from the selected pin
+    if (connected_pin_indices.empty()) {
+        return;
+    }
+
+    // Set ratsnet line color and thickness
+    ImU32 ratsnet_color = IM_COL32(
+        static_cast<int>(settings.ratsnet_color.r * 255),
+        static_cast<int>(settings.ratsnet_color.g * 255),
+        static_cast<int>(settings.ratsnet_color.b * 255),
+        180  // Semi-transparent
+    );
+    const float line_thickness = 1.0f;
+
+    // For the selected pin, draw ratsnet lines to all other pins in the same net
+    // Transform selected pin position
+    float selected_x = static_cast<float>(selected_pin.pos.x);
+    float selected_y = static_cast<float>(selected_pin.pos.y);
+    ApplyRotation(selected_x, selected_y, false);
+    
+    // Convert to screen coordinates
+    ImVec2 selected_screen(selected_x * zoom + offset_x, offset_y - selected_y * zoom);
+    
+    // Connect the selected pin to all other pins in the same net
+    for (size_t pin_idx : connected_pin_indices) {
+        const auto& pin = pcb_data->pins[pin_idx];
+        
+        // Transform pin position
+        float pin_x = static_cast<float>(pin.pos.x);
+        float pin_y = static_cast<float>(pin.pos.y);
+        ApplyRotation(pin_x, pin_y, false);
+        
+        // Convert to screen coordinates
+        ImVec2 pin_screen(pin_x * zoom + offset_x, offset_y - pin_y * zoom);
+        
+        // Basic visibility culling - only draw lines that might be visible
+        ImVec2 min_pt(
+            std::min(selected_screen.x, pin_screen.x),
+            std::min(selected_screen.y, pin_screen.y)
+        );
+        ImVec2 max_pt(
+            std::max(selected_screen.x, pin_screen.x),
+            std::max(selected_screen.y, pin_screen.y)
+        );
+        
+        // Check if line intersects with visible area (with some margin)
+        const float margin = 50.0f;
+        if (max_pt.x >= -margin && min_pt.x <= window_width + margin &&
+            max_pt.y >= -margin && min_pt.y <= window_height + margin) {
+            
+            // Draw the ratsnet line from selected pin to this pin
+            draw_list->AddLine(selected_screen, pin_screen, ratsnet_color, line_thickness);
+        }
     }
 }
 

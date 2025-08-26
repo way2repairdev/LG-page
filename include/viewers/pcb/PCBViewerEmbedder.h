@@ -63,6 +63,10 @@ public:
     void toggleDiodeReadings();
     void setDiodeReadingsEnabled(bool enabled);
     bool isDiodeReadingsEnabled() const;
+    // Ratsnet/airwires visibility
+    void toggleRatsnet();
+    void setRatsnetEnabled(bool enabled);
+    bool isRatsnetEnabled() const;
 
     // Mouse and keyboard input
     void handleMouseMove(int x, int y);

@@ -24,6 +24,7 @@ struct RenderSettings {
     bool show_part_outlines = true;
     bool show_nets = false;
     bool show_diode_readings = true; // control displaying diode readings in pin text overlay
+    bool show_ratsnet = false; // control displaying ratsnet/airwires
     
     float part_alpha = 1.0f;
     float pin_alpha = 1.0f;
@@ -45,7 +46,12 @@ struct RenderSettings {
     struct {
         float r = 1.0f, g = 1.0f, b = 1.0f;  // White
     } part_outline_color;
-      struct {
+    
+    struct {
+        float r = 0.0f, g = 1.0f, b = 1.0f;  // Cyan
+    } ratsnet_color;
+    
+    struct {
         float r = 0.0f, g = 0.3f, b = 0.0f;  // Dark green PCB background
     } background_color;
 };
@@ -95,6 +101,7 @@ public:
     void RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, float offset_x, float offset_y, int window_width, int window_height); // Render pin numbers as text overlays
     void CollectPartNamesForRendering(float zoom, float offset_x, float offset_y); // Collect part names for rendering
     void RenderPartHighlighting(ImDrawList* draw_list, float zoom, float offset_x, float offset_y); // Render part highlighting on top
+    void RenderRatsnetImGui(ImDrawList* draw_list, float zoom, float offset_x, float offset_y, int window_width, int window_height); // Render ratsnet/airwires
     
     // Camera controls
     void SetCamera(float x, float y, float zoom);
@@ -116,6 +123,11 @@ public:
     void ToggleDiodeReadings() { settings.show_diode_readings = !settings.show_diode_readings; }
     void SetDiodeReadingsEnabled(bool enabled) { settings.show_diode_readings = enabled; }
     bool IsDiodeReadingsEnabled() const { return settings.show_diode_readings; }
+    
+    // Ratsnet/airwires visibility
+    void ToggleRatsnet() { settings.show_ratsnet = !settings.show_ratsnet; }
+    void SetRatsnetEnabled(bool enabled) { settings.show_ratsnet = enabled; }
+    bool IsRatsnetEnabled() const { return settings.show_ratsnet; }
 
     // External net highlighting (independent from selected pin net)
     void SetHighlightedNet(const std::string &net) { highlighted_net = net; }
