@@ -1326,31 +1326,7 @@ void PCBViewerEmbedder::displayPinHoverInfo()
         }
     }
     
-    // Display selected pin information in a separate window - matching main.cpp
-    if (m_renderer && m_renderer->HasSelectedPin() && m_pcbData) {
-        int selectedPin = m_renderer->GetSelectedPinIndex();
-        if (selectedPin >= 0 && selectedPin < static_cast<int>(m_pcbData->pins.size())) {
-            const auto& pin = m_pcbData->pins[selectedPin];
-            
-            // Create selection info window
-            ImGui::Begin("Pin Information", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
-            ImGui::Text("Selected Pin Details:");
-            ImGui::Separator();
-            ImGui::Text("Pin Number: %s", pin.name.c_str());
-            ImGui::Text("Net Name: %s", pin.net.empty() ? "UNCONNECTED" : pin.net.c_str());
-            ImGui::Text("Serial Number: %s", pin.snum.c_str());
-            ImGui::Text("Position: (%d, %d)", pin.pos.x, pin.pos.y);
-            ImGui::Text("Radius: %.1f", pin.radius);
-            
-            if ((int)pin.part < (int)m_pcbData->parts.size()) {
-                ImGui::Text("Part: %s", m_pcbData->parts[(int)pin.part].name.c_str());
-            }
-            
-            if (ImGui::Button("Clear Selection")) {
-                clearSelection();
-            }
-            
-            ImGui::End();
-        }
-    }
+    // Note: The persistent left-side pin information panel has been intentionally disabled.
+    // We keep the hover tooltip above, but do not render a docked/anchored info window.
+    // If needed in the future, this block can be restored behind a feature flag.
 }
