@@ -29,6 +29,7 @@
 #include <QLineEdit>
 #include <QToolButton>
 #include <QVector>
+#include <QButtonGroup>
 
 #include "ui/dualtabwidget.h"
 
@@ -88,6 +89,8 @@ private slots:
 public slots:
     void toggleTreeView();
     void toggleFullScreenPDF();
+    // Allow configuring server root path at runtime
+    void setServerRootPath(const QString &path);
 
 protected:
     void changeEvent(QEvent *event) override; // Re-apply theme on palette changes
@@ -96,6 +99,9 @@ private:
     UserSession m_userSession;
     DatabaseManager *m_dbManager;
     QString m_rootFolderPath;  // Local folder path to load files from
+    QString m_serverRootPath;  // Server folder path (will be provided later)
+    enum class TreeSource { Server, Local };
+    TreeSource m_treeSource { TreeSource::Server }; // default to Server
     
     // Server-side members (commented out for local file loading)
     //QNetworkAccessManager *m_networkManager;
@@ -106,10 +112,14 @@ private:
     QSplitter *m_splitter;
     QWidget *m_treePanel;           // container for search bar + tree
     QWidget *m_treeSearchBar;       // search bar container (for theming)
+    QWidget *m_sourceToggleBar;     // Local/Server toggle bar
     QTreeWidget *m_treeWidget;
     QLineEdit *m_treeSearchEdit;    // search input
     QPushButton *m_treeSearchButton; // search/next button
     QToolButton *m_treeSearchClearButton; // clear input
+    QPushButton *m_btnLocal;        // Local button
+    QPushButton *m_btnServer;       // Server button
+    QButtonGroup *m_sourceGroup;    // Exclusive selection
     DualTabWidget *m_tabWidget;  // Changed from QTabWidget to DualTabWidget
     QStatusBar *m_statusBar;
     
@@ -129,10 +139,15 @@ private:
     void setupStatusBar();
     void setupKeyboardShortcuts();
     void setupTreeView();
+    void setupSourceToggleBar(); // create Local/Server toggle UI
     void setupTabWidget();  // Changed from setupContentArea
     void applyTreeViewTheme(); // Apply adaptive dark/light stylesheet to tree view
     void updateUserInfo();
+    void setTreeSource(TreeSource src, bool forceReload=false);
+    void refreshCurrentTree();
+    QString currentRootPath() const;
     void loadLocalFiles();  // Changed from loadFileList
+    void loadServerFiles(); // Mirror of local loader using m_serverRootPath
     void loadLocalFileContent(const QString &filePath);  // Changed from loadFileContent
     void populateTreeFromDirectory(const QString &dirPath, QTreeWidgetItem *parentItem = nullptr);
     void openFileInTab(const QString &filePath);

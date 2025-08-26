@@ -46,7 +46,8 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
     : QMainWindow(parent)
     , m_userSession(userSession)
     , m_dbManager(new DatabaseManager(this))
-    , m_rootFolderPath("C:\\W2R_Schematics")  // Set to W2R_Schematics folder
+    , m_rootFolderPath("C:\\W2R_Schematics")  // Local default folder
+    , m_serverRootPath("\\\\192.168.1.2\\SharedFiles\\W2R_Schematics") // Default server UNC path
     // Server-side initialization (commented out for local file loading)
     //, m_networkManager(new QNetworkAccessManager(this))
     //, m_baseUrl("http://localhost/api") // WAMP server API endpoint
@@ -77,8 +78,15 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
     // Set application icon (you can add an icon file later)
     setWindowIcon(QIcon(":/icons/app_icon.png"));
     
-    // Load initial file list from local folder
-    loadLocalFiles();
+    // Load initial tree: default to Server mode; fallback to Local until a server path is set
+    if (m_serverRootPath.isEmpty()) {
+        // No server path yet
+        // Ensure toggle reflects Local and load
+        // setTreeSource defined later; safe to call
+        setTreeSource(TreeSource::Local, true);
+    } else {
+        setTreeSource(TreeSource::Server, true);
+    }
     writeTransitionLog("ctor: after loadLocalFiles");
     
     // Add welcome tab
@@ -187,7 +195,7 @@ void MainApplication::setupMenuBar()
     connect(fullUpdateAction, &QAction::triggered, this, &MainApplication::onFullUpdateUI);
     
     viewMenu->addSeparator();
-    viewMenu->addAction("&Refresh Tree", this, &MainApplication::loadLocalFiles);
+    viewMenu->addAction("&Refresh Tree", this, &MainApplication::refreshCurrentTree);
     viewMenu->addAction("&Expand All", this, [this]() { m_treeWidget->expandAll(); });
     viewMenu->addAction("&Collapse All", this, [this]() { m_treeWidget->collapseAll(); });
     
@@ -313,7 +321,9 @@ void MainApplication::setupTreeView()
     panelLayout->setContentsMargins(0, 0, 0, 0);
     panelLayout->setSpacing(6);
 
-    // Search bar row
+    // No title bar row; search bar will be the top row
+
+    // Search bar row (with Server/Local toggle on the right)
     m_treeSearchBar = new QWidget(m_treePanel);
     QHBoxLayout *searchLayout = new QHBoxLayout(m_treeSearchBar);
     searchLayout->setContentsMargins(6, 6, 6, 0);
@@ -351,6 +361,10 @@ void MainApplication::setupTreeView()
     searchLayout->addWidget(m_treeSearchEdit, 1);
     // No explicit clear button inserted; QLineEdit shows its own clear icon
     searchLayout->addWidget(m_treeSearchButton, 0);
+    // Add the source toggle bar to the right of the search controls
+    setupSourceToggleBar();
+    searchLayout->addSpacing(6);
+    searchLayout->addWidget(m_sourceToggleBar, 0, Qt::AlignVCenter);
     m_treeSearchBar->setLayout(searchLayout);
 
     // Tree widget
@@ -375,7 +389,7 @@ void MainApplication::setupTreeView()
         m_searchResultIndex = -1;
         if (m_isSearchView) {
             m_isSearchView = false;
-            loadLocalFiles();
+            refreshCurrentTree();
         } else if (m_searchResultsRoot) {
             m_searchResultsRoot->takeChildren();
             m_searchResultsRoot->setHidden(true);
@@ -565,25 +579,23 @@ void MainApplication::applyTreeViewTheme()
         ).arg(bg));
     }
     // Style search widgets to match theme
-    if (m_treeSearchEdit) {
+    if (m_treeSearchBar) {
         // Clean, compact field
-        m_treeSearchEdit->setStyleSheet(QString(
-            "QLineEdit {"
-            "  border: 1px solid %1;"
-            "  border-radius: 8px;"
-            "  padding: 6px 10px;"
-            "  background: %2;"
-            "  color: %3;"
-            "  caret-color: %3;"
-            "  selection-background-color: %6;"
-            "  selection-color: %7;"
-            "}"
-            "QLineEdit::placeholder { color: %5; }"
-            "QLineEdit:focus {"
-            "  border: 1px solid %4;"
-            "}")
-            .arg(border, bg, text, focusOutline, placeholder, selectedBg, selectedText));
+        if (m_treeSearchEdit) {
+            m_treeSearchEdit->setStyleSheet(QString(
+                "QLineEdit {"
+                "  border: 1px solid %1;"
+                "  border-radius: 8px;"
+                "  padding: 6px 10px;"
+                "}"
+                "QLineEdit::placeholder { color: %5; }"
+                "QLineEdit:focus {"
+                "  border: 1px solid %4;"
+                "}")
+                .arg(border, bg, text, focusOutline, placeholder, selectedBg, selectedText));
+        }
     }
+    // No title bar to style
     if (m_treeSearchButton) {
         // Outlined button, neutral until hovered/pressed
         m_treeSearchButton->setStyleSheet(QString(
@@ -606,6 +618,51 @@ void MainApplication::applyTreeViewTheme()
         // No visible clear button; style reset to avoid theme artifacts if ever shown
         m_treeSearchClearButton->setStyleSheet("QToolButton { border: none; background: transparent; } QToolButton:hover { background: transparent; }");
     }
+}
+
+void MainApplication::setupSourceToggleBar()
+{
+    m_sourceToggleBar = new QWidget(m_treePanel);
+    auto *hl = new QHBoxLayout(m_sourceToggleBar);
+    hl->setContentsMargins(6, 6, 6, 0);
+    hl->setSpacing(6);
+
+    m_btnServer = new QPushButton("Server", m_sourceToggleBar);
+    m_btnLocal  = new QPushButton("Local", m_sourceToggleBar);
+    m_btnServer->setCheckable(true);
+    m_btnLocal->setCheckable(true);
+    m_sourceGroup = new QButtonGroup(this);
+    m_sourceGroup->setExclusive(true);
+    m_sourceGroup->addButton(m_btnServer, 1);
+    m_sourceGroup->addButton(m_btnLocal, 2);
+
+    // Default visual selection: Server (constructor will set actual source)
+    m_btnServer->setChecked(true);
+
+    auto applyBtnStyle = [this](QPushButton *b){
+        const QColor base = palette().color(QPalette::Window);
+        bool dark = base.lightness() < 128;
+        QString border = dark ? "#39424c" : "#d7dbe2";
+        QString bg = dark ? "#20262c" : "#ffffff";
+        QString text = dark ? "#e2e8ef" : "#1a1a1a";
+        QString hover = dark ? "#2d3640" : "#f3f5f7";
+        QString active = dark ? "#2f7dd8" : "#0078d4";
+        QString activeText = "#ffffff";
+        b->setStyleSheet(QString(
+            "QPushButton { padding: 6px 12px; border: 1px solid %1; background: %2; color: %3; border-radius: 8px; }"
+            "QPushButton:hover { background: %4; }"
+            "QPushButton:checked { background: %5; color: %6; border-color: %5; }"
+        ).arg(border, bg, text, hover, active, activeText));
+    };
+    applyBtnStyle(m_btnServer);
+    applyBtnStyle(m_btnLocal);
+
+    hl->addWidget(m_btnServer, 0);
+    hl->addWidget(m_btnLocal, 0);
+    hl->addStretch(1);
+
+    connect(m_btnServer, &QPushButton::toggled, this, [this](bool on){ if (on) setTreeSource(TreeSource::Server, true); });
+    connect(m_btnLocal,  &QPushButton::toggled, this, [this](bool on){ if (on) setTreeSource(TreeSource::Local, true);  });
 }
 
 // Create and style the search widgets (called within setupTreeView)
@@ -665,7 +722,7 @@ void MainApplication::renderSearchResultsFlat(const QVector<QString> &results, c
     // Header label remains "Treeview" for consistency
 
     // Create a simple flat list: one top-level item per result
-    QDir root(m_rootFolderPath);
+    QDir root(currentRootPath());
     for (const QString &path : results) {
         QFileInfo fi(path);
         QString relDir = root.relativeFilePath(fi.absolutePath());
@@ -689,8 +746,9 @@ void MainApplication::renderSearchResultsFlat(const QVector<QString> &results, c
 QVector<QString> MainApplication::findMatchingFiles(const QString &term, int maxResults) const
 {
     QVector<QString> results;
-    if (m_rootFolderPath.isEmpty()) return results;
-    QDir root(m_rootFolderPath);
+    QString rootPath = currentRootPath();
+    if (rootPath.isEmpty()) return results;
+    QDir root(rootPath);
     if (!root.exists()) return results;
 
     // Breadth-first traversal using a queue to be responsive for large trees
@@ -724,7 +782,7 @@ bool MainApplication::revealPathInTree(const QString &absPath)
     if (!fi.exists()) return false;
 
     // Build list of folder names from root to file's parent
-    QString rel = QDir(m_rootFolderPath).relativeFilePath(fi.absolutePath());
+    QString rel = QDir(currentRootPath()).relativeFilePath(fi.absolutePath());
     QStringList parts = rel.split(QDir::separator(), Qt::SkipEmptyParts);
 
     // Find the root item matching m_rootFolderPath; top-level items correspond to entries of the root
@@ -870,6 +928,78 @@ void MainApplication::loadLocalFiles()
     m_treeWidget->collapseAll();
     
     statusBar()->showMessage(QString("Loaded files from: %1").arg(m_rootFolderPath));
+}
+
+void MainApplication::loadServerFiles()
+{
+    statusBar()->showMessage("Loading files from server directory...");
+    m_treeWidget->clear();
+    m_searchResultsRoot = nullptr;
+
+    if (m_serverRootPath.isEmpty()) {
+        statusBar()->showMessage("Server path not set. Switch to Local or provide server path.");
+        return;
+    }
+    QDir rootDir(m_serverRootPath);
+    if (!rootDir.exists()) {
+        statusBar()->showMessage("Error: Server folder not accessible: " + m_serverRootPath);
+        return;
+    }
+    populateTreeFromDirectory(m_serverRootPath);
+
+    m_searchResultsRoot = new QTreeWidgetItem(m_treeWidget);
+    m_searchResultsRoot->setText(0, "Search Results");
+    m_searchResultsRoot->setIcon(0, style()->standardIcon(QStyle::SP_FileDialogContentsView));
+    m_searchResultsRoot->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
+    m_searchResultsRoot->setHidden(true);
+    m_searchResultsRoot->setExpanded(false);
+
+    m_treeWidget->collapseAll();
+    statusBar()->showMessage(QString("Loaded files from: %1").arg(m_serverRootPath));
+}
+
+void MainApplication::setServerRootPath(const QString &path)
+{
+    m_serverRootPath = path;
+    if (m_treeSource == TreeSource::Server)
+        refreshCurrentTree();
+}
+
+void MainApplication::setTreeSource(TreeSource src, bool forceReload)
+{
+    if (!forceReload && m_treeSource == src) return;
+    m_treeSource = src;
+    if (m_btnServer && m_btnLocal) {
+        m_btnServer->blockSignals(true);
+        m_btnLocal->blockSignals(true);
+        m_btnServer->setChecked(src == TreeSource::Server);
+        m_btnLocal->setChecked(src == TreeSource::Local);
+        m_btnServer->blockSignals(false);
+        m_btnLocal->blockSignals(false);
+    }
+    // No title label to update
+    refreshCurrentTree();
+}
+
+QString MainApplication::currentRootPath() const
+{
+    return (m_treeSource == TreeSource::Server && !m_serverRootPath.isEmpty())
+            ? m_serverRootPath
+            : m_rootFolderPath;
+}
+
+void MainApplication::refreshCurrentTree()
+{
+    if (m_treeSource == TreeSource::Server) {
+        if (m_serverRootPath.isEmpty()) {
+            statusBar()->showMessage("Server path not set. Showing Local.");
+            loadLocalFiles();
+        } else {
+            loadServerFiles();
+        }
+    } else {
+        loadLocalFiles();
+    }
 }
 
 void MainApplication::populateTreeFromDirectory(const QString &dirPath, QTreeWidgetItem *parentItem)
