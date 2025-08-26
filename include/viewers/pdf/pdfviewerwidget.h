@@ -206,7 +206,7 @@ private:
     // Search widgets (shared/main toolbar)
     QLabel* m_searchLabel;
     QLineEdit* m_searchInput;
-    QLabel* m_statusInfoLabel;    // Compact status (page & zoom)
+    QLabel* m_statusInfoLabel = nullptr;    // Compact status (page & zoom); may be absent
     
     // Split view navigation widgets removed
     

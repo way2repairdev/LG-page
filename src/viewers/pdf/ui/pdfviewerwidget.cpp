@@ -334,14 +334,8 @@ void PDFViewerWidget::setupToolbar()
     m_actionFindNext->setToolTip("Find Next");
     connect(m_actionFindNext, &QAction::triggered, this, &PDFViewerWidget::findNext);
 
-    // Compact status area
-    m_toolbar->addSeparator();
-    m_statusInfoLabel = new QLabel("No PDF", this);
-    m_statusInfoLabel->setObjectName("statusInfoLabel");
-    m_statusInfoLabel->setMinimumWidth(110);
-    m_statusInfoLabel->setStyleSheet(QStringLiteral("QLabel#statusInfoLabel{color:%1;padding:0 4px;font:10pt 'Segoe UI';}")
-                                         .arg(dark ? "#e8eaed" : "#444"));
-    m_toolbar->addWidget(m_statusInfoLabel);
+    // Removed compact status area (page/zoom label) per request
+    // Previously: trailing separator + m_statusInfoLabel showing "Pg x/y 35%"
 
     // Premium icon tinting on hover/checked
     installPremiumButtonStyling(m_toolbar, QColor(dark ? "#4f89d3" : "#1976d2"), dark);
