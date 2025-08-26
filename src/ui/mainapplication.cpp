@@ -732,7 +732,8 @@ void MainApplication::renderSearchResultsFlat(const QVector<QString> &results, c
         it->setData(0, Qt::UserRole, fi.absoluteFilePath());
         it->setIcon(0, getFileIcon(fi.absoluteFilePath()));
         it->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
-        it->setToolTip(0, fi.absoluteFilePath());
+    // Tooltip should only show the file name without extension
+    it->setToolTip(0, fi.baseName());
     }
 
     // Sort alphabetically for predictability and apply compact premium look
@@ -1852,12 +1853,8 @@ void MainApplication::setupTreeItemAppearance(QTreeWidgetItem *item, const QFile
         // This is a directory
         item->setIcon(0, getFolderIcon(false));
         
-        // Add tooltip with folder info
-        QString tooltip = QString("Folder: %1\nPath: %2\nModified: %3")
-                            .arg(fileInfo.fileName())
-                            .arg(fileInfo.absoluteFilePath())
-                            .arg(fileInfo.lastModified().toString("yyyy-MM-dd hh:mm:ss"));
-        item->setToolTip(0, tooltip);
+        // Tooltip should only show the folder name
+        item->setToolTip(0, fileInfo.fileName());
         
         // Set folder-specific properties
         item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
@@ -1865,14 +1862,8 @@ void MainApplication::setupTreeItemAppearance(QTreeWidgetItem *item, const QFile
         // This is a file
         item->setIcon(0, getFileIcon(fileInfo.absoluteFilePath()));
         
-        // Add tooltip with file info
-        QString extension = getFileExtension(fileInfo.absoluteFilePath());
-        QString tooltip = QString("File: %1\nSize: %2 bytes\nType: %3\nModified: %4")
-                            .arg(fileInfo.fileName())
-                            .arg(fileInfo.size())
-                            .arg(extension.isEmpty() ? "Unknown" : extension.toUpper())
-                            .arg(fileInfo.lastModified().toString("yyyy-MM-dd hh:mm:ss"));
-        item->setToolTip(0, tooltip);
+        // Tooltip should only show the file name without extension
+        item->setToolTip(0, fileInfo.baseName());
         
         // Set file-specific properties
         item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
