@@ -284,6 +284,67 @@ static QString displayNameFromLabel(const QString &label)
     return smartShorten(name, 40, 8);
 }
 
+// Returns the base file name (no path, no extension) from any input text.
+// Unlike displayNameFromLabel, this does NOT shorten the result and removes
+// any extension (not only .pdf/.pcb). It also tolerates multi-line strings
+// like "PDF File: name\nPath: C:\\dir\\file.pdf\nSize: ...".
+static QString baseNameNoExtFromAnyText(const QString &label)
+{
+    if (label.isEmpty()) return label;
+
+    QString cleaned = label.trimmed();
+    auto stripPrefix = [&cleaned](const QString &prefix){
+        if (cleaned.startsWith(prefix, Qt::CaseInsensitive)) {
+            cleaned = cleaned.mid(prefix.length()).trimmed();
+        }
+    };
+    // Common prefixes we use elsewhere
+    stripPrefix("PDF File:");
+    stripPrefix("PCB File:");
+    stripPrefix("PDF:");
+    stripPrefix("PCB:");
+    stripPrefix("File:");
+
+    // If the text contains a path anywhere, take the segment after the last separator
+    int posSlash = cleaned.lastIndexOf('/');
+    int posBack = cleaned.lastIndexOf('\\');
+    int sep = qMax(posSlash, posBack);
+    QString name = (sep >= 0) ? cleaned.mid(sep + 1) : cleaned;
+
+    // If name includes a newline (e.g., extracted from a multi-line tooltip),
+    // keep only the first line segment which should be the filename.
+    int nl = name.indexOf('\n');
+    if (nl >= 0) name = name.left(nl);
+
+    // Trim common wrapping characters and whitespace
+    name = name.trimmed();
+    while (!name.isEmpty()) {
+        const QChar ch = name.at(0);
+        if (ch == ' ' || ch == '\t' || ch == ':' || ch == '.' || ch == '-' || ch.unicode() == 0x2026) {
+            name.remove(0, 1);
+        } else {
+            break;
+        }
+    }
+
+    // Remove any trailing punctuation that might follow the filename
+    while (!name.isEmpty()) {
+        const QChar ch = name.at(name.size() - 1);
+        if (ch == ' ' || ch == '\t') {
+            name.chop(1);
+        } else {
+            break;
+        }
+    }
+
+    // Drop the extension if present (last dot, not at position 0)
+    int dot = name.lastIndexOf('.');
+    if (dot > 0) {
+        name = name.left(dot);
+    }
+    return name;
+}
+
 DualTabWidget::DualTabWidget(QWidget *parent) 
     : QWidget(parent)
     , m_activeTabType(PDF_TAB)
@@ -469,7 +530,8 @@ int DualTabWidget::addTab(QWidget *widget, const QIcon &/*icon*/, const QString 
     const QString cleanedFull = displayNameFromLabel(label); // shortened already
     const QString display = cleanedFull;
     tabIndex = m_pdfTabWidget->addTab(dummyWidget, display); // icon intentionally ignored
-    m_pdfTabWidget->setTabToolTip(tabIndex, label); // show full original path/label on hover
+    // Tooltip should show only the file name without path/extension
+    this->setTabToolTip(tabIndex, display, PDF_TAB);
     // Close button functionality removed
     // Log the state after adding a tab
     logTabBarState(m_pdfTabWidget->tabBar(), "after-add-tab", "PDF");
@@ -492,7 +554,8 @@ int DualTabWidget::addTab(QWidget *widget, const QIcon &/*icon*/, const QString 
     const QString cleanedFull = displayNameFromLabel(label);
     const QString display = cleanedFull;
     tabIndex = m_pcbTabWidget->addTab(dummyWidget, display); // icon intentionally ignored
-    m_pcbTabWidget->setTabToolTip(tabIndex, label);
+    // Tooltip should show only the file name without path/extension
+    this->setTabToolTip(tabIndex, display, PCB_TAB);
     // Close button functionality removed
     // Log the state after adding a tab
     logTabBarState(m_pcbTabWidget->tabBar(), "after-add-tab", "PCB");
@@ -630,11 +693,13 @@ void DualTabWidget::setTabText(int index, const QString &text, TabType type)
     const QString display = displayNameFromLabel(text);
     if (type == PDF_TAB) {
         m_pdfTabWidget->setTabText(index, display);
-        m_pdfTabWidget->setTabToolTip(index, text);
+        // Tooltip should mirror the plain file name (no path/ext)
+        this->setTabToolTip(index, display, PDF_TAB);
     logTabBarState(m_pdfTabWidget->tabBar(), "after-setTabText", "PDF");
     } else {
         m_pcbTabWidget->setTabText(index, display);
-        m_pcbTabWidget->setTabToolTip(index, text);
+        // Tooltip should mirror the plain file name (no path/ext)
+        this->setTabToolTip(index, display, PCB_TAB);
     logTabBarState(m_pcbTabWidget->tabBar(), "after-setTabText", "PCB");
     }
 }
@@ -650,10 +715,12 @@ QString DualTabWidget::tabText(int index, TabType type) const
 
 void DualTabWidget::setTabToolTip(int index, const QString &tip, TabType type)
 {
+    // Always sanitize to show only the base filename without path or extension
+    const QString onlyName = baseNameNoExtFromAnyText(tip);
     if (type == PDF_TAB) {
-        m_pdfTabWidget->setTabToolTip(index, tip);
+        m_pdfTabWidget->setTabToolTip(index, onlyName);
     } else {
-        m_pcbTabWidget->setTabToolTip(index, tip);
+        m_pcbTabWidget->setTabToolTip(index, onlyName);
     }
 }
 
