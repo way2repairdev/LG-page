@@ -1272,56 +1272,46 @@ void PCBViewerEmbedder::displayPinHoverInfo()
     
     if (hoveredPin >= 0 && m_pcbData && hoveredPin < static_cast<int>(m_pcbData->pins.size())) {
         const auto& pin = m_pcbData->pins[hoveredPin];
-        
-        // Create hover tooltip with exact mouse cursor positioning - matching main.cpp
+
+        // Create hover tooltip near cursor
         ImGui::SetNextWindowPos(ImVec2(static_cast<float>(mouseX) + 15, static_cast<float>(mouseY) + 15));
-        ImGui::SetNextWindowBgAlpha(0.9f); // Semi-transparent background
-        
-        if (ImGui::Begin("Pin Info", nullptr, 
-                       ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize |
-                       ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing)) {
-            
-            // Display pin information - matching main.cpp format
-            ImGui::Text("Pin Information:");
-            ImGui::Separator();
-            
-            if (!pin.snum.empty()) {
-                ImGui::Text("Pin Number: %s", pin.snum.c_str());
-            }
-            if (!pin.name.empty() && pin.name != pin.snum) {
-                ImGui::Text("Pin Name: %s", pin.name.c_str());
-            }
-            if (!pin.net.empty()) {
-                ImGui::Text("Net: %s", pin.net.c_str());
-                
-                // Count connected pins in the same net
-                if (pin.net != "UNCONNECTED" && pin.net != "") {
-                    int connectedPins = 0;
-                    for (const auto& otherPin : m_pcbData->pins) {
-                        if (otherPin.net == pin.net) {
-                            connectedPins++;
-                        }
-                    }
-                    ImGui::Text("Connected Pins: %d", connectedPins);
-                    
-                    if (connectedPins > 1) {
-                        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), 
-                                         "Click to highlight net");
+        ImGui::SetNextWindowBgAlpha(0.9f);
+
+        if (ImGui::Begin("Pin Info", nullptr,
+                         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize |
+                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing)) {
+
+            // Only show: Net No, Net, Connected Pins
+            // Compute a stable 1-based Net No by enumerating unique nets in order of appearance
+            int netNo = -1;
+            if (!pin.net.empty() && pin.net != "UNCONNECTED") {
+                std::unordered_set<std::string> seen;
+                int counter = 0;
+                for (const auto& other : m_pcbData->pins) {
+                    if (other.net.empty() || other.net == "UNCONNECTED") continue;
+                    if (seen.insert(other.net).second) {
+                        ++counter;
+                        if (other.net == pin.net) { netNo = counter; break; }
                     }
                 }
             }
-            
-            ImGui::Text("Position: (%d, %d)", pin.pos.x, pin.pos.y);
-            ImGui::Text("Part: %d", pin.part);
-            
-            // Show selection status
-            if (m_renderer && m_renderer->GetSelectedPinIndex() == hoveredPin) {
-                ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "SELECTED");
-            } else {
-                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Click to select");
+
+            int connectedPins = 0;
+            if (!pin.net.empty() && pin.net != "UNCONNECTED") {
+                for (const auto& otherPin : m_pcbData->pins) {
+                    if (otherPin.net == pin.net) connectedPins++;
+                }
             }
-            
+
+            if (netNo > 0) {
+                ImGui::Text("Net No: %d", netNo);
+            } else {
+                ImGui::Text("Net No: N/A");
+            }
+            ImGui::Text("Net: %s", pin.net.empty() ? "UNCONNECTED" : pin.net.c_str());
+            ImGui::Text("Connected Pins: %d", connectedPins);
+
             ImGui::End();
         }
     }
