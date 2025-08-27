@@ -83,6 +83,8 @@ bool PCBRenderer::Initialize() {
     }
 
     LOG_INFO("PCB Renderer initialized (optional GL resources: VBO=" + std::string(hasVBO?"Y":"N") + ", VAO=" + std::string(hasVAO?"Y":"N") + ", Shaders=" + std::string(hasShaders?"Y":"N") + ")");
+    // Ensure default theme applied
+    SetColorTheme(ColorTheme::Default);
     return true;
 }
 
@@ -127,8 +129,8 @@ void PCBRenderer::Render(int window_width, int window_height) {
         return;
     }
 
-    // Clear screen with PCB green background
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    // Clear screen using theme background color
+    glClearColor(settings.background_color.r, settings.background_color.g, settings.background_color.b, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     // Initialize camera if needed (first time rendering)
@@ -670,8 +672,13 @@ void PCBRenderer::RenderOutlineImGui(ImDrawList* draw_list, float zoom, float of
         return;
     }    // Render board outline
     
-    // Set outline color - white/gray for PCB outline
-    ImU32 outline_color = IM_COL32(255, 255, 255, 255);
+    // Set outline color from theme
+    ImU32 outline_color = IM_COL32(
+        static_cast<int>(settings.outline_color.r * 255),
+        static_cast<int>(settings.outline_color.g * 255),
+        static_cast<int>(settings.outline_color.b * 255),
+        static_cast<int>(settings.outline_alpha * 255)
+    );
     
     // Adaptive line thickness based on zoom level
     float line_thickness = std::max(1.0f, std::min(4.0f, zoom * 2.0f));  // Thicker when zoomed in
@@ -839,8 +846,18 @@ void PCBRenderer::RenderPartHighlighting(ImDrawList* draw_list, float zoom, floa
         ImVec2 top_left(tlx * zoom + offset_x, offset_y - tly * zoom);
         ImVec2 bottom_right(brx * zoom + offset_x, offset_y - bry * zoom);
 
-        ImU32 fill_col = IM_COL32(255, 255, 0, 125);
-        ImU32 border_col = IM_COL32(255, 255, 0, 255);
+        ImU32 fill_col = IM_COL32(
+            static_cast<int>(settings.part_highlight_fill_color.r * 255),
+            static_cast<int>(settings.part_highlight_fill_color.g * 255),
+            static_cast<int>(settings.part_highlight_fill_color.b * 255),
+            125
+        );
+        ImU32 border_col = IM_COL32(
+            static_cast<int>(settings.part_highlight_border_color.r * 255),
+            static_cast<int>(settings.part_highlight_border_color.g * 255),
+            static_cast<int>(settings.part_highlight_border_color.b * 255),
+            255
+        );
         draw_list->AddRectFilled(top_left, bottom_right, fill_col);
         draw_list->AddRect(top_left, bottom_right, border_col, 0.f, 0, 2.f);
     }
@@ -971,8 +988,8 @@ void PCBRenderer::RenderCirclePinsImGui(ImDrawList* draw_list, float zoom, float
         // Ensure minimum visibility
         if (radius < 1.0f) radius = 1.0f;
         
-        // Check if this circle corresponds to a pin with cached data for color override
-        float r = circle.r, g = circle.g, b = circle.b, a = circle.a;
+    // Check if this circle corresponds to a pin with cached data for color override
+    float r = circle.r, g = circle.g, b = circle.b, a = circle.a;
         
         // Find pin that matches this circle using cache (much faster than linear search)
         for (size_t pin_idx = 0; pin_idx < pcb_data->pins.size() && pin_idx < pin_geometry_cache.size(); ++pin_idx) {
@@ -984,13 +1001,16 @@ void PCBRenderer::RenderCirclePinsImGui(ImDrawList* draw_list, float zoom, float
                 // Use cached pin type checks
                 if (!selected_net.empty() && pin.net == selected_net) {
                     // Highlight all pins on the same net
-                    r = 1.0f; g = 1.0f; b = 0.0f; a = 1.0f;
+                    r = settings.pin_same_net_color.r; g = settings.pin_same_net_color.g; b = settings.pin_same_net_color.b; a = 1.0f;
                 } else if (cache.is_nc) {
-                    // Use blue color for NC pins
-                    r = 0.0f; g = 0.3f; b = 0.3f; a = 1.0f;
+                    // NC pins
+                    r = settings.pin_nc_color.r; g = settings.pin_nc_color.g; b = settings.pin_nc_color.b; a = 1.0f;
                 } else if (cache.is_ground) {
-                    // Use grey color for ground pins
-                    r = 0.376f; g = 0.376f; b = 0.376f; a = 1.0f;
+                    // Ground pins
+                    r = settings.pin_ground_color.r; g = settings.pin_ground_color.g; b = settings.pin_ground_color.b; a = 1.0f;
+                } else if (settings.override_pin_colors) {
+                    // Theme default pin color
+                    r = settings.pin_color.r; g = settings.pin_color.g; b = settings.pin_color.b; a = settings.pin_alpha;
                 }
                 break;
             }
@@ -1049,8 +1069,8 @@ void PCBRenderer::RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, fl
         
     // Minimum visibility handled after projection; keep world sizes intact here
         
-        // Check if this rectangle corresponds to a pin with cached data for color override
-        float r = rectangle.r, g = rectangle.g, b = rectangle.b, a = rectangle.a;
+    // Check if this rectangle corresponds to a pin with cached data for color override
+    float r = rectangle.r, g = rectangle.g, b = rectangle.b, a = rectangle.a;
         
         // Find pin that matches this rectangle using cache (much faster than linear search)
         for (size_t pin_idx = 0; pin_idx < pcb_data->pins.size() && pin_idx < pin_geometry_cache.size(); ++pin_idx) {
@@ -1061,14 +1081,13 @@ void PCBRenderer::RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, fl
             if (cache.rectangle_index == rect_idx) {
                 // Use cached pin type checks
                 if (!selected_net.empty() && pin.net == selected_net) {
-                    // Highlight all pins on the same net
-                    r = 1.0f; g = 1.0f; b = 0.0f; a = 1.0f;
+                    r = settings.pin_same_net_color.r; g = settings.pin_same_net_color.g; b = settings.pin_same_net_color.b; a = 1.0f;
                 } else if (cache.is_nc) {
-                    // Use blue color for NC pins
-                    r = 0.0f; g = 0.3f; b = 0.3f; a = 1.0f;
+                    r = settings.pin_nc_color.r; g = settings.pin_nc_color.g; b = settings.pin_nc_color.b; a = 1.0f;
                 } else if (cache.is_ground) {
-                    // Use grey color for ground pins
-                    r = 0.376f; g = 0.376f; b = 0.376f; a = 1.0f;
+                    r = settings.pin_ground_color.r; g = settings.pin_ground_color.g; b = settings.pin_ground_color.b; a = 1.0f;
+                } else if (settings.override_pin_colors) {
+                    r = settings.pin_color.r; g = settings.pin_color.g; b = settings.pin_color.b; a = settings.pin_alpha;
                 }
                 break;
             }
@@ -1131,12 +1150,7 @@ void PCBRenderer::RenderRectanglePinsImGui(ImDrawList* draw_list, float zoom, fl
         draw_list->AddQuadFilled(corners[0], corners[1], corners[2], corners[3], fill_color);
 
         // Outline
-        ImU32 outline_color = IM_COL32(
-            (int)(r * 180),
-            (int)(g * 180),
-            (int)(b * 180),
-            255
-        );
+    ImU32 outline_color = IM_COL32((int)(r * 180),(int)(g * 180),(int)(b * 180),255);
         draw_list->AddQuad(corners[0], corners[1], corners[2], corners[3], outline_color, 1.0f);
     }
 }
@@ -1170,8 +1184,8 @@ void PCBRenderer::RenderOvalPinsImGui(ImDrawList* draw_list, float zoom, float o
     float half_w_world = oval.width * 0.5f;
     float half_h_world = oval.height * 0.5f;
         
-        // Check if this oval corresponds to a pin with cached data for color override
-        float r = oval.r, g = oval.g, b = oval.b, a = oval.a;
+    // Check if this oval corresponds to a pin with cached data for color override
+    float r = oval.r, g = oval.g, b = oval.b, a = oval.a;
         
         // Find pin that matches this oval using cache (much faster than linear search)
         for (size_t pin_idx = 0; pin_idx < pcb_data->pins.size() && pin_idx < pin_geometry_cache.size(); ++pin_idx) {
@@ -1182,14 +1196,13 @@ void PCBRenderer::RenderOvalPinsImGui(ImDrawList* draw_list, float zoom, float o
             if (cache.oval_index == oval_idx) {
                 // Use cached pin type checks
                 if (!selected_net.empty() && pin.net == selected_net) {
-                    // Highlight all pins on the same net
-                    r = 1.0f; g = 1.0f; b = 0.0f; a = 1.0f;
+                    r = settings.pin_same_net_color.r; g = settings.pin_same_net_color.g; b = settings.pin_same_net_color.b; a = 1.0f;
                 } else if (cache.is_nc) {
-                    // Use blue color for NC pins
-                    r = 0.0f; g = 0.3f; b = 0.3f; a = 1.0f;
+                    r = settings.pin_nc_color.r; g = settings.pin_nc_color.g; b = settings.pin_nc_color.b; a = 1.0f;
                 } else if (cache.is_ground) {
-                    // Use grey color for ground pins
-                    r = 0.376f; g = 0.376f; b = 0.376f; a = 1.0f;
+                    r = settings.pin_ground_color.r; g = settings.pin_ground_color.g; b = settings.pin_ground_color.b; a = 1.0f;
+                } else if (settings.override_pin_colors) {
+                    r = settings.pin_color.r; g = settings.pin_color.g; b = settings.pin_color.b; a = settings.pin_alpha;
                 }
                 break;
             }
@@ -1261,6 +1274,52 @@ void PCBRenderer::RenderOvalPinsImGui(ImDrawList* draw_list, float zoom, float o
             ImU32 outline_color = IM_COL32((int)(r * 180),(int)(g * 180),(int)(b * 180),255);
             draw_list->AddPolyline(pts.data(), (int)pts.size(), outline_color, ImDrawFlags_Closed, 1.0f);
         }
+    }
+}
+
+void PCBRenderer::SetColorTheme(ColorTheme theme) {
+    current_theme = theme;
+    // Start from a neutral baseline, then override per theme
+    // Default
+    settings.background_color = {0.0f, 0.0f, 0.0f};
+    settings.outline_color    = {1.0f, 1.0f, 1.0f};
+    settings.part_outline_color = {1.0f, 1.0f, 1.0f};
+    settings.pin_color = {1.0f, 1.0f, 0.0f}; // default accent yellow
+    settings.pin_same_net_color = {1.0f, 1.0f, 0.0f};
+    settings.pin_nc_color = {0.0f, 0.3f, 0.3f};
+    settings.pin_ground_color = {0.376f, 0.376f, 0.376f};
+    settings.ratsnet_color = {0.0f, 1.0f, 1.0f};
+    settings.part_highlight_border_color = {1.0f, 1.0f, 0.0f};
+    settings.part_highlight_fill_color   = {1.0f, 1.0f, 0.0f};
+    settings.part_alpha = 0.8f; settings.pin_alpha = 0.9f; settings.outline_alpha = 1.0f; settings.part_outline_alpha = 0.9f;
+    settings.override_pin_colors = false; // Default theme: respect file pin colors
+
+    if (theme == ColorTheme::Light) {
+        // Light theme: light background, darker outlines, blue highlights
+        settings.background_color = {0.95f, 0.95f, 0.95f};
+        settings.outline_color    = {0.1f, 0.1f, 0.1f};
+        settings.part_outline_color = {0.2f, 0.2f, 0.2f};
+    settings.pin_color = {0.0f, 0.45f, 0.85f}; // blue-ish default pin
+        settings.pin_same_net_color = {0.0f, 0.45f, 0.85f}; // blue
+        settings.pin_nc_color = {0.6f, 0.6f, 0.6f};
+        settings.pin_ground_color = {0.35f, 0.35f, 0.35f};
+        settings.ratsnet_color = {0.85f, 0.1f, 0.1f}; // red
+        settings.part_highlight_border_color = {0.0f, 0.45f, 0.85f};
+        settings.part_highlight_fill_color   = {0.0f, 0.45f, 0.85f};
+    settings.override_pin_colors = true;
+    } else if (theme == ColorTheme::HighContrast) {
+        // High-contrast: black background, white outlines, vivid accent
+        settings.background_color = {0.0f, 0.0f, 0.0f};
+        settings.outline_color    = {1.0f, 1.0f, 1.0f};
+        settings.part_outline_color = {1.0f, 1.0f, 1.0f};
+    settings.pin_color = {1.0f, 1.0f, 0.0f}; // bright yellow
+        settings.pin_same_net_color = {1.0f, 1.0f, 0.0f}; // yellow
+        settings.pin_nc_color = {0.0f, 1.0f, 1.0f}; // cyan
+        settings.pin_ground_color = {0.7f, 0.7f, 0.7f};
+        settings.ratsnet_color = {1.0f, 0.0f, 1.0f}; // magenta
+        settings.part_highlight_border_color = {1.0f, 1.0f, 0.0f};
+        settings.part_highlight_fill_color   = {1.0f, 1.0f, 0.0f};
+    settings.override_pin_colors = true;
     }
 }
 

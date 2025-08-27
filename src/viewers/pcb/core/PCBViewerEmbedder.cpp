@@ -181,6 +181,23 @@ void PCBViewerEmbedder::cleanup()
     handleStatus("PCB viewer embedder cleaned up");
 }
 
+// Color theme control (forwarders)
+void PCBViewerEmbedder::setColorTheme(ColorTheme theme)
+{
+    if (m_renderer) {
+        m_renderer->SetColorTheme(theme);
+        // Provide a small status update for visibility
+        std::string name = (theme == ColorTheme::Default) ? "Default" : (theme == ColorTheme::Light ? "Light" : "High Contrast");
+        handleStatus("Applied PCB color theme: " + name);
+    }
+}
+
+ColorTheme PCBViewerEmbedder::colorTheme() const
+{
+    if (m_renderer) return m_renderer->GetColorTheme();
+    return ColorTheme::Default;
+}
+
 bool PCBViewerEmbedder::loadPCB(const std::string& filePath)
 {
     handleStatus("Loading PCB file: " + filePath);
@@ -613,6 +630,19 @@ void PCBViewerEmbedder::handleKeyPress(int key, int scancode, int action, int mo
             case GLFW_KEY_MINUS:
             case GLFW_KEY_KP_SUBTRACT:
                 zoomOut();
+                break;
+            case GLFW_KEY_T:
+                // Cycle color themes: Default -> Light -> HighContrast -> Default
+                if (m_renderer) {
+                    ColorTheme current = m_renderer->GetColorTheme();
+                    ColorTheme next = ColorTheme::Default;
+                    if (current == ColorTheme::Default) next = ColorTheme::Light;
+                    else if (current == ColorTheme::Light) next = ColorTheme::HighContrast;
+                    else next = ColorTheme::Default;
+                    m_renderer->SetColorTheme(next);
+                    std::string name = (next == ColorTheme::Default) ? "Default" : (next == ColorTheme::Light ? "Light" : "High Contrast");
+                    handleStatus("Switched PCB color theme to: " + name);
+                }
                 break;
         }
     }

@@ -11,6 +11,8 @@ struct ImGuiContext;
 class PCBRenderer;
 class BRDFileBase;
 struct BRDPin;
+// Use renderer's ColorTheme without including the heavy header here
+enum class ColorTheme;
 
 /**
  * PCBViewerEmbedder - Embeds the standalone PCB viewer into Qt widgets
@@ -126,6 +128,10 @@ public:
     // ImGui UI control
     void setImGuiUIEnabled(bool enabled) { m_imguiUIEnabled = enabled; }
     bool isImGuiUIEnabled() const { return m_imguiUIEnabled; }
+
+    // Color theme control (forwarded to renderer)
+    void setColorTheme(ColorTheme theme);
+    ColorTheme colorTheme() const;
 
     // Fallback mode (Qt-only rendering when GLFW fails)
     bool isUsingFallback() const { return m_usingFallback; }

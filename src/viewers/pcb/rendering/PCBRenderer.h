@@ -25,6 +25,8 @@ struct RenderSettings {
     bool show_nets = false;
     bool show_diode_readings = true; // control displaying diode readings in pin text overlay
     bool show_ratsnet = false; // control displaying ratsnet/airwires
+    // When true, renderer ignores per-geometry pin colors and uses pin_color from theme
+    bool override_pin_colors = false;
     
     float part_alpha = 1.0f;
     float pin_alpha = 1.0f;
@@ -36,7 +38,7 @@ struct RenderSettings {
     } part_color;
     
     struct {
-        float r = 1.0f, g = 1.0f, b = 0.0f;  // Yellow
+    float r = 1.0f, g = 1.0f, b = 0.0f;  // Default accent for pins when override is enabled
     } pin_color;
     
     struct {
@@ -46,14 +48,42 @@ struct RenderSettings {
     struct {
         float r = 1.0f, g = 1.0f, b = 1.0f;  // White
     } part_outline_color;
+    // Pin override colors for special cases and net highlighting
+    struct {
+        float r = 1.0f, g = 1.0f, b = 0.0f; // Yellow for same-net highlight
+    } pin_same_net_color;
+
+    struct {
+        float r = 0.0f, g = 0.3f, b = 0.3f; // Teal for NC pins
+    } pin_nc_color;
+
+    struct {
+        float r = 0.376f, g = 0.376f, b = 0.376f; // Gray for GND-family pins
+    } pin_ground_color;
     
     struct {
         float r = 0.0f, g = 1.0f, b = 1.0f;  // Cyan
     } ratsnet_color;
     
     struct {
-        float r = 0.0f, g = 0.3f, b = 0.0f;  // Dark green PCB background
+    float r = 0.0f, g = 0.0f, b = 0.0f;  // Default black background (legacy behavior)
     } background_color;
+
+    // Part highlight colors
+    struct {
+        float r = 1.0f, g = 1.0f, b = 0.0f; // Yellow border
+    } part_highlight_border_color;
+
+    struct {
+        float r = 1.0f, g = 1.0f, b = 0.0f; // Yellow fill (alpha controlled separately)
+    } part_highlight_fill_color;
+};
+
+// Predefined color themes
+enum class ColorTheme {
+    Default = 0,
+    Light   = 1,
+    HighContrast = 2,
 };
 
 // Structure to hold part name rendering information
@@ -153,6 +183,10 @@ public:
     RenderSettings& GetSettings() { return settings; }
     const Camera& GetCamera() const { return camera; }
 
+    // Themes
+    void SetColorTheme(ColorTheme theme);
+    ColorTheme GetColorTheme() const { return current_theme; }
+
 private:
     // OpenGL objects
     GLuint shader_program = 0;
@@ -163,6 +197,7 @@ private:
     std::shared_ptr<BRDFileBase> pcb_data;
     Camera camera;
     RenderSettings settings;
+    ColorTheme current_theme = ColorTheme::Default;
     
     // Selection state
     int selected_pin_index = -1;  // -1 means no selection

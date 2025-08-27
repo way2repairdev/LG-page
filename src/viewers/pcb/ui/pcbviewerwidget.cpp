@@ -1,5 +1,6 @@
 #include "viewers/pcb/PCBViewerWidget.h"
 #include "viewers/pcb/PCBViewerEmbedder.h"
+#include "../rendering/PCBRenderer.h" // for ColorTheme enum values
 #include "ui/LoadingOverlay.h"
 #include <QtConcurrent/QtConcurrent>
 #include <QFutureWatcher>
@@ -606,28 +607,47 @@ void PCBViewerWidget::setupToolbar()
     // Auto trigger navigation when user picks from list (but still allow manual typing then Enter/Go)
     connect(m_netCombo, QOverload<int>::of(&QComboBox::activated), this, &PCBViewerWidget::onNetComboActivated);
 
-    // Color scheme dropdown (shows placeholder menu for now) — placed after search controls
+    // Color Theme selector (combo box): Default, Light, High Contrast
     {
-        QMenu *colorMenu = new QMenu(m_toolbar);
-        QAction *placeholder = colorMenu->addAction("Under construction…");
-        placeholder->setEnabled(false);
-        // Prefer a palette icon if available; fall back to text label
-        QIcon paletteIcon;
-        const QString palettePath = ":/icons/images/icons/palette.svg";
-        if (QFile::exists(palettePath)) {
-            paletteIcon = QIcon(palettePath);
-            WritePCBDebugToFile("Palette icon found for Color Scheme dropdown");
-        } else {
-            WritePCBDebugToFile("Palette icon NOT found; using text label for Color Scheme dropdown");
+        m_toolbar->addSeparator();
+        auto *themeBox = new QComboBox(m_toolbar);
+        themeBox->setObjectName("pcbThemeCombo");
+        themeBox->setToolTip("Color Theme");
+        themeBox->addItem("Default", QVariant::fromValue(0));
+        themeBox->addItem("Light", QVariant::fromValue(1));
+        themeBox->addItem("High Contrast", QVariant::fromValue(2));
+        themeBox->setFixedHeight(26);
+        themeBox->setMinimumWidth(150);
+        // Style similar to net combo for consistency
+        const bool dark2 = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+        const QString border2 = dark2 ? "#5f6368" : "#ccc";
+        const QString bg2 = dark2 ? "#2a2b2d" : "white";
+        const QString fg2 = dark2 ? "#e8eaed" : "#111";
+        const QString focus2 = dark2 ? "#cf6679" : "#E53935";
+        const QString viewBg2 = dark2 ? "#1f2023" : "white";
+        const QString viewFg2 = fg2;
+        const QString viewSelBg2 = dark2 ? "#3b1f22" : "#fdeaea";
+        const QString viewSelFg2 = fg2;
+        themeBox->setStyleSheet(QString(
+            "QComboBox, QComboBox:editable{border:1px solid %1;border-radius:3px;padding:2px 8px;background:%2;color:%3;}"
+            "QComboBox:focus, QComboBox:editable:focus{border-color:%4;}"
+            "QComboBox QAbstractItemView{background:%5;color:%6;border:1px solid %1;outline:0;selection-background-color:%7;selection-color:%8;}"
+        ).arg(border2, bg2, fg2, focus2, viewBg2, viewFg2, viewSelBg2, viewSelFg2));
+        m_toolbar->addWidget(themeBox);
+        // Initialize selection to renderer's current theme when available
+        if (m_pcbEmbedder) {
+            int idx = 0;
+            auto ct = m_pcbEmbedder->colorTheme();
+            if (ct == ColorTheme::Default) idx = 0; else if (ct == ColorTheme::Light) idx = 1; else idx = 2;
+            themeBox->setCurrentIndex(idx);
         }
-        QAction *actionColorScheme = m_toolbar->addAction(paletteIcon, paletteIcon.isNull() ? QString("Colors") : QString());
-        actionColorScheme->setToolTip("Color scheme (under construction)");
-        actionColorScheme->setMenu(colorMenu);
-        // Also open the menu when the main button area is clicked
-        connect(actionColorScheme, &QAction::triggered, this, [this, actionColorScheme, colorMenu]() {
-            QWidget *w = m_toolbar->widgetForAction(actionColorScheme);
-            QPoint pos = w ? w->mapToGlobal(QPoint(w->width()/2, w->height())) : QCursor::pos();
-            colorMenu->exec(pos);
+        connect(themeBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, themeBox](int idx){
+            if (!m_pcbEmbedder) return;
+            ColorTheme theme = ColorTheme::Default;
+            if (idx == 1) theme = ColorTheme::Light; else if (idx == 2) theme = ColorTheme::HighContrast;
+            m_pcbEmbedder->setColorTheme(theme);
+            // Force a redraw so change is visible immediately
+            if (m_updateTimer && !m_updateTimer->isActive()) updateViewer();
         });
     }
     m_toolbar->addSeparator();
