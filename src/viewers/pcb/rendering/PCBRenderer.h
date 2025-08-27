@@ -79,6 +79,13 @@ struct RenderSettings {
     struct {
         float r = 1.0f, g = 1.0f, b = 0.0f; // Yellow fill (alpha controlled separately)
     } part_highlight_fill_color;
+
+    // Text/label colors
+    struct { float r = 0.5f, g = 0.5f, b = 0.5f; } pin_text_color;   // pin number/name
+    struct { float r = 0.5f, g = 0.5f, b = 0.5f; } net_text_color;   // net label on pin
+    struct { float r = 0.0f, g = 1.0f, b = 1.0f; } diode_text_color; // diode reading text
+    struct { float r = 1.0f, g = 1.0f, b = 1.0f; } component_name_text_color; // part name text
+    struct { float r = 0.0f, g = 0.0f, b = 0.0f; float a = 0.5f; } component_name_bg_color; // part name bg
 };
 
 // Predefined color themes

@@ -683,7 +683,7 @@ void PCBRenderer::RenderOutlineImGui(ImDrawList* draw_list, float zoom, float of
     
     // Adaptive line thickness based on zoom level
     float line_thickness = std::max(1.0f, std::min(4.0f, zoom * 2.0f));  // Thicker when zoomed in
-    
+     
     for (const auto& segment : pcb_data->outline_segments) {
         // Apply global rotation first
         float x1 = segment.first.x, y1 = segment.first.y;
@@ -1294,6 +1294,12 @@ void PCBRenderer::SetColorTheme(ColorTheme theme) {
     settings.part_highlight_fill_color   = {1.0f, 1.0f, 0.0f};
     settings.part_alpha = 0.8f; settings.pin_alpha = 0.9f; settings.outline_alpha = 1.0f; settings.part_outline_alpha = 0.9f;
     settings.override_pin_colors = false; // Default theme: respect file pin colors
+    // Text defaults
+    settings.pin_text_color = {0.5f, 0.5f, 0.5f};
+    settings.net_text_color = {0.5f, 0.5f, 0.5f};
+    settings.diode_text_color = {0.0f, 1.0f, 1.0f};
+    settings.component_name_text_color = {1.0f, 1.0f, 1.0f};
+    settings.component_name_bg_color = {0.0f, 0.0f, 0.0f, 0.5f};
 
     if (theme == ColorTheme::Light) {
         // Light theme: light background, darker outlines, blue highlights
@@ -1308,6 +1314,12 @@ void PCBRenderer::SetColorTheme(ColorTheme theme) {
         settings.part_highlight_border_color = {0.0f, 0.45f, 0.85f};
         settings.part_highlight_fill_color   = {0.0f, 0.45f, 0.85f};
     settings.override_pin_colors = true;
+        // Text overrides for light background
+        settings.pin_text_color = {0.15f, 0.15f, 0.15f};
+        settings.net_text_color = {0.2f, 0.2f, 0.2f};
+        settings.diode_text_color = {0.0f, 0.45f, 0.85f};
+        settings.component_name_text_color = {0.1f, 0.1f, 0.1f};
+        settings.component_name_bg_color = {1.0f, 1.0f, 1.0f, 0.3f};
     } else if (theme == ColorTheme::HighContrast) {
         // High-contrast: black background, white outlines, vivid accent
         settings.background_color = {0.0f, 0.0f, 0.0f};
@@ -1321,6 +1333,12 @@ void PCBRenderer::SetColorTheme(ColorTheme theme) {
         settings.part_highlight_border_color = {1.0f, 1.0f, 0.0f};
         settings.part_highlight_fill_color   = {1.0f, 1.0f, 0.0f};
     settings.override_pin_colors = true;
+        // Text overrides for high-contrast dark background
+        settings.pin_text_color = {1.0f, 1.0f, 0.0f};
+        settings.net_text_color = {1.0f, 0.0f, 1.0f};
+        settings.diode_text_color = {0.0f, 1.0f, 1.0f};
+        settings.component_name_text_color = {1.0f, 1.0f, 1.0f};
+        settings.component_name_bg_color = {0.0f, 0.0f, 0.0f, 0.6f};
     }
 }
 
@@ -1354,6 +1372,13 @@ void PCBRenderer::ApplyTheme(const PCBThemeSpec& spec, bool setBaseFromSpec) {
     settings.ratsnet_color = {spec.ratsnet_r, spec.ratsnet_g, spec.ratsnet_b};
     settings.part_highlight_border_color = {spec.part_highlight_border_r, spec.part_highlight_border_g, spec.part_highlight_border_b};
     settings.part_highlight_fill_color = {spec.part_highlight_fill_r, spec.part_highlight_fill_g, spec.part_highlight_fill_b};
+
+    // Text/label colors
+    settings.pin_text_color = {spec.pin_text_r, spec.pin_text_g, spec.pin_text_b};
+    settings.net_text_color = {spec.net_text_r, spec.net_text_g, spec.net_text_b};
+    settings.diode_text_color = {spec.diode_text_r, spec.diode_text_g, spec.diode_text_b};
+    settings.component_name_text_color = {spec.component_name_text_r, spec.component_name_text_g, spec.component_name_text_b};
+    settings.component_name_bg_color = {spec.component_name_bg_r, spec.component_name_bg_g, spec.component_name_bg_b, spec.component_name_bg_a};
 }
 
 bool PCBRenderer::IsGroundPin(const BRDPin& pin) {
@@ -2026,8 +2051,8 @@ void PCBRenderer::CollectPartNamesForRendering(float zoom, float offset_x, float
             info.text = part.name;
             info.position = ImVec2(screen_x - text_size.x * 0.5f, screen_y - text_size.y * 0.5f);
             info.size = text_size;
-            info.color = IM_COL32(255, 255, 255, 255); // White text
-            info.background_color = IM_COL32(0, 0, 0, 128); // Semi-transparent black background
+            info.color = IM_COL32((int)(settings.component_name_text_color.r*255), (int)(settings.component_name_text_color.g*255), (int)(settings.component_name_text_color.b*255), 255);
+            info.background_color = IM_COL32((int)(settings.component_name_bg_color.r*255), (int)(settings.component_name_bg_color.g*255), (int)(settings.component_name_bg_color.b*255), (int)(settings.component_name_bg_color.a*255));
             
             // Set clipping bounds (use part bounds)
             float bbminx = part.p1.x, bbminy = part.p1.y;
@@ -2096,13 +2121,13 @@ void PCBRenderer::CollectPartNamesForRendering(float zoom, float offset_x, float
         // Use original text size (no artificial scaling)
         ImVec2 scaled_text_size = text_size;
 
-        PartNameInfo info;
+    PartNameInfo info;
         info.text = part.name;
         info.position = ImVec2(screen_center_x - scaled_text_size.x * 0.5f, screen_center_y - scaled_text_size.y * 0.5f);
         info.size = scaled_text_size;
-        info.color = IM_COL32(255, 255, 255, 255);
-        // Semi-transparent black background for better visibility
-        info.background_color = IM_COL32(0, 0, 0, 128); // Semi-transparent black background
+    info.color = IM_COL32((int)(settings.component_name_text_color.r*255), (int)(settings.component_name_text_color.g*255), (int)(settings.component_name_text_color.b*255), 255);
+    // Background
+    info.background_color = IM_COL32((int)(settings.component_name_bg_color.r*255), (int)(settings.component_name_bg_color.g*255), (int)(settings.component_name_bg_color.b*255), (int)(settings.component_name_bg_color.a*255));
         
         // Set clipping bounds to component area
         float screen_min_x = min_x * zoom + offset_x;
@@ -2329,32 +2354,32 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
             float text_spacing = 2.0f;
             float total_text_height = diode_text_height + pin_text_height + net_text_height + 2 * text_spacing;
             
-            // Position diode reading lines at TOP (CYAN text for visibility)
+            // Position diode reading lines at TOP (theme-controlled color)
             float current_y = y - total_text_height * 0.5f;
             for (const auto& line : diode_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
                 ImVec2 diode_text_pos(x - line_size.x * 0.5f, current_y);
-                draw_list->AddText(diode_text_pos, IM_COL32(0, 255, 255, 255), line.c_str()); // Cyan
+                draw_list->AddText(diode_text_pos, IM_COL32((int)(settings.diode_text_color.r*255),(int)(settings.diode_text_color.g*255),(int)(settings.diode_text_color.b*255),255), line.c_str());
                 current_y += ImGui::GetTextLineHeight();
             }
             
             current_y += text_spacing;
             
-            // Position pin number lines in MIDDLE (original gray text)
+            // Position pin number lines in MIDDLE (theme-controlled color)
             for (const auto& line : pin_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
                 ImVec2 pin_text_pos(x - line_size.x * 0.5f, current_y);
-                draw_list->AddText(pin_text_pos, IM_COL32(128, 128, 128, 255), line.c_str());
+                draw_list->AddText(pin_text_pos, IM_COL32((int)(settings.pin_text_color.r*255),(int)(settings.pin_text_color.g*255),(int)(settings.pin_text_color.b*255),255), line.c_str());
                 current_y += ImGui::GetTextLineHeight();
             }
             
             current_y += text_spacing;
             
-            // Position net name lines at BOTTOM (original gray text)
+            // Position net name lines at BOTTOM (theme-controlled color)
             for (const auto& line : net_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
                 ImVec2 net_text_pos(x - line_size.x * 0.5f, current_y);
-                draw_list->AddText(net_text_pos, IM_COL32(128, 128, 128, 255), line.c_str());
+                draw_list->AddText(net_text_pos, IM_COL32((int)(settings.net_text_color.r*255),(int)(settings.net_text_color.g*255),(int)(settings.net_text_color.b*255),255), line.c_str());
                 current_y += ImGui::GetTextLineHeight();
             }
         }
@@ -2363,22 +2388,22 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
             float text_spacing = 2.0f;
             float total_text_height = diode_text_height + pin_text_height + text_spacing;
             
-            // Position diode reading lines at TOP (CYAN text)
+            // Position diode reading lines at TOP (theme-controlled color)
             float current_y = y - total_text_height * 0.5f;
             for (const auto& line : diode_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
                 ImVec2 diode_text_pos(x - line_size.x * 0.5f, current_y);
-                draw_list->AddText(diode_text_pos, IM_COL32(0, 255, 255, 255), line.c_str()); // Cyan
+                draw_list->AddText(diode_text_pos, IM_COL32((int)(settings.diode_text_color.r*255),(int)(settings.diode_text_color.g*255),(int)(settings.diode_text_color.b*255),255), line.c_str());
                 current_y += ImGui::GetTextLineHeight();
             }
             
             current_y += text_spacing;
             
-            // Position pin number lines at BOTTOM (original gray text)
+            // Position pin number lines at BOTTOM (theme-controlled color)
             for (const auto& line : pin_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
                 ImVec2 pin_text_pos(x - line_size.x * 0.5f, current_y);
-                draw_list->AddText(pin_text_pos, IM_COL32(128, 128, 128, 255), line.c_str());
+                draw_list->AddText(pin_text_pos, IM_COL32((int)(settings.pin_text_color.r*255),(int)(settings.pin_text_color.g*255),(int)(settings.pin_text_color.b*255),255), line.c_str());
                 current_y += ImGui::GetTextLineHeight();
             }
         }
@@ -2387,52 +2412,52 @@ void PCBRenderer::RenderPinNumbersAsText(ImDrawList* draw_list, float zoom, floa
             float text_spacing = 2.0f;
             float total_text_height = pin_text_height + net_text_height + text_spacing;
             
-            // Position pin number lines at TOP of circle (original gray text)
+            // Position pin number lines at TOP of circle (theme-controlled color)
             float current_y = y - total_text_height * 0.5f;
             for (const auto& line : pin_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
                 ImVec2 pin_text_pos(x - line_size.x * 0.5f, current_y);
-                draw_list->AddText(pin_text_pos, IM_COL32(128, 128, 128, 255), line.c_str());
+                draw_list->AddText(pin_text_pos, IM_COL32((int)(settings.pin_text_color.r*255),(int)(settings.pin_text_color.g*255),(int)(settings.pin_text_color.b*255),255), line.c_str());
                 current_y += ImGui::GetTextLineHeight();
             }
             
             current_y += text_spacing;
             
-            // Position net name lines at BOTTOM of circle (original gray text)
+            // Position net name lines at BOTTOM of circle (theme-controlled color)
             for (const auto& line : net_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
                 ImVec2 net_text_pos(x - line_size.x * 0.5f, current_y);
-                draw_list->AddText(net_text_pos, IM_COL32(128, 128, 128, 255), line.c_str());
+                draw_list->AddText(net_text_pos, IM_COL32((int)(settings.net_text_color.r*255),(int)(settings.net_text_color.g*255),(int)(settings.net_text_color.b*255),255), line.c_str());
                 current_y += ImGui::GetTextLineHeight();
             }
         }
     else if (show_diode_text) {
-            // Only diode reading - center it
+            // Only diode reading - center it (theme-controlled color)
             float current_y = y - diode_text_height * 0.5f;
             for (const auto& line : diode_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
                 ImVec2 diode_text_pos(x - line_size.x * 0.5f, current_y);
-                draw_list->AddText(diode_text_pos, IM_COL32(0, 255, 255, 255), line.c_str()); // Cyan
+                draw_list->AddText(diode_text_pos, IM_COL32((int)(settings.diode_text_color.r*255),(int)(settings.diode_text_color.g*255),(int)(settings.diode_text_color.b*255),255), line.c_str());
                 current_y += ImGui::GetTextLineHeight();
             }
         }
         else if (show_pin_text) {
-            // Only pin number - center it
+            // Only pin number - center it (theme-controlled color)
             float current_y = y - pin_text_height * 0.5f;
             for (const auto& line : pin_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
                 ImVec2 pin_text_pos(x - line_size.x * 0.5f, current_y);
-                draw_list->AddText(pin_text_pos, IM_COL32(128, 128, 128, 255), line.c_str());
+                draw_list->AddText(pin_text_pos, IM_COL32((int)(settings.pin_text_color.r*255),(int)(settings.pin_text_color.g*255),(int)(settings.pin_text_color.b*255),255), line.c_str());
                 current_y += ImGui::GetTextLineHeight();
             }
         }
         else if (show_net_text) {
-            // Only net name - center it
+            // Only net name - center it (theme-controlled color)
             float current_y = y - net_text_height * 0.5f;
             for (const auto& line : net_lines) {
                 ImVec2 line_size = ImGui::CalcTextSize(line.c_str());
                 ImVec2 net_text_pos(x - line_size.x * 0.5f, current_y);
-                draw_list->AddText(net_text_pos, IM_COL32(255, 255, 0, 255), line.c_str());
+                draw_list->AddText(net_text_pos, IM_COL32((int)(settings.net_text_color.r*255),(int)(settings.net_text_color.g*255),(int)(settings.net_text_color.b*255),255), line.c_str());
                 current_y += ImGui::GetTextLineHeight();
             }
         }

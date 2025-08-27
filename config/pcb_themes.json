@@ -17,7 +17,13 @@
       "partAlpha": 0.8,
       "pinAlpha": 0.9,
       "outlineAlpha": 1.0,
-      "partOutlineAlpha": 0.9
+  "partOutlineAlpha": 0.9,
+  "pinText": "#808080",
+  "netText": "#808080",
+  "diodeText": "#00FFFF",
+  "componentNameText": "#FFFFFF",
+  "componentNameBg": "#000000",
+  "componentNameBgAlpha": 0.5
     },
     {
       "name": "Light",
@@ -36,7 +42,13 @@
       "partAlpha": 0.8,
       "pinAlpha": 0.9,
       "outlineAlpha": 1.0,
-      "partOutlineAlpha": 0.9
+  "partOutlineAlpha": 0.9,
+  "pinText": "#262626",
+  "netText": "#333333",
+  "diodeText": "#0073D9",
+  "componentNameText": "#1A1A1A",
+  "componentNameBg": "#FFFFFF",
+  "componentNameBgAlpha": 0.3
     },
     {
       "name": "High Contrast",
@@ -55,26 +67,38 @@
       "partAlpha": 0.8,
       "pinAlpha": 0.9,
       "outlineAlpha": 1.0,
-      "partOutlineAlpha": 0.9
+  "partOutlineAlpha": 0.9,
+  "pinText": "#FFFF00",
+  "netText": "#FF00FF",
+  "diodeText": "#00FFFF",
+  "componentNameText": "#FFFFFF",
+  "componentNameBg": "#000000",
+  "componentNameBgAlpha": 0.6
     },
     {
-      "name": "Blue",
+      "name": "New Theme",
       "base": "Blue Theme",
       "overridePinColors": true,
-      "background": "#0000FF",
+      "background": "#353036",
       "outline": "#FFFFFF",
-      "partOutline": "#FFFFFF",
-      "pin": "#0000FF",
-      "sameNetPin": "#FFFFFF",
-      "ncPin": "#00FFFF",
-      "groundPin": "#B3B3B3",
+      "partOutline": "#ffd700",
+      "pin": "#ffd700",
+      "sameNetPin": "#ff0000",
+      "ncPin": "#4289fe",
+      "groundPin": "#a9a9a9",
       "ratsnet": "#FF00FF",
-      "partHighlightBorder": "#FFFF00",
-      "partHighlightFill": "#FFFF00",
+      "partHighlightBorder": "#1a989b",
+      "partHighlightFill": "#1a989b",
       "partAlpha": 0.8,
       "pinAlpha": 0.9,
       "outlineAlpha": 1.0,
-      "partOutlineAlpha": 0.9
+  "partOutlineAlpha": 0.9,
+  "pinText": "#FFD700",
+  "netText": "#FF00FF",
+  "diodeText": "#00FFFF",
+  "componentNameText": "#FFFFFF",
+  "componentNameBg": "#000000",
+  "componentNameBgAlpha": 0.6
     }
 
   ]

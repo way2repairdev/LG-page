@@ -746,6 +746,16 @@ void PCBViewerWidget::setupToolbar()
                 applyColor("ratsnet", spec.ratsnet_r, spec.ratsnet_g, spec.ratsnet_b);
                 applyColor("partHighlightBorder", spec.part_highlight_border_r, spec.part_highlight_border_g, spec.part_highlight_border_b);
                 applyColor("partHighlightFill", spec.part_highlight_fill_r, spec.part_highlight_fill_g, spec.part_highlight_fill_b);
+                // Text colors
+                applyColor("pinText", spec.pin_text_r, spec.pin_text_g, spec.pin_text_b);
+                applyColor("netText", spec.net_text_r, spec.net_text_g, spec.net_text_b);
+                applyColor("diodeText", spec.diode_text_r, spec.diode_text_g, spec.diode_text_b);
+                applyColor("componentNameText", spec.component_name_text_r, spec.component_name_text_g, spec.component_name_text_b);
+                // Component name background with optional alpha
+                applyColor("componentNameBg", spec.component_name_bg_r, spec.component_name_bg_g, spec.component_name_bg_b);
+                if (m.contains("componentNameBgAlpha")) {
+                    spec.component_name_bg_a = (float)m.value("componentNameBgAlpha", spec.component_name_bg_a).toDouble();
+                }
 
                 spec.part_alpha = (float)m.value("partAlpha", spec.part_alpha).toDouble();
                 spec.pin_alpha = (float)m.value("pinAlpha", spec.pin_alpha).toDouble();
