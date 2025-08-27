@@ -1380,7 +1380,20 @@ void PDFViewerEmbedder::renderFrame()
     glEnable(GL_TEXTURE_2D);
     
     int pageCount = m_renderer->GetPageCount();
-    float yOffset = -m_scrollState->scrollOffset;
+    // Compute total content height at current zoom to support vertical centering
+    float zoom = m_scrollState->zoomScale;
+    float totalContentHeight = 0.0f;
+    for (int i = 0; i < pageCount; ++i) {
+        totalContentHeight += (float)m_pageHeights[i] * zoom;
+    }
+    // If content is shorter than the viewport, center it vertically by adding a top padding.
+    // Otherwise, no padding (behaves as before).
+    float padTop = 0.0f;
+    if (totalContentHeight < (float)m_windowHeight) {
+        padTop = ((float)m_windowHeight - totalContentHeight) * 0.5f;
+    }
+    // Start drawing at padTop minus scroll offset
+    float yOffset = padTop - m_scrollState->scrollOffset;
     
     // Use pipeline-specific rendering
     auto selectedPipeline = m_pipelineManager->getSelectedPipeline();
@@ -1518,10 +1531,17 @@ void PDFViewerEmbedder::renderFrame()
                       << ", endChar=" << m_scrollState->textSelection.endCharIndex << std::endl;
         }
         
-        DrawTextSelection(*m_scrollState, m_pageHeights, m_pageWidths, (float)m_windowWidth, (float)m_windowHeight);
-        
-        // Draw search results highlighting
-        DrawSearchResultsHighlighting(*m_scrollState, m_pageHeights, m_pageWidths, (float)m_windowWidth, (float)m_windowHeight);
+    // To keep highlights aligned when content is vertically centered,
+    // temporarily subtract padTop from scrollOffset for overlay computations.
+    float originalScrollOffset = m_scrollState->scrollOffset;
+    m_scrollState->scrollOffset = originalScrollOffset - padTop;
+
+    DrawTextSelection(*m_scrollState, m_pageHeights, m_pageWidths, (float)m_windowWidth, (float)m_windowHeight);
+
+    // Draw search results highlighting
+    DrawSearchResultsHighlighting(*m_scrollState, m_pageHeights, m_pageWidths, (float)m_windowWidth, (float)m_windowHeight);
+    // Restore real scroll offset (scroll bar should reflect actual document position)
+    m_scrollState->scrollOffset = originalScrollOffset;
         
         // Draw scroll bar overlay
         DrawScrollBar(*m_scrollState);
