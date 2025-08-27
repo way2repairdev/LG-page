@@ -137,6 +137,14 @@ public:
     void clearSearchHighlights();
 
     /**
+     * Force this viewer to become the active global PDF context and schedule a
+     * visible regeneration. Use this when switching from external views (e.g.,
+     * PCB -> PDF cross-search) to ensure crisp content immediately.
+     * @param highQuality If true, schedule a settled high-quality visible regen.
+     */
+    void activateForCrossSearchAndRefresh(bool highQuality = true);
+
+    /**
      * Set focus to the viewer (for keyboard input)
      */
     void setFocus();

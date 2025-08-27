@@ -92,6 +92,30 @@ PDFViewerEmbedder::~PDFViewerEmbedder()
     shutdown();
 }
 
+// Ensure this viewer is active and force a crisp refresh (used on PCB->PDF switch)
+void PDFViewerEmbedder::activateForCrossSearchAndRefresh(bool highQuality)
+{
+    if (!m_initialized || !m_pdfLoaded) return;
+    // Claim global context so subsequent operations apply to this viewer
+    g_scrollState = m_scrollState.get();
+    g_renderer = m_renderer.get();
+    g_pageHeights = &m_pageHeights;
+    g_pageWidths = &m_pageWidths;
+
+    // Make sure our GL context is current before any GL uploads later
+    if (m_glfwWindow) glfwMakeContextCurrent(m_glfwWindow);
+
+    // Cancel any stale async work from previous tab and schedule visible regen
+    if (m_asyncQueue) m_asyncQueue->cancelAll();
+    m_needsFullRegeneration = false;     // avoid heavy rebuild unless resize happened
+    m_needsVisibleRegeneration = true;   // ensure fresh textures for visible pages
+
+    // Prefer an immediate high-quality pass so text is crisp after switch
+    scheduleVisibleRegeneration(highQuality);
+    // Also request a light redraw so UI updates even before textures land
+    if (m_scrollState) m_scrollState->forceRedraw = true;
+}
+
 bool PDFViewerEmbedder::initialize(HWND parentHwnd, int width, int height)
 {
     std::cout << "PDFViewerEmbedder::initialize() called - parent: " << parentHwnd << ", size: " << width << "x" << height << std::endl;
@@ -1171,7 +1195,11 @@ void PDFViewerEmbedder::restoreViewState(const ViewState &state) {
         m_scrollState->horizontalOffset = std::max(minHoriz, std::min(state.horizontalOffset, maxHoriz));
     }
     // Mark to regenerate visible pages promptly
-    m_needsVisibleRegeneration = true;
+    if (m_scrollState) {
+        // Ask for a high-quality settled visible regeneration on next update
+        m_scrollState->requestHighQualityVisibleRegen = true;
+        m_scrollState->forceRedraw = true;
+    }
 }
 
 // Private helper methods

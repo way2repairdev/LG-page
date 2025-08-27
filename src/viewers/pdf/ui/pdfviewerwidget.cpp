@@ -848,6 +848,16 @@ void PDFViewerWidget::showEvent(QShowEvent *event)
     }
     // Resume updates
     if (m_updateTimer && !m_updateTimer->isActive()) m_updateTimer->start();
+    // When switching back to PDF tab, ensure the embedder claims active context
+    // and schedules a high-quality refresh so pages are crisp, not scaled.
+    if (m_pdfEmbedder && m_viewerInitialized && isPDFLoaded()) {
+        // Small delay to allow layout to settle, then refresh crisply
+        QTimer::singleShot(30, this, [this]() {
+            if (m_pdfEmbedder && isVisible() && isPDFLoaded()) {
+                m_pdfEmbedder->activateForCrossSearchAndRefresh(true);
+            }
+        });
+    }
     // Restore last view state if we have one - with proper timing
     // BUT: Skip restoration if we're in the middle of a cross-search operation
     if (m_pdfEmbedder && m_viewerInitialized && m_lastViewState.valid) {
@@ -863,6 +873,8 @@ void PDFViewerWidget::showEvent(QShowEvent *event)
                 s.valid = m_lastViewState.valid;
                 qDebug() << "Restoring PDF view state - zoom:" << s.zoom << "page:" << s.page;
                 m_pdfEmbedder->restoreViewState(s);
+                // After restoration, schedule a crisp refresh to avoid stale preview textures
+                m_pdfEmbedder->activateForCrossSearchAndRefresh(true);
                 // Clear to avoid reapplying repeatedly
                 m_lastViewState = {};
             }
@@ -1058,6 +1070,9 @@ bool PDFViewerWidget::externalFindText(const QString &term) {
         // Force UI updates
         syncToolbarStates();
         updateStatusInfo();
+    // Ensure the embedder activates and refreshes visible pages crisply after switch
+    // This fixes blurry/old textures when jumping from PCB to PDF.
+    m_pdfEmbedder->activateForCrossSearchAndRefresh(true);
         
         // Resume update timer after successful navigation with slight delay
         if (wasUpdateTimerActive) {
