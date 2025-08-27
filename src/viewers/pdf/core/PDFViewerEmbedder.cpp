@@ -39,6 +39,26 @@ extern PDFRenderer* g_renderer;
 extern std::vector<int>* g_pageHeights;
 extern std::vector<int>* g_pageWidths;
 
+// Ensure actions operate on the intended tab by claiming the global context when needed
+bool PDFViewerEmbedder::isActiveGlobal() const {
+    return g_scrollState == m_scrollState.get() && g_renderer == m_renderer.get();
+}
+
+void PDFViewerEmbedder::logContextMismatch(const char* where) const {
+    std::cout << "PDFViewerEmbedder[" << m_viewerId << "] " << where
+              << ": globals pointed to another viewer, claiming active context now" << std::endl;
+}
+
+void PDFViewerEmbedder::ensureActiveGlobals() {
+    if (!m_initialized || !m_pdfLoaded) return;
+    if (isActiveGlobal()) return;
+    logContextMismatch("ensureActiveGlobals");
+    g_scrollState = m_scrollState.get();
+    g_renderer = m_renderer.get();
+    g_pageHeights = &m_pageHeights;
+    g_pageWidths = &m_pageWidths;
+}
+
 
 // Transient zoom gesture state (file-scope to avoid header changes)
 static double s_lastWheelZoomTime = 0.0;        // Last time we received a wheel-zoom event
@@ -744,6 +764,7 @@ void PDFViewerEmbedder::shutdown()
 // Navigation methods
 void PDFViewerEmbedder::zoomIn()
 {
+    ensureActiveGlobals();
     if (!m_scrollState) return;
     
     float oldZoom = m_scrollState->zoomScale;
@@ -787,6 +808,7 @@ void PDFViewerEmbedder::zoomIn()
 
 void PDFViewerEmbedder::zoomOut()
 {
+    ensureActiveGlobals();
     if (!m_scrollState) return;
     
     float oldZoom = m_scrollState->zoomScale;
@@ -830,6 +852,7 @@ void PDFViewerEmbedder::zoomOut()
 
 void PDFViewerEmbedder::setZoom(float zoomLevel)
 {
+    ensureActiveGlobals();
     if (!m_scrollState) return;
     
     // Apply SAME zoom limits as HandleZoom function (0.35f to 15.0f)
@@ -859,6 +882,7 @@ void PDFViewerEmbedder::setZoom(float zoomLevel)
 
 void PDFViewerEmbedder::goToPage(int pageNumber)
 {
+    ensureActiveGlobals();
     if (!m_initialized || !m_pdfLoaded || !m_scrollState || !m_renderer) {
         std::cout << "PDFViewerEmbedder::goToPage() - Not initialized or PDF not loaded" << std::endl;
         return;
@@ -909,12 +933,14 @@ void PDFViewerEmbedder::goToPage(int pageNumber)
 
 void PDFViewerEmbedder::nextPage()
 {
+    ensureActiveGlobals();
     int currentPage = getCurrentPage();
     goToPage(currentPage + 1);
 }
 
 void PDFViewerEmbedder::previousPage()
 {
+    ensureActiveGlobals();
     int currentPage = getCurrentPage();
     goToPage(currentPage - 1);
 }
@@ -922,6 +948,7 @@ void PDFViewerEmbedder::previousPage()
 // Rotation methods
 void PDFViewerEmbedder::rotateLeft()
 {
+    ensureActiveGlobals();
     if (!m_initialized || !m_pdfLoaded || !m_renderer || !m_scrollState) return;
 
     // Capture current view to preserve zoom/position where appropriate
@@ -985,6 +1012,7 @@ void PDFViewerEmbedder::rotateLeft()
 
 void PDFViewerEmbedder::rotateRight()
 {
+    ensureActiveGlobals();
     if (!m_initialized || !m_pdfLoaded || !m_renderer || !m_scrollState) return;
 
     // Capture current view to preserve zoom/position where appropriate
@@ -2518,6 +2546,7 @@ void PDFViewerEmbedder::clearSelection()
 
 bool PDFViewerEmbedder::findText(const std::string& searchTerm)
 {
+    ensureActiveGlobals();
     if (!m_scrollState) return false;
     
     m_scrollState->textSearch.searchTerm = searchTerm;
@@ -2531,6 +2560,7 @@ bool PDFViewerEmbedder::findText(const std::string& searchTerm)
 
 void PDFViewerEmbedder::findNext()
 {
+    ensureActiveGlobals();
     if (m_scrollState) {
     NavigateToNextSearchResult(*m_scrollState, m_pageHeights);
     // Refresh visible pages to reflect new selection location
@@ -2540,6 +2570,7 @@ void PDFViewerEmbedder::findNext()
 
 void PDFViewerEmbedder::findPrevious()
 {
+    ensureActiveGlobals();
     if (m_scrollState) {
     NavigateToPreviousSearchResult(*m_scrollState, m_pageHeights);
     // Refresh visible pages to reflect new selection location
@@ -2549,6 +2580,7 @@ void PDFViewerEmbedder::findPrevious()
 
 void PDFViewerEmbedder::setFocus()
 {
+    ensureActiveGlobals();
     if (m_glfwWindow) {
         glfwFocusWindow(m_glfwWindow);
     }
@@ -2577,6 +2609,7 @@ int PDFViewerEmbedder::getCurrentSearchResultIndex() const
 // Fresh search that resets any previous state and focuses first result
 bool PDFViewerEmbedder::findTextFreshAndFocusFirst(const std::string& term)
 {
+    ensureActiveGlobals();
     if (!m_scrollState || !m_pdfLoaded) return false;
 
     // 1) Clear any existing selection/search highlights and cached matches
@@ -2612,6 +2645,7 @@ bool PDFViewerEmbedder::findTextFreshAndFocusFirst(const std::string& term)
 // Optimized version for cross-search that reduces latency and cursor interference
 bool PDFViewerEmbedder::findTextFreshAndFocusFirstOptimized(const std::string& term)
 {
+    ensureActiveGlobals();
     if (!m_scrollState || !m_pdfLoaded) return false;
 
     // 1) Clear any existing selection/search highlights and cached matches
@@ -2649,6 +2683,7 @@ bool PDFViewerEmbedder::findTextFreshAndFocusFirstOptimized(const std::string& t
 
 void PDFViewerEmbedder::clearSearchHighlights()
 {
+    ensureActiveGlobals();
     if (!m_scrollState) return;
     // Clear selection box too (avoid lingering selection tint)
     ClearTextSelection(*m_scrollState);

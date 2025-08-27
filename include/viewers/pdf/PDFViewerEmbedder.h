@@ -263,4 +263,7 @@ private:
     double m_rightPressY {0.0};
     bool   m_rightMoved {false};
     std::function<void(const std::string&)> m_quickRightClickCallback;
+
+    // Ensure global viewer pointers point to this instance before executing actions
+    void ensureActiveGlobals();
 };
