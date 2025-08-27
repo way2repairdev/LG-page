@@ -1,4 +1,5 @@
 #include "PCBRenderer.h"
+#include "PCBTheme.h"
 #include "Utils.h"
 #include <algorithm>
 #include <cmath>
@@ -1321,6 +1322,38 @@ void PCBRenderer::SetColorTheme(ColorTheme theme) {
         settings.part_highlight_fill_color   = {1.0f, 1.0f, 0.0f};
     settings.override_pin_colors = true;
     }
+}
+
+void PCBRenderer::ApplyTheme(const PCBThemeSpec& spec, bool setBaseFromSpec) {
+    // Optionally initialize from a base preset so unspecified fields inherit sane defaults
+    if (setBaseFromSpec) {
+        if (spec.base == "Light") {
+            SetColorTheme(ColorTheme::Light);
+        } else if (spec.base == "HighContrast" || spec.base == "High Contrast") {
+            SetColorTheme(ColorTheme::HighContrast);
+        } else {
+            SetColorTheme(ColorTheme::Default);
+        }
+    }
+
+    // Apply scalar fields
+    settings.override_pin_colors = spec.overridePinColors;
+    settings.part_alpha = spec.part_alpha;
+    settings.pin_alpha = spec.pin_alpha;
+    settings.outline_alpha = spec.outline_alpha;
+    settings.part_outline_alpha = spec.part_outline_alpha;
+
+    // Apply colors
+    settings.background_color = {spec.background_r, spec.background_g, spec.background_b};
+    settings.outline_color = {spec.outline_r, spec.outline_g, spec.outline_b};
+    settings.part_outline_color = {spec.part_outline_r, spec.part_outline_g, spec.part_outline_b};
+    settings.pin_color = {spec.pin_r, spec.pin_g, spec.pin_b};
+    settings.pin_same_net_color = {spec.same_net_pin_r, spec.same_net_pin_g, spec.same_net_pin_b};
+    settings.pin_nc_color = {spec.nc_pin_r, spec.nc_pin_g, spec.nc_pin_b};
+    settings.pin_ground_color = {spec.ground_pin_r, spec.ground_pin_g, spec.ground_pin_b};
+    settings.ratsnet_color = {spec.ratsnet_r, spec.ratsnet_g, spec.ratsnet_b};
+    settings.part_highlight_border_color = {spec.part_highlight_border_r, spec.part_highlight_border_g, spec.part_highlight_border_b};
+    settings.part_highlight_fill_color = {spec.part_highlight_fill_r, spec.part_highlight_fill_g, spec.part_highlight_fill_b};
 }
 
 bool PCBRenderer::IsGroundPin(const BRDPin& pin) {

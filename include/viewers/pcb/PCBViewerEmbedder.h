@@ -13,6 +13,7 @@ class BRDFileBase;
 struct BRDPin;
 // Use renderer's ColorTheme without including the heavy header here
 enum class ColorTheme;
+struct PCBThemeSpec; // from PCBTheme.h
 
 /**
  * PCBViewerEmbedder - Embeds the standalone PCB viewer into Qt widgets
@@ -132,6 +133,10 @@ public:
     // Color theme control (forwarded to renderer)
     void setColorTheme(ColorTheme theme);
     ColorTheme colorTheme() const;
+    // Apply a runtime theme (from JSON)
+    void applyTheme(const PCBThemeSpec& spec);
+    // Optional: get a human-readable name for current preset
+    std::string currentThemeName() const;
 
     // Fallback mode (Qt-only rendering when GLFW fails)
     bool isUsingFallback() const { return m_usingFallback; }

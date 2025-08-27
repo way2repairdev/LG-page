@@ -4,6 +4,8 @@
 #include <GL/glew.h>
 #include <memory>
 #include <imgui.h>
+// Forward-declare to avoid heavy include in header
+struct PCBThemeSpec;
 
 struct Camera {
     float x = 0.0f;
@@ -186,6 +188,8 @@ public:
     // Themes
     void SetColorTheme(ColorTheme theme);
     ColorTheme GetColorTheme() const { return current_theme; }
+    // Apply a theme spec loaded at runtime (e.g., from JSON). Optionally set current_theme to a base.
+    void ApplyTheme(const PCBThemeSpec& spec, bool setBaseFromSpec = true);
 
 private:
     // OpenGL objects

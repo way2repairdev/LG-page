@@ -2,6 +2,7 @@
 
 // Include PCB viewer components - using relative paths like the PCB main.cpp
 #include "../rendering/PCBRenderer.h"
+#include "PCBTheme.h"
 #include "../rendering/BRDRenderer.h"
 #include "../format/BRDFileBase.h"
 #include "../format/XZZPCBFile.h"
@@ -196,6 +197,23 @@ ColorTheme PCBViewerEmbedder::colorTheme() const
 {
     if (m_renderer) return m_renderer->GetColorTheme();
     return ColorTheme::Default;
+}
+
+void PCBViewerEmbedder::applyTheme(const PCBThemeSpec& spec)
+{
+    if (m_renderer) {
+        m_renderer->ApplyTheme(spec);
+        std::string label = spec.name.empty() ? std::string("Custom Theme") : spec.name;
+        handleStatus("Applied PCB custom theme: " + label);
+    }
+}
+
+std::string PCBViewerEmbedder::currentThemeName() const
+{
+    ColorTheme ct = colorTheme();
+    if (ct == ColorTheme::Light) return "Light";
+    if (ct == ColorTheme::HighContrast) return "High Contrast";
+    return "Default";
 }
 
 bool PCBViewerEmbedder::loadPCB(const std::string& filePath)

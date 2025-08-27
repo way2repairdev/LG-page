@@ -34,6 +34,14 @@
 #include <QIcon>
 #include <QPixmap>
 #include <QImage>
+#include <QCoreApplication>
+#include "PCBTheme.h"
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QColor>
+#include <QVariant>
+#include <QMetaType>
 // QWidgetAction header may not be available in current include paths; we'll use addWidget helpers instead.
 
 // Enhanced debug logging for PCBViewerWidget
@@ -607,17 +615,14 @@ void PCBViewerWidget::setupToolbar()
     // Auto trigger navigation when user picks from list (but still allow manual typing then Enter/Go)
     connect(m_netCombo, QOverload<int>::of(&QComboBox::activated), this, &PCBViewerWidget::onNetComboActivated);
 
-    // Color Theme selector (combo box): Default, Light, High Contrast
+    // Color Theme selector (combo box): load from config/pcb_themes.json when present, else fallback to 3 presets
     {
         m_toolbar->addSeparator();
         auto *themeBox = new QComboBox(m_toolbar);
         themeBox->setObjectName("pcbThemeCombo");
         themeBox->setToolTip("Color Theme");
-        themeBox->addItem("Default", QVariant::fromValue(0));
-        themeBox->addItem("Light", QVariant::fromValue(1));
-        themeBox->addItem("High Contrast", QVariant::fromValue(2));
         themeBox->setFixedHeight(26);
-        themeBox->setMinimumWidth(150);
+        themeBox->setMinimumWidth(180);
         // Style similar to net combo for consistency
         const bool dark2 = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
         const QString border2 = dark2 ? "#5f6368" : "#ccc";
@@ -633,19 +638,127 @@ void PCBViewerWidget::setupToolbar()
             "QComboBox:focus, QComboBox:editable:focus{border-color:%4;}"
             "QComboBox QAbstractItemView{background:%5;color:%6;border:1px solid %1;outline:0;selection-background-color:%7;selection-color:%8;}"
         ).arg(border2, bg2, fg2, focus2, viewBg2, viewFg2, viewSelBg2, viewSelFg2));
-        m_toolbar->addWidget(themeBox);
-        // Initialize selection to renderer's current theme when available
-        if (m_pcbEmbedder) {
-            int idx = 0;
-            auto ct = m_pcbEmbedder->colorTheme();
-            if (ct == ColorTheme::Default) idx = 0; else if (ct == ColorTheme::Light) idx = 1; else idx = 2;
-            themeBox->setCurrentIndex(idx);
+        // Try to load JSON themes
+        struct JsonThemeRow { QString name; QVariantMap map; };
+        QList<JsonThemeRow> themeRows;
+        {
+            auto tryLoad = [&](const QString &path) -> bool {
+                QFile f(path);
+                if (!f.exists()) return false;
+                if (!f.open(QIODevice::ReadOnly)) return false;
+                QByteArray raw = f.readAll(); f.close();
+                QJsonParseError err; QJsonDocument doc = QJsonDocument::fromJson(raw, &err);
+                if (err.error != QJsonParseError::NoError || !doc.isObject()) return false;
+                auto obj = doc.object();
+                auto arr = obj.value(QStringLiteral("themes")).toArray();
+                for (const auto &it : arr) {
+                    if (!it.isObject()) continue;
+                    auto to = it.toObject();
+                    QVariantMap map = to.toVariantMap();
+                    QString nm = to.value(QStringLiteral("name")).toString();
+                    if (nm.isEmpty()) nm = QStringLiteral("Theme %1").arg(themeRows.size()+1);
+                    themeRows.push_back({nm, map});
+                }
+                return !themeRows.isEmpty();
+            };
+
+            // Try CWD, then relative to app dir (../config)
+            if (!tryLoad(QStringLiteral("config/pcb_themes.json"))) {
+                const QString alt = QCoreApplication::applicationDirPath() + "/../config/pcb_themes.json";
+                (void)tryLoad(alt);
+            }
         }
+        // Populate combo: if JSON provided, use it. Otherwise, fall back to presets
+        if (!themeRows.isEmpty()) {
+            for (const auto &row : themeRows) {
+                themeBox->addItem(row.name, row.map);
+            }
+        } else {
+            themeBox->addItem("Default", 0);
+            themeBox->addItem("Light", 1);
+            themeBox->addItem("High Contrast", 2);
+        }
+        m_toolbar->addWidget(themeBox);
+
+        // Initialize current selection
+        if (m_pcbEmbedder) {
+            if (!themeRows.isEmpty()) {
+                // Try to match by name against current preset name
+                const QString curName = QString::fromStdString(m_pcbEmbedder->currentThemeName());
+                int found = -1;
+                for (int i = 0; i < themeBox->count(); ++i) {
+                    if (themeBox->itemText(i).compare(curName, Qt::CaseInsensitive) == 0) { found = i; break; }
+                }
+                themeBox->setCurrentIndex(found >= 0 ? found : 0);
+            } else {
+                int idx = 0; auto ct = m_pcbEmbedder->colorTheme();
+                if (ct == ColorTheme::Default) idx = 0; else if (ct == ColorTheme::Light) idx = 1; else idx = 2;
+                themeBox->setCurrentIndex(idx);
+            }
+        }
+
+        // Selection handler: apply JSON theme if present for selected row, else switch preset
         connect(themeBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, themeBox](int idx){
-            if (!m_pcbEmbedder) return;
-            ColorTheme theme = ColorTheme::Default;
-            if (idx == 1) theme = ColorTheme::Light; else if (idx == 2) theme = ColorTheme::HighContrast;
-            m_pcbEmbedder->setColorTheme(theme);
+            if (!m_pcbEmbedder || idx < 0) return;
+            const QVariant data = themeBox->itemData(idx);
+            if (data.typeId() == QMetaType::QVariantMap) {
+                // Build PCBThemeSpec from JSON map
+                PCBThemeSpec spec;
+                QVariantMap m = data.toMap();
+                auto str = [&](const char* k){ return m.value(k).toString(); };
+                auto dbl = [&](const char* k, double d){ return m.contains(k) ? m.value(k).toDouble() : d; };
+                auto parseColorHex = [&](const QString &hex, float &r, float &g, float &b){
+                    QColor c(hex);
+                    if (!c.isValid()) return false;
+                    r = c.redF(); g = c.greenF(); b = c.blueF();
+                    return true;
+                };
+                auto parseColorTriple = [&](const char* kr, const char* kg, const char* kb, float &r, float &g, float &b){
+                    r = (float)dbl(kr, r); g = (float)dbl(kg, g); b = (float)dbl(kb, b);
+                };
+
+                spec.name = str("name").toStdString();
+                spec.base = str("base").toStdString();
+                spec.overridePinColors = m.value("overridePinColors").toBool();
+
+                // Colors accept either hex: "#RRGGBB" or r/g/b floats 0..1
+                auto applyColor = [&](const char* key, float &r, float &g, float &b){
+                    if (m.contains(key)) {
+                        const QVariant v = m.value(key);
+                        if (v.typeId() == QMetaType::QString) {
+                            parseColorHex(v.toString(), r, g, b);
+                        } else if (v.typeId() == QMetaType::QVariantMap) {
+                            auto mm = v.toMap();
+                            r = (float)mm.value("r", r).toDouble();
+                            g = (float)mm.value("g", g).toDouble();
+                            b = (float)mm.value("b", b).toDouble();
+                        }
+                    }
+                };
+
+                applyColor("background", spec.background_r, spec.background_g, spec.background_b);
+                applyColor("outline", spec.outline_r, spec.outline_g, spec.outline_b);
+                applyColor("partOutline", spec.part_outline_r, spec.part_outline_g, spec.part_outline_b);
+                applyColor("pin", spec.pin_r, spec.pin_g, spec.pin_b);
+                applyColor("sameNetPin", spec.same_net_pin_r, spec.same_net_pin_g, spec.same_net_pin_b);
+                applyColor("ncPin", spec.nc_pin_r, spec.nc_pin_g, spec.nc_pin_b);
+                applyColor("groundPin", spec.ground_pin_r, spec.ground_pin_g, spec.ground_pin_b);
+                applyColor("ratsnet", spec.ratsnet_r, spec.ratsnet_g, spec.ratsnet_b);
+                applyColor("partHighlightBorder", spec.part_highlight_border_r, spec.part_highlight_border_g, spec.part_highlight_border_b);
+                applyColor("partHighlightFill", spec.part_highlight_fill_r, spec.part_highlight_fill_g, spec.part_highlight_fill_b);
+
+                spec.part_alpha = (float)m.value("partAlpha", spec.part_alpha).toDouble();
+                spec.pin_alpha = (float)m.value("pinAlpha", spec.pin_alpha).toDouble();
+                spec.outline_alpha = (float)m.value("outlineAlpha", spec.outline_alpha).toDouble();
+                spec.part_outline_alpha = (float)m.value("partOutlineAlpha", spec.part_outline_alpha).toDouble();
+
+                m_pcbEmbedder->applyTheme(spec);
+            } else {
+                int preset = data.toInt();
+                ColorTheme theme = ColorTheme::Default;
+                if (preset == 1) theme = ColorTheme::Light; else if (preset == 2) theme = ColorTheme::HighContrast;
+                m_pcbEmbedder->setColorTheme(theme);
+            }
             // Force a redraw so change is visible immediately
             if (m_updateTimer && !m_updateTimer->isActive()) updateViewer();
         });
