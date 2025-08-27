@@ -258,6 +258,8 @@ private:
 public:
     void setQuickRightClickCallback(const std::function<void(const std::string &selectedText)> &cb) { m_quickRightClickCallback = cb; }
 private:
+    // Pending GL uploads queue to cap per-frame texture upload work
+    std::vector<PageRenderResult> m_pendingGLUploads;
     double m_rightPressTime {0.0};
     double m_rightPressX {0.0};
     double m_rightPressY {0.0};

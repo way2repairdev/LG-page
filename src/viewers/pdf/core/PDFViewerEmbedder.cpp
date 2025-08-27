@@ -599,7 +599,7 @@ void PDFViewerEmbedder::update()
 
     // If a zoom gesture just stopped, do one crisp settled regen for visible pages
     double now = glfwGetTime();
-    if (s_pendingSettledRegen && (now - s_lastWheelZoomTime) > 0.12) {
+    if (s_pendingSettledRegen && (now - s_lastWheelZoomTime) > 0.16) {
         scheduleVisibleRegeneration(true);
         s_pendingSettledRegen = false;
     }
@@ -617,9 +617,16 @@ void PDFViewerEmbedder::update()
     }
 
     // IMPORTANT: Update search state and trigger search if needed
-    // This ensures that search highlighting works properly
+    // Defer search recompute while a wheel-zoom gesture is active to avoid UI jank
     if (m_scrollState->textSearch.needsUpdate && !m_scrollState->textSearch.searchTerm.empty()) {
-        PerformTextSearch(*m_scrollState, m_pageHeights, m_pageWidths);
+        double tnow = glfwGetTime();
+        bool zoomGestureActive = (tnow - s_lastWheelZoomTime) < 0.16; // slightly longer quiet window
+        if (!zoomGestureActive) {
+            PerformTextSearch(*m_scrollState, m_pageHeights, m_pageWidths);
+        } else {
+            // Try again next frame after the gesture has settled
+            m_scrollState->forceRedraw = true; // keep feedback smooth while deferring
+        }
     }
 
     // Drain async results and update textures before drawing
@@ -1647,6 +1654,9 @@ void PDFViewerEmbedder::regenerateTextures()
     m_textures.resize(pageCount);
     m_pageWidths.resize(pageCount);
     m_pageHeights.resize(pageCount);
+    // Track current texture pixel sizes for skip heuristics in async preview
+    m_textureWidths.assign(pageCount, 0);
+    m_textureHeights.assign(pageCount, 0);
     m_textureByteSizes.assign(pageCount, 0);
     m_currentTextureBytes = 0;
     m_budgetDownscaleApplied = false;
@@ -1726,6 +1736,13 @@ void PDFViewerEmbedder::regenerateTextures()
         // Store BASE dimensions (ACTUAL page dimensions, not window-fitted)
         m_pageWidths[i] = static_cast<int>(originalPageWidth);
         m_pageHeights[i] = static_cast<int>(originalPageHeight);
+        // Record current texture pixel dimensions for heuristics
+        if (i >= 0 && i < (int)m_textureWidths.size()) {
+            m_textureWidths[i] = textureWidth;
+        }
+        if (i >= 0 && i < (int)m_textureHeights.size()) {
+            m_textureHeights[i] = textureHeight;
+        }
     }
     // Pages outside (regenStart, regenEnd) remain as placeholders until scrolled into view
     
@@ -1814,6 +1831,13 @@ void PDFViewerEmbedder::regenerateVisibleTextures()
         // Store BASE dimensions (ACTUAL page dimensions, not window-fitted)
         m_pageWidths[i] = static_cast<int>(originalPageWidth);
         m_pageHeights[i] = static_cast<int>(originalPageHeight);
+        // Record current texture pixel dimensions for heuristics
+        if (i >= 0 && i < (int)m_textureWidths.size()) {
+            m_textureWidths[i] = textureWidth;
+        }
+        if (i >= 0 && i < (int)m_textureHeights.size()) {
+            m_textureHeights[i] = textureHeight;
+        }
     }
     
     m_needsVisibleRegeneration = false;
@@ -1895,6 +1919,13 @@ void PDFViewerEmbedder::regeneratePageTexture(int pageIndex)
     // Store BASE dimensions
     m_pageWidths[pageIndex] = static_cast<int>(originalPageWidth);
     m_pageHeights[pageIndex] = static_cast<int>(originalPageHeight);
+    // Record current texture pixel dimensions for heuristics
+    if (pageIndex >= 0 && pageIndex < (int)m_textureWidths.size()) {
+        m_textureWidths[pageIndex] = textureWidth;
+    }
+    if (pageIndex >= 0 && pageIndex < (int)m_textureHeights.size()) {
+        m_textureHeights[pageIndex] = textureHeight;
+    }
     enforceMemoryBudget();
 }
 
@@ -2708,10 +2739,10 @@ void PDFViewerEmbedder::clearSearchHighlights()
 void PDFViewerEmbedder::scheduleVisibleRegeneration(bool settled) {
     if (!m_pdfLoaded || !m_asyncQueue) return;
 
-    // Debounce progressive (non-settled) regeneration to at most ~1 every 55 ms
+    // Debounce progressive (non-settled) regeneration to at most ~1 every ~48 ms
     double now = glfwGetTime();
     if (!settled) {
-        const double DEBOUNCE_INTERVAL = 0.055; // ~18 fps ceiling while interacting
+        const double DEBOUNCE_INTERVAL = 0.048; // ~20-21 fps ceiling while interacting
         if (now - m_lastPreviewRegenTime < DEBOUNCE_INTERVAL) {
             return; // Skip scheduling too soon
         }
@@ -2732,13 +2763,13 @@ void PDFViewerEmbedder::scheduleVisibleRegeneration(bool settled) {
     // Build tasks for visible pages only
     std::vector<PageRenderTask> tasks;
     int priority = 0;
-    // When not settled, limit progressive pass to center-most 2 pages to reduce GPU churn
+    // When not settled, limit progressive pass to center-most page to reduce GPU churn
     int progressiveFirst = firstVisible;
     int progressiveLast = lastVisible;
     if (!settled) {
         int mid = (firstVisible + lastVisible) / 2;
-        progressiveFirst = std::max(firstVisible, mid - 1);
-        progressiveLast = std::min(lastVisible, mid + 1);
+        progressiveFirst = std::max(firstVisible, mid);
+        progressiveLast = std::min(lastVisible, mid);
     }
 
     for (int i = firstVisible; i <= lastVisible; ++i) {
@@ -2753,15 +2784,15 @@ void PDFViewerEmbedder::scheduleVisibleRegeneration(bool settled) {
         // Progressive quality: while not settled (gesture ongoing), cap to a preview size
         float quality = 1.0f;
         if (!settled) {
-            // Cap max dimension relative to window to keep wheel zoom snappy (reduced to ~window size)
+            // Cap preview dimension more aggressively to keep wheel zoom snappy
             const int windowMax = std::max(m_windowWidth, m_windowHeight);
-            const int PREVIEW_MAX = std::max(256, std::min(windowMax, // <= window dimension
+            const int PREVIEW_MAX = std::max(256, std::min((int)(windowMax * 0.75),
                                                            (m_glMaxTextureSize > 0 ? m_glMaxTextureSize - 64 : 4096)));
             const double desiredMax = std::max(pw * zoom, ph * zoom);
             if (desiredMax > 0.0) {
                 quality = std::min(1.0, (double)PREVIEW_MAX / desiredMax);
                 // Avoid too blurry preview
-                quality = std::max(quality, 0.3f);
+                quality = std::max(quality, 0.28f);
             }
         }
 
@@ -2775,7 +2806,7 @@ void PDFViewerEmbedder::scheduleVisibleRegeneration(bool settled) {
             if (existingW > 0 && existingH > 0) {
                 float dw = std::abs(existingW - w) / (float)std::max(w, 1);
                 float dh = std::abs(existingH - h) / (float)std::max(h, 1);
-                if (!settled && dw < 0.08f && dh < 0.08f) {
+                if (!settled && dw < 0.12f && dh < 0.12f) {
                     continue; // Texture close enough during interaction
                 }
             }
@@ -2795,16 +2826,33 @@ void PDFViewerEmbedder::scheduleVisibleRegeneration(bool settled) {
 void PDFViewerEmbedder::processAsyncResults() {
     if (!m_asyncQueue) return;
     auto results = m_asyncQueue->drainResults();
-    if (results.empty()) return;
+    if (!results.empty()) {
+        // Queue results for controlled per-frame GL uploads
+        m_pendingGLUploads.insert(m_pendingGLUploads.end(),
+                                  std::make_move_iterator(results.begin()),
+                                  std::make_move_iterator(results.end()));
+    }
+    if (m_pendingGLUploads.empty()) return;
 
     // Upload results to GL textures
     glfwMakeContextCurrent(m_glfwWindow);
-    for (auto& r : results) {
+    // Cap uploads per frame to reduce stutter on heavy docs
+    const int MAX_UPLOADS_PER_FRAME = 3;
+    int uploads = 0;
+    // Process highest-priority first: sort by generation desc then preview false first, then by smaller page index
+    std::stable_sort(m_pendingGLUploads.begin(), m_pendingGLUploads.end(),
+                     [](const PageRenderResult& a, const PageRenderResult& b) {
+                         if (a.generation != b.generation) return a.generation > b.generation; // newest first
+                         if (a.preview != b.preview) return !a.preview; // settled before preview
+                         return a.pageIndex < b.pageIndex; // visible order-ish
+                     });
+    auto it = m_pendingGLUploads.begin();
+    while (it != m_pendingGLUploads.end() && uploads < MAX_UPLOADS_PER_FRAME) {
+        PageRenderResult r = std::move(*it);
+        it = m_pendingGLUploads.erase(it);
         // Drop stale generation results (e.g., from an older zoom / resize / tab activation)
         // to avoid overwriting with wrong-sized textures or resurrecting freed pages.
-        if (r.generation != m_generation.load()) {
-            continue;
-        }
+        if (r.generation != m_generation.load()) continue;
         // Recreate page texture at new size for simplicity (could be sub-image into atlas)
         if (r.pageIndex < 0 || r.pageIndex >= (int)m_textures.size()) continue;
         if (m_textures[r.pageIndex]) glDeleteTextures(1, &m_textures[r.pageIndex]);
@@ -2824,8 +2872,8 @@ void PDFViewerEmbedder::processAsyncResults() {
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
         } else {
-            if (r.preview) {
-                // Cheaper filtering & no mipmaps for preview to speed interaction
+            if (r.preview || !m_enableMipmaps) {
+                // Cheaper filtering & no mipmaps for preview or when mipmaps disabled globally
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             } else {
@@ -2835,7 +2883,7 @@ void PDFViewerEmbedder::processAsyncResults() {
         }
         glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, r.width, r.height, 0, GL_BGRA, GL_UNSIGNED_BYTE, r.bgra.data());
-        if (!intermediatePipeline && !r.preview) glGenerateMipmap(GL_TEXTURE_2D);
+        if (!intermediatePipeline && !r.preview && m_enableMipmaps) glGenerateMipmap(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, 0);
         m_textures[r.pageIndex] = tex;
 
@@ -2847,7 +2895,8 @@ void PDFViewerEmbedder::processAsyncResults() {
             m_textureHeights[r.pageIndex] = r.height;
         }
 
-    // Keep base page size unchanged; zoom applied in draw. Original page
-    // size tracked separately; here we only update current texture dims.
+        // Keep base page size unchanged; zoom applied in draw. Original page
+        // size tracked separately; here we only update current texture dims.
+        uploads++;
     }
 }
