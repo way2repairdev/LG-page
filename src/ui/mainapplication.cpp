@@ -40,6 +40,16 @@ inline void writeTransitionLog(const QString &msg) {
            << " [main] " << msg << '\n';
     }
 }
+
+// Lightweight helper to surface issues without stopping the app
+inline void showTreeIssue(MainApplication* self, const QString &context, const QString &detail = QString()) {
+    QString msg = context;
+    if (!detail.trimmed().isEmpty()) msg += ": " + detail.trimmed();
+    // Floating toast + status bar + log
+    ToastNotifier::show(self, msg);
+    if (self && self->statusBar()) self->statusBar()->showMessage(msg, 5000);
+    writeTransitionLog(QString("tree-issue: ") + msg);
+}
 }
 
 MainApplication::MainApplication(const UserSession &userSession, QWidget *parent)
@@ -710,32 +720,48 @@ void MainApplication::onTreeSearchTriggered()
 // Replace the tree with a flat list of search results
 void MainApplication::renderSearchResultsFlat(const QVector<QString> &results, const QString &term)
 {
-    Q_UNUSED(term);
-    m_isSearchView = true;
-    m_treeWidget->clear();
-    // Header label remains "Treeview" for consistency
+    try {
+        Q_UNUSED(term);
+        m_isSearchView = true;
+        m_treeWidget->clear();
+        // Header label remains "Treeview" for consistency
 
-    // Create a simple flat list: one top-level item per result
-    QDir root(currentRootPath());
-    for (const QString &path : results) {
-        QFileInfo fi(path);
-        QString relDir = root.relativeFilePath(fi.absolutePath());
-        QString display = QString("%1 — %2").arg(fi.fileName(), relDir);
-        QTreeWidgetItem *it = new QTreeWidgetItem(m_treeWidget);
-        it->setText(0, display);
-        it->setData(0, Qt::UserRole, fi.absoluteFilePath());
-        it->setIcon(0, getFileIcon(fi.absoluteFilePath()));
-        it->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
-    // Tooltip should only show the file name without extension
-    it->setToolTip(0, fi.baseName());
+        // Create a simple flat list: one top-level item per result (with a safe display cap)
+        constexpr int kMaxShow = 5000; // avoid excessive UI nodes
+        int shown = 0;
+        QDir root(currentRootPath());
+        for (const QString &path : results) {
+            if (shown >= kMaxShow) break;
+            QFileInfo fi(path);
+            QString relDir = root.relativeFilePath(fi.absolutePath());
+            QString display = QString("%1 — %2").arg(fi.fileName(), relDir);
+            QTreeWidgetItem *it = new QTreeWidgetItem(m_treeWidget);
+            it->setText(0, display);
+            it->setData(0, Qt::UserRole, fi.absoluteFilePath());
+            it->setIcon(0, getFileIcon(fi.absoluteFilePath()));
+            it->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
+            // Tooltip should only show the file name without extension
+            it->setToolTip(0, fi.baseName());
+            ++shown;
+        }
+
+        // Sort alphabetically for predictability and apply compact premium look
+        m_treeWidget->sortItems(0, Qt::AscendingOrder);
+        m_treeWidget->setAlternatingRowColors(true);
+        m_treeWidget->setStyleSheet(m_treeWidget->styleSheet() + QString(
+            "\nQTreeWidget::item { padding: 4px 6px; }\n"
+            "QTreeWidget::item:selected { border-radius: 8px; }\n"));
+
+        if (results.size() > kMaxShow) {
+            showTreeIssue(this, "Search trimmed for performance",
+                          QString("%1 total results; showing first %2").arg(results.size()).arg(kMaxShow));
+            statusBar()->showMessage(QString("Showing first %1 of %2 matches").arg(kMaxShow).arg(results.size()), 5000);
+        }
+    } catch (const std::exception &e) {
+        showTreeIssue(this, "Error rendering search results", e.what());
+    } catch (...) {
+        showTreeIssue(this, "Unknown error rendering search results");
     }
-
-    // Sort alphabetically for predictability and apply compact premium look
-    m_treeWidget->sortItems(0, Qt::AscendingOrder);
-    m_treeWidget->setAlternatingRowColors(true);
-    m_treeWidget->setStyleSheet(m_treeWidget->styleSheet() + QString(
-        "\nQTreeWidget::item { padding: 4px 6px; }\n"
-        "QTreeWidget::item:selected { border-radius: 8px; }\n"));
 }
 
 QVector<QString> MainApplication::findMatchingFiles(const QString &term, int maxResults) const
@@ -753,8 +779,8 @@ QVector<QString> MainApplication::findMatchingFiles(const QString &term, int max
     while (!dirs.isEmpty() && (noCap || results.size() < maxResults)) {
         const QString d = dirs.takeFirst();
         QDir dir(d);
-        QFileInfoList entries = dir.entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot,
-                                                  QDir::DirsFirst | QDir::Name);
+    QFileInfoList entries = dir.entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot | QDir::NoSymLinks,
+                          QDir::DirsFirst | QDir::Name);
         for (const QFileInfo &fi : entries) {
             if (fi.isDir()) {
                 dirs << fi.absoluteFilePath();
@@ -772,89 +798,97 @@ QVector<QString> MainApplication::findMatchingFiles(const QString &term, int max
 // Expand parent folders and select the file item if present (lazy-load children as needed)
 bool MainApplication::revealPathInTree(const QString &absPath)
 {
-    if (!m_treeWidget) return false;
-    QFileInfo fi(absPath);
-    if (!fi.exists()) return false;
+    try {
+        if (!m_treeWidget) return false;
+        QFileInfo fi(absPath);
+        if (!fi.exists()) return false;
 
-    // Build list of folder names from root to file's parent
-    QString rel = QDir(currentRootPath()).relativeFilePath(fi.absolutePath());
-    QStringList parts = rel.split(QDir::separator(), Qt::SkipEmptyParts);
+        // Build list of folder names from root to file's parent
+        QString rel = QDir(currentRootPath()).relativeFilePath(fi.absolutePath());
+        QStringList parts = rel.split(QDir::separator(), Qt::SkipEmptyParts);
 
-    // Find the root item matching m_rootFolderPath; top-level items correspond to entries of the root
-    // For our tree, folders are top-level items initially; iterate accordingly
-    auto matchChildByName = [](QTreeWidgetItem *item, const QString &name) -> QTreeWidgetItem* {
-        for (int i = 0; i < (item ? item->childCount() : 0); ++i) {
-            QTreeWidgetItem *c = item->child(i);
-            if (c && c->text(0).compare(name, Qt::CaseInsensitive) == 0) return c;
+        // Find the root item matching m_rootFolderPath; top-level items correspond to entries of the root
+        // For our tree, folders are top-level items initially; iterate accordingly
+        auto matchChildByName = [](QTreeWidgetItem *item, const QString &name) -> QTreeWidgetItem* {
+            for (int i = 0; i < (item ? item->childCount() : 0); ++i) {
+                QTreeWidgetItem *c = item->child(i);
+                if (c && c->text(0).compare(name, Qt::CaseInsensitive) == 0) return c;
+            }
+            return nullptr;
+        };
+
+        // Navigate/expand down the path
+        QTreeWidgetItem *current = nullptr;
+        QTreeWidget *tw = m_treeWidget;
+        // At top level, search among tw->topLevelItem(i)
+        for (const QString &folderName : parts) {
+            if (!current) {
+                QTreeWidgetItem *next = nullptr;
+                for (int i = 0; i < tw->topLevelItemCount(); ++i) {
+                    QTreeWidgetItem *ti = tw->topLevelItem(i);
+                    if (ti->data(0, Qt::UserRole + 1).toString().endsWith(folderName, Qt::CaseInsensitive) ||
+                        ti->text(0).compare(folderName, Qt::CaseInsensitive) == 0) {
+                        next = ti; break;
+                    }
+                }
+                if (!next) return false;
+                current = next;
+            } else {
+                // Ensure children are loaded (expand triggers load)
+                if (!current->isExpanded()) {
+                    current->setExpanded(true);
+                    // If had a dummy, onTreeItemExpanded will populate
+                }
+                QCoreApplication::processEvents();
+                // Refresh to ensure children are accessible
+                QTreeWidgetItem *next = matchChildByName(current, folderName);
+                if (!next) {
+                    // Try after forcing expansion signal to run population
+                    onTreeItemExpanded(current);
+                    QCoreApplication::processEvents();
+                    next = matchChildByName(current, folderName);
+                }
+                if (!next) return false;
+                current = next;
+            }
         }
-        return nullptr;
-    };
 
-    // Navigate/expand down the path
-    QTreeWidgetItem *current = nullptr;
-    QTreeWidget *tw = m_treeWidget;
-    // At top level, search among tw->topLevelItem(i)
-    for (const QString &folderName : parts) {
+        // Now select the file within current
+        if (current && !current->isExpanded()) {
+            current->setExpanded(true);
+            onTreeItemExpanded(current);
+            QCoreApplication::processEvents();
+        }
+
+        QString baseName = fi.baseName();
+        QTreeWidgetItem *fileItem = nullptr;
         if (!current) {
-            QTreeWidgetItem *next = nullptr;
+            // Could be a file at top level
             for (int i = 0; i < tw->topLevelItemCount(); ++i) {
                 QTreeWidgetItem *ti = tw->topLevelItem(i);
-                if (ti->data(0, Qt::UserRole + 1).toString().endsWith(folderName, Qt::CaseInsensitive) ||
-                    ti->text(0).compare(folderName, Qt::CaseInsensitive) == 0) {
-                    next = ti; break;
-                }
+                if (ti->data(0, Qt::UserRole).toString() == fi.absoluteFilePath() ||
+                    ti->text(0).compare(baseName, Qt::CaseInsensitive) == 0) { fileItem = ti; break; }
             }
-            if (!next) return false;
-            current = next;
         } else {
-            // Ensure children are loaded (expand triggers load)
-            if (!current->isExpanded()) {
-                current->setExpanded(true);
-                // If had a dummy, onTreeItemExpanded will populate
+            for (int i = 0; i < current->childCount(); ++i) {
+                QTreeWidgetItem *c = current->child(i);
+                if (c->data(0, Qt::UserRole).toString() == fi.absoluteFilePath() ||
+                    c->text(0).compare(baseName, Qt::CaseInsensitive) == 0) { fileItem = c; break; }
             }
-            QCoreApplication::processEvents();
-            // Refresh to ensure children are accessible
-            QTreeWidgetItem *next = matchChildByName(current, folderName);
-            if (!next) {
-                // Try after forcing expansion signal to run population
-                onTreeItemExpanded(current);
-                QCoreApplication::processEvents();
-                next = matchChildByName(current, folderName);
-            }
-            if (!next) return false;
-            current = next;
         }
-    }
+        if (!fileItem) return false;
 
-    // Now select the file within current
-    if (current && !current->isExpanded()) {
-        current->setExpanded(true);
-        onTreeItemExpanded(current);
-        QCoreApplication::processEvents();
+        expandToItem(fileItem);
+        tw->setCurrentItem(fileItem);
+        tw->scrollToItem(fileItem, QAbstractItemView::PositionAtCenter);
+        return true;
+    } catch (const std::exception &e) {
+        showTreeIssue(this, "Reveal in tree error", e.what());
+        return false;
+    } catch (...) {
+        showTreeIssue(this, "Unknown error revealing item in tree");
+        return false;
     }
-
-    QString baseName = fi.baseName();
-    QTreeWidgetItem *fileItem = nullptr;
-    if (!current) {
-        // Could be a file at top level
-        for (int i = 0; i < tw->topLevelItemCount(); ++i) {
-            QTreeWidgetItem *ti = tw->topLevelItem(i);
-            if (ti->data(0, Qt::UserRole).toString() == fi.absoluteFilePath() ||
-                ti->text(0).compare(baseName, Qt::CaseInsensitive) == 0) { fileItem = ti; break; }
-        }
-    } else {
-        for (int i = 0; i < current->childCount(); ++i) {
-            QTreeWidgetItem *c = current->child(i);
-            if (c->data(0, Qt::UserRole).toString() == fi.absoluteFilePath() ||
-                c->text(0).compare(baseName, Qt::CaseInsensitive) == 0) { fileItem = c; break; }
-        }
-    }
-    if (!fileItem) return false;
-
-    expandToItem(fileItem);
-    tw->setCurrentItem(fileItem);
-    tw->scrollToItem(fileItem, QAbstractItemView::PositionAtCenter);
-    return true;
 }
 
 void MainApplication::expandToItem(QTreeWidgetItem *item)
@@ -999,46 +1033,44 @@ void MainApplication::refreshCurrentTree()
 
 void MainApplication::populateTreeFromDirectory(const QString &dirPath, QTreeWidgetItem *parentItem)
 {
-    QDir dir(dirPath);
-    if (!dir.exists()) {
-        return;
-    }
-    
+    try {
+        QDir dir(dirPath);
+        if (!dir.exists()) {
+            showTreeIssue(this, "Folder not found", dirPath);
+            return;
+        }
+        // Avoid symlink loops and permission issues
+        dir.setFilter(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks);
     // Get all entries (files and directories)
     QFileInfoList entries = dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
-    
-    for (const QFileInfo &entry : entries) {
-        QTreeWidgetItem *item;
         
-        if (parentItem) {
-            item = new QTreeWidgetItem(parentItem);
-        } else {
-            item = new QTreeWidgetItem(m_treeWidget);
+        // Soft cap per directory to avoid UI stalls on huge folders
+        const int kMaxPerDir = 5000;
+        int count = 0;
+        for (const QFileInfo &entry : entries) {
+            if (++count > kMaxPerDir) { showTreeIssue(this, "Folder trimmed for performance", dirPath); break; }
+            QTreeWidgetItem *item = parentItem ? new QTreeWidgetItem(parentItem)
+                                               : new QTreeWidgetItem(m_treeWidget);
+            // Set up the tree item appearance
+            setupTreeItemAppearance(item, entry);
+            if (entry.isDir()) {
+                // This is a directory
+                item->setData(0, Qt::UserRole + 1, entry.absoluteFilePath()); // Store folder path
+                // Add a dummy child item to make the folder expandable (lazy load)
+                QTreeWidgetItem *dummyItem = new QTreeWidgetItem(item);
+                dummyItem->setText(0, "Loading...");
+                dummyItem->setData(0, Qt::UserRole + 2, true); // Mark as dummy
+                item->setExpanded(false);
+            } else {
+                // This is a file
+                item->setData(0, Qt::UserRole, entry.absoluteFilePath()); // Store file path
+                item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
+            }
         }
-        
-        // Set up the tree item appearance
-        setupTreeItemAppearance(item, entry);
-        
-        if (entry.isDir()) {
-            // This is a directory
-            item->setData(0, Qt::UserRole + 1, entry.absoluteFilePath()); // Store folder path
-            
-            // Add a dummy child item to make the folder expandable
-            // The actual children will be loaded when the folder is expanded
-            QTreeWidgetItem *dummyItem = new QTreeWidgetItem(item);
-            dummyItem->setText(0, "Loading...");
-            dummyItem->setData(0, Qt::UserRole + 2, true); // Mark as dummy
-            
-            // Don't expand folders by default - let user expand them
-            item->setExpanded(false);
-        } else {
-            // This is a file
-            item->setData(0, Qt::UserRole, entry.absoluteFilePath()); // Store file path
-            
-            // Make files non-expandable by ensuring they have no children
-            // and can't be expanded
-            item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
-        }
+    } catch (const std::exception &e) {
+        showTreeIssue(this, "Error loading folder", e.what());
+    } catch (...) {
+        showTreeIssue(this, "Unknown error loading folder");
     }
 }
 
@@ -1750,79 +1782,75 @@ void MainApplication::updateContentArea(const QString &title, const QString &con
 
 void MainApplication::onTreeItemClicked(QTreeWidgetItem *item, int column)
 {
-    Q_UNUSED(column)
-    
-    if (!item) return;
-    
-    QString itemText = item->text(0);
-    
-    // Check if item has a file path data (files)
-    QString filePath = item->data(0, Qt::UserRole).toString();
-    // Check if item has a folder path data (folders)
-    QString folderPath = item->data(0, Qt::UserRole + 1).toString();
-    
-    if (!filePath.isEmpty()) {
-    // File (could be search result or real tree) - just show status
-    statusBar()->showMessage(QString("Selected: %1 (double-click to open)").arg(itemText));
-    } else if (!folderPath.isEmpty()) {
-    // Folder: toggle immediately for faster UX
-    bool willExpand = !item->isExpanded();
-    item->setExpanded(willExpand);
-    statusBar()->showMessage(QString("%1 folder: %2")
-                 .arg(willExpand ? "Expanded" : "Collapsed")
-                 .arg(itemText));
-    } else {
-        // No specific data, just show the item name
-        statusBar()->showMessage(QString("Selected: %1").arg(itemText));
+    try {
+        Q_UNUSED(column)
+        if (!item) return;
+        QString itemText = item->text(0);
+        // Check if item has a file path data (files)
+        QString filePath = item->data(0, Qt::UserRole).toString();
+        // Check if item has a folder path data (folders)
+        QString folderPath = item->data(0, Qt::UserRole + 1).toString();
+        if (!filePath.isEmpty()) {
+            statusBar()->showMessage(QString("Selected: %1 (double-click to open)").arg(itemText));
+        } else if (!folderPath.isEmpty()) {
+            bool willExpand = !item->isExpanded();
+            item->setExpanded(willExpand);
+            statusBar()->showMessage(QString("%1 folder: %2").arg(willExpand ? "Expanded" : "Collapsed").arg(itemText));
+        } else {
+            statusBar()->showMessage(QString("Selected: %1").arg(itemText));
+        }
+    } catch (const std::exception &e) {
+        showTreeIssue(this, "Tree click error", e.what());
+    } catch (...) {
+        showTreeIssue(this, "Tree click error");
     }
 }
 
 void MainApplication::onTreeItemDoubleClicked(QTreeWidgetItem *item, int column)
 {
-    Q_UNUSED(column)
-    
-    if (!item) return;
-    
-    QString itemText = item->text(0);
-    QString filePath = item->data(0, Qt::UserRole).toString();
-    
-    if (!filePath.isEmpty()) {
-        // This is a file - open it in a new tab (double-click to open)
-        statusBar()->showMessage(QString("Opening file: %1...").arg(itemText));
-        openFileInTab(filePath);
-    } else {
-        // This is a folder - toggle expansion
-        if (item->isExpanded()) {
-            item->setExpanded(false);
+    try {
+        Q_UNUSED(column)
+        if (!item) return;
+        QString itemText = item->text(0);
+        QString filePath = item->data(0, Qt::UserRole).toString();
+        if (!filePath.isEmpty()) {
+            statusBar()->showMessage(QString("Opening file: %1...").arg(itemText));
+            openFileInTab(filePath);
         } else {
-            item->setExpanded(true);
+            item->setExpanded(!item->isExpanded());
+            statusBar()->showMessage(QString("Toggled folder: %1").arg(itemText));
         }
-        statusBar()->showMessage(QString("Toggled folder: %1").arg(itemText));
+    } catch (const std::exception &e) {
+        showTreeIssue(this, "Open item error", e.what());
+    } catch (...) {
+        showTreeIssue(this, "Open item error");
     }
 }
 
 void MainApplication::onTreeItemExpanded(QTreeWidgetItem *item)
 {
-    if (!item) return;
-    
-    // Update folder icon to "open" state
-    updateTreeItemIcon(item, true);
-    
-    // Check if this folder has dummy children and needs to be populated
-    if (item->childCount() == 1) {
-        QTreeWidgetItem *child = item->child(0);
-        if (child && child->data(0, Qt::UserRole + 2).toBool()) {
-            // This is a dummy item, remove it and load actual contents
-            delete child;
-            
-            // Load the actual folder contents
-            QString folderPath = item->data(0, Qt::UserRole + 1).toString();
-            if (!folderPath.isEmpty()) {
-                statusBar()->showMessage(QString("Loading folder: %1...").arg(item->text(0)));
-                populateTreeFromDirectory(folderPath, item);
-                statusBar()->showMessage(QString("Loaded folder: %1").arg(item->text(0)));
+    try {
+        if (!item) return;
+        updateTreeItemIcon(item, true);
+        // Check if this folder has dummy children and needs to be populated
+        if (item->childCount() == 1) {
+            QTreeWidgetItem *child = item->child(0);
+            if (child && child->data(0, Qt::UserRole + 2).toBool()) {
+                // This is a dummy item, remove it and load actual contents
+                delete child;
+                // Load the actual folder contents
+                QString folderPath = item->data(0, Qt::UserRole + 1).toString();
+                if (!folderPath.isEmpty()) {
+                    statusBar()->showMessage(QString("Loading folder: %1...").arg(item->text(0)));
+                    populateTreeFromDirectory(folderPath, item);
+                    statusBar()->showMessage(QString("Loaded folder: %1").arg(item->text(0)));
+                }
             }
         }
+    } catch (const std::exception &e) {
+        showTreeIssue(this, "Expand folder error", e.what());
+    } catch (...) {
+        showTreeIssue(this, "Expand folder error");
     }
 }
 

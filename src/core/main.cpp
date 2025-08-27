@@ -2,14 +2,18 @@
 
 #include <QApplication>
 #include <QCoreApplication>
+#include <QMessageBox>
+#include <QTimer>
 #include <QDir>
 #include <QFile>
 #include <QTextStream>
 #include <QDateTime>
 #include <QStandardPaths>
 #include <QStyleFactory>
+#include <QEvent>
 #include <csignal>
 #include <exception>
+#include <atomic>
 #ifdef _WIN32
 #include <windows.h>
 #include <dbghelp.h>
@@ -46,19 +50,37 @@ void qtMessageHandler(QtMsgType type, const QMessageLogContext &ctx, const QStri
     }
     appendLog("qt", QString("%1: %2%3").arg(typeStr).arg(msg).arg(ctxStr));
     if (type == QtFatalMsg) {
-        // Ensure fatal messages are visible in the log
-        ::abort();
+        // Do not abort. Show a non-blocking critical message and try to keep app running.
+        static std::atomic<bool> showing{false};
+        if (!showing.exchange(true)) {
+            const QString m = QString("A fatal Qt error was reported and was intercepted.\n\n%1\n\nThe application will try to continue running.").arg(msg);
+            QMetaObject::invokeMethod(qApp, [m]() {
+                QMessageBox::critical(nullptr, "Runtime Error", m);
+            }, Qt::QueuedConnection);
+            // Allow another fatal to show later
+            QTimer::singleShot(2000, qApp, [](){ showing.store(false); });
+        }
+        // Swallow the fatal to avoid hard aborts.
+        return;
     }
 }
 
+// Avoid forcing process termination; prefer logging and UI error where possible.
+// Note: true OS faults (e.g., access violations) cannot be fully recovered.
 void onTerminate() {
     appendLog("crash", "std::terminate called");
-    std::_Exit(1);
+    // Try to notify the user, but don't hard-exit here. The runtime may still terminate.
+    QMetaObject::invokeMethod(qApp, [](){
+        QMessageBox::critical(nullptr, "Unexpected Termination", "An unrecoverable error occurred. The app will attempt to remain open. Please save your work.");
+    }, Qt::QueuedConnection);
 }
 
 void onSignal(int sig) {
     appendLog("crash", QString("signal caught: %1").arg(sig));
-    std::_Exit(1);
+    // Best effort notify; signals like SIGSEGV are not recoverable.
+    QMetaObject::invokeMethod(qApp, [sig](){
+        QMessageBox::critical(nullptr, "System Signal", QString("The app received signal %1. Operation may be unstable.").arg(sig));
+    }, Qt::QueuedConnection);
 }
 
 #ifdef _WIN32
@@ -98,20 +120,43 @@ LONG WINAPI sehFilter(EXCEPTION_POINTERS* ep) {
     appendLog("crash", QString("unhandled SEH exception: 0x%1").arg(code, 0, 16));
     // Attempt to write a minidump for post-mortem analysis (avoid MSVC-specific __try/__except for MinGW)
     writeMinidump(ep);
-    return EXCEPTION_EXECUTE_HANDLER;
+    // Try to continue execution if possible; if not, OS will still terminate.
+    return EXCEPTION_CONTINUE_SEARCH;
 }
 #endif
 }
 
+// Subclass QApplication to catch exceptions during Qt event dispatch and keep app alive
+class SafeApplication : public QApplication {
+public:
+    using QApplication::QApplication;
+    bool notify(QObject *receiver, QEvent *event) override {
+        try {
+            return QApplication::notify(receiver, event);
+        } catch (const std::exception &e) {
+            appendLog("crash", QString("exception in Qt notify: %1").arg(e.what()));
+            QMessageBox::critical(nullptr, "Runtime Error", QString("An error occurred and was handled: %1").arg(e.what()));
+            return false;
+        } catch (...) {
+            appendLog("crash", "unknown exception in Qt notify");
+            QMessageBox::critical(nullptr, "Runtime Error", "An unknown error occurred and was handled.");
+            return false;
+        }
+    }
+};
+
 int main(int argc, char *argv[])
 {
-    QApplication app(argc, argv);
+    SafeApplication app(argc, argv);
 
     // Install global diagnostics
     qInstallMessageHandler(qtMessageHandler);
-    std::set_terminate(onTerminate);
+    // Avoid forcing exits; just log. Unhandled exceptions/signals are not fully recoverable but we try to keep UI alive.
+    // std::set_terminate(onTerminate); // disabled: can cause immediate hard-exit
     std::signal(SIGABRT, onSignal);
+#ifdef SIGSEGV
     std::signal(SIGSEGV, onSignal);
+#endif
 #ifdef _WIN32
     SetUnhandledExceptionFilter(sehFilter);
 #endif
@@ -126,12 +171,22 @@ int main(int argc, char *argv[])
     // Set application style
     app.setStyle(QStyleFactory::create("Fusion"));
     
-    // Create and show main window
-    MainWindow window;
-    window.show();
-    appendLog("login", "login window shown");
-    
-    const int rc = app.exec();
+    // Create and show main window under a basic safety net
+    int rc = 0;
+    try {
+        MainWindow window;
+        window.show();
+        appendLog("login", "login window shown");
+        rc = app.exec();
+    } catch (const std::exception &e) {
+        appendLog("crash", QString("uncaught exception: %1").arg(e.what()));
+        QMessageBox::critical(nullptr, "Unexpected Error", QString("An unexpected error occurred: %1").arg(e.what()));
+        rc = 1;
+    } catch (...) {
+        appendLog("crash", "uncaught non-standard exception");
+        QMessageBox::critical(nullptr, "Unexpected Error", "An unknown error occurred.");
+        rc = 2;
+    }
     appendLog("app", QString("shutdown rc=%1").arg(rc));
     return rc;
 }
