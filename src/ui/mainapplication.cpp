@@ -215,15 +215,9 @@ void MainApplication::setupStatusBar()
         "    font-family: 'Segoe UI', Arial, sans-serif;"
         "}"
     );
-    
-    // Add permanent widgets to status bar
-    QLabel *userLabel = new QLabel(QString("Logged in as: %1").arg(m_userSession.fullName), this);
-    m_statusBar->addPermanentWidget(userLabel);
-    
-    QLabel *timeLabel = new QLabel(QString("Session started: %1").arg(m_userSession.loginTime.toString("hh:mm:ss")), this);
-    m_statusBar->addPermanentWidget(timeLabel);
-    
-    m_statusBar->showMessage("Ready");
+    // Hide the status bar to remove bottom debug/info messages (file name, zoom, etc.)
+    // All statusBar()->showMessage(...) calls remain harmless while hidden.
+    m_statusBar->hide();
 }
 
 void MainApplication::onFullUpdateUI()
