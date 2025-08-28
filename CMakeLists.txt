@@ -60,6 +60,8 @@ endif()
 # Find Qt6 packages
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets Sql Network OpenGL OpenGLWidgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets Sql Network OpenGL OpenGLWidgets)
+# Optionally find QtSvg for icon generation helper tool
+find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS Svg)
 
 # Try to find PDF modules (optional)
 find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS Pdf PdfWidgets)
@@ -266,6 +268,67 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
     )
+    # Optionally embed Windows .ico into the executable (improves taskbar/shortcut icon)
+    if(WIN32)
+        set(APP_ICO_SVG "${CMAKE_CURRENT_SOURCE_DIR}/resources/images/icons/Way2Repair_Logo.svg")
+        set(APP_ICO_SRC "${CMAKE_CURRENT_SOURCE_DIR}/resources/images/icons/Way2Repair_Logo.ico")
+        set(APP_ICO_GEN "${CMAKE_CURRENT_BINARY_DIR}/Way2Repair_Logo.ico")
+
+        # Try to generate an .ico from SVG if missing
+        if(NOT EXISTS ${APP_ICO_SRC})
+            set(APP_RC_GEN "${CMAKE_CURRENT_BINARY_DIR}/app_icon_gen.rc")
+            # Prefer building a tiny Qt-based svg2ico tool if QtSvg is available
+            if(Qt${QT_VERSION_MAJOR}Svg_FOUND)
+                add_executable(svg2ico ${CMAKE_CURRENT_SOURCE_DIR}/tools/svg2ico.cpp)
+                target_link_libraries(svg2ico PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Gui Qt${QT_VERSION_MAJOR}::Svg)
+                set_target_properties(svg2ico PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+                add_custom_command(
+                    OUTPUT ${APP_ICO_GEN}
+                    COMMAND $<TARGET_FILE:svg2ico> "${APP_ICO_SVG}" "${APP_ICO_GEN}" 256
+                    DEPENDS svg2ico ${APP_ICO_SVG}
+                    COMMENT "Generating ICO from SVG using svg2ico helper"
+                )
+                add_custom_target(gen_app_ico ALL DEPENDS ${APP_ICO_GEN})
+                file(WRITE ${APP_RC_GEN} "IDI_APP_ICON ICON \"${APP_ICO_GEN}\"\n")
+                target_sources(Way2RepairLoginSystem PRIVATE ${APP_RC_GEN})
+                add_dependencies(Way2RepairLoginSystem gen_app_ico)
+                message(STATUS "App icon (.ico) will be auto-generated via svg2ico and embedded")
+            else()
+                # Fallback: try ImageMagick if installed
+                find_program(IMAGEMAGICK_MAGICK magick)
+                if(IMAGEMAGICK_MAGICK)
+                    set(IMAGEMAGICK_EXE ${IMAGEMAGICK_MAGICK})
+                    add_custom_command(
+                        OUTPUT ${APP_ICO_GEN}
+                        COMMAND ${IMAGEMAGICK_EXE} "${APP_ICO_SVG}" -define icon:auto-resize=256 "${APP_ICO_GEN}"
+                        DEPENDS ${APP_ICO_SVG}
+                        COMMENT "Generating ICO from SVG using ImageMagick"
+                    )
+                    add_custom_target(gen_app_ico ALL DEPENDS ${APP_ICO_GEN})
+                    file(WRITE ${APP_RC_GEN} "IDI_APP_ICON ICON \"${APP_ICO_GEN}\"\n")
+                    target_sources(Way2RepairLoginSystem PRIVATE ${APP_RC_GEN})
+                    add_dependencies(Way2RepairLoginSystem gen_app_ico)
+                    message(STATUS "App icon (.ico) will be auto-generated via ImageMagick and embedded")
+                else()
+                    message(WARNING "QtSvg/ImageMagick not found. Provide resources/images/icons/Way2Repair_Logo.ico to embed EXE icon.")
+                endif()
+            endif()
+        endif()
+
+        # If a source .ico exists in resources, prefer that
+        if(EXISTS ${APP_ICO_SRC})
+            message(STATUS "App icon (.ico) found - embedding into executable")
+            target_sources(Way2RepairLoginSystem PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/resources/app_icon.rc)
+        elseif(EXISTS ${APP_ICO_GEN})
+            # Fallback if generated earlier in configuration
+            set(APP_RC_GEN "${CMAKE_CURRENT_BINARY_DIR}/app_icon_gen.rc")
+            if(EXISTS ${APP_RC_GEN})
+                target_sources(Way2RepairLoginSystem PRIVATE ${APP_RC_GEN})
+            endif()
+        else()
+            message(STATUS "App icon (.ico) not found - taskbar/shortcut will use default icon")
+        endif()
+    endif()
 else()
     if(ANDROID)
         add_library(Way2RepairLoginSystem SHARED

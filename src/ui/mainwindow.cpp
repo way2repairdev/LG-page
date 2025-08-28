@@ -9,6 +9,7 @@
 #include <QTextStream>
 #include <QDateTime>
 #include <QDir>
+#include <QIcon>
 
 namespace {
 // Append a timestamped line to build/tab_debug.txt (next to the exe)
@@ -58,6 +59,20 @@ MainWindow::MainWindow(QWidget *parent)
     
     // Set focus to username field
     ui->usernameLineEdit->setFocus();
+
+    // Ensure login window shows the application icon (taskbar, alt-tab, etc.)
+    {
+        QIcon appIcon;
+        const QString svgPath = ":/icons/images/icons/Way2Repair_Logo.svg";
+        if (QFile(svgPath).exists()) {
+            const QList<QSize> sizes = { {16,16}, {20,20}, {24,24}, {32,32}, {40,40}, {48,48}, {64,64}, {96,96}, {128,128}, {256,256} };
+            for (const auto &sz : sizes) appIcon.addFile(svgPath, sz);
+        }
+        if (!appIcon.isNull()) {
+            setWindowIcon(appIcon);
+            QApplication::setWindowIcon(appIcon);
+        }
+    }
 }
 
 MainWindow::~MainWindow()

@@ -85,8 +85,21 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
         move(x, y);
     }
     
-    // Set application icon (you can add an icon file later)
-    setWindowIcon(QIcon(":/icons/app_icon.png"));
+    // Set application/window icon from SVG with multiple declared sizes for crisp scaling
+    {
+        const QString svgPath = ":/icons/images/icons/Way2Repair_Logo.svg";
+        QIcon appIcon;
+        if (QFile(svgPath).exists()) {
+            const QList<QSize> sizes = { {16,16}, {20,20}, {24,24}, {32,32}, {40,40}, {48,48}, {64,64}, {96,96}, {128,128}, {256,256} };
+            for (const auto &sz : sizes) {
+                appIcon.addFile(svgPath, sz);
+            }
+        }
+        if (!appIcon.isNull()) {
+            setWindowIcon(appIcon);
+            QApplication::setWindowIcon(appIcon);
+        }
+    }
     
     // Load initial tree: default to Server mode; fallback to Local until a server path is set
     if (m_serverRootPath.isEmpty()) {

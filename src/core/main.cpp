@@ -167,6 +167,17 @@ int main(int argc, char *argv[])
     app.setApplicationVersion("1.0.0");
     app.setOrganizationName("Way2Repair Systems");
     app.setOrganizationDomain("way2repair.com");
+
+    // Set a global application icon so taskbar/early windows pick it up
+    {
+        QIcon appIcon;
+        const QString svgPath = ":/icons/images/icons/Way2Repair_Logo.svg";
+        if (QFile(svgPath).exists()) {
+            const QList<QSize> sizes = { {16,16}, {20,20}, {24,24}, {32,32}, {40,40}, {48,48}, {64,64}, {96,96}, {128,128}, {256,256} };
+            for (const auto &sz : sizes) appIcon.addFile(svgPath, sz);
+        }
+        if (!appIcon.isNull()) QApplication::setWindowIcon(appIcon);
+    }
     
     // Set application style
     app.setStyle(QStyleFactory::create("Fusion"));
