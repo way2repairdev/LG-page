@@ -366,9 +366,9 @@ static QWidget* makeFlatTabPage()
     auto *w = new QWidget();
     // Zero margins and minimal height so only the tab bar contributes to height
     w->setContentsMargins(0, 0, 0, 0);
-    // Avoid strictly zero height to keep style/layout engines happy
-    w->setMinimumHeight(1);
-    w->setMaximumHeight(1);
+    // Collapse the pane completely so the tab bar sits flush with adjacent content
+    w->setMinimumHeight(0);
+    w->setMaximumHeight(0);
     w->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     return w;
 }
@@ -1306,21 +1306,32 @@ void DualTabWidget::applyCurrentThemeStyles()
             "    background: #ffffff;"
             "    font-family: 'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif;"
             "}"
+            // Keep a visible baseline between tabs and content (no negative offset)
             "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
             "QTabBar { qproperty-drawBase:0; background:#f6f7f9; border-bottom:1px solid #e2e5ea; }"
-            "QTabBar::tab { background:#ffffff; border:1px solid #d3d7de; color:#333; margin:0px 2px; min-height:20px; min-width:140px; max-width:300px; font-size:11px; font-weight:500; letter-spacing:0.2px; }"
+            // Add a small bottom gap so the baseline shows under tabs
+            "QTabBar::tab { background:#ffffff; border:1px solid #d3d7de; color:#333; margin:0px 2px; margin-bottom:2px; min-height:20px; min-width:140px; max-width:300px; font-size:11px; font-weight:500; letter-spacing:0.2px; }"
+            // Inactive tabs: thinner 0.5px border in light mode
+            "QTabBar::tab:!selected { border-width:0.5px; }"
             "QTabBar::tab:selected { background:#ffffff; color:#0b63c5; border:2px solid #6aa0e8; padding-left:5px; }"
-            "QTabBar::tab:hover:!selected { background:#f0f6ff; border:1px solid #6A9FE8; color:#1976d2; }"
+            // Keep hover color, but thin border width
+            "QTabBar::tab:hover:!selected { background:#f0f6ff; border:0.5px solid #6A9FE8; color:#1976d2; }"
             "QTabBar::tab:first { margin-left:2px; } QTabBar::tab:last { margin-right:2px; } QTabBar::tab:focus { outline:none; }"
             ;
 
         const QString darkTheme =
             "QTabWidget { background:#111; color:#e8eaed; font-family:'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif; }"
+            // Keep a visible baseline between tabs and content (no negative offset)
             "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
-            "QTabBar { qproperty-drawBase:0; background:#1e242a; border-bottom:1px solid #2b3239; }"
-            "QTabBar::tab { background:#22272e; border:1px solid #2f363d; color:#e8eaed; margin:0px 2px; min-height:20px; min-width:140px; max-width:320px; font-size:11px; font-weight:500; letter-spacing:.2px; }"
+            "QTabBar { qproperty-drawBase:0; background:#1e242a; border-bottom:0.5px solid #ffffff; }"
+            // Base tab style in dark; overridden for specific states below
+            // Add a small bottom gap so the baseline shows under tabs
+            "QTabBar::tab { background:#22272e; border:1px solid #2f363d; color:#e8eaed; margin:0px 2px; margin-bottom:2px; min-height:20px; min-width:140px; max-width:320px; font-size:11px; font-weight:500; letter-spacing:.2px; }"
+            // Inactive (unselected) tabs should have a white, thin border for contrast in dark mode
+            "QTabBar::tab:!selected { border:0.5px solid #ffffff; }"
             "QTabBar::tab:selected { background:#1b2026; color:#8ab4f8; border:2px solid #355a7a; padding-left:5px; }"
-            "QTabBar::tab:hover:!selected { background:#263238; border:1px solid #2F5F7F; color:#90caf9; }"
+            // Keep hover color, but thin border width
+            "QTabBar::tab:hover:!selected { background:#263238; border:0.5px solid #2F5F7F; color:#90caf9; }"
             "QTabBar::tab:first { margin-left:2px; } QTabBar::tab:last { margin-right:2px; } QTabBar::tab:focus { outline:none; }"
             ;
 
@@ -1347,39 +1358,47 @@ void DualTabWidget::applyCurrentThemeStyles()
 
         const QString commonPane =
             "QTabWidget { background:%1; color:%2; }"
+            // Keep a visible baseline between tabs and content (no negative offset)
             "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
             "QTabBar { qproperty-drawBase:0; background:%1; border-bottom:1px solid %3; }"
             "QTabBar::tear { width:0; height:0; }";
 
         const QString tabsBase =
             "QTabBar::tab { background: transparent; border:3px solid transparent; border-radius:2px;"
-            " padding:2px 10px; margin:0 2px; min-height:22px; min-width:150px; font-weight:500; color:%1; }"
+            " padding:2px 10px; margin:0 2px; margin-bottom:2px; min-height:22px; min-width:150px; font-weight:500; color:%1; }"
             "QTabBar::tab:hover { background:%2; }"
             "QTabBar::tab:pressed { background:%3; }"
             "QTabBar::tab:focus { outline: none; }"
             "QTabBar::tab:!selected { background: transparent; }";
 
         const QString tabsLight = tabsBase.arg(onSurfaceL, hoverL, pressedL) +
-            "QTabBar::tab:!selected { border-color:" + borderNeutralL + "; }"
-            "QTabBar::tab:hover:!selected { border-color:" + hoverBorderL + "; }"
+            // Inactive tabs: set color and 0.5px width in light mode
+            "QTabBar::tab:!selected { border-color:" + borderNeutralL + "; border-width:0.5px; }"
+            "QTabBar::tab:hover:!selected { border-color:" + hoverBorderL + "; border-width:0.5px; }"
             "QTabBar::tab:selected { background:" + primaryL + "; color:#FFFFFF; border:none; font-weight:600; }"
             "QTabBar::tab:focus:!selected { border-color:" + hoverBorderL + "; }";
 
         const QString tabsDark = tabsBase.arg(onSurfaceD, hoverD, pressedD) +
-            "QTabBar::tab:!selected { border-color:" + borderNeutralD + "; }"
-            "QTabBar::tab:hover:!selected { border-color:" + hoverBorderD + "; }"
+            // Inactive (unselected) tabs: white, thin border for dark mode per requirement
+            "QTabBar::tab:!selected { border-color:#FFFFFF; border-width:0.5px; }"
+            "QTabBar::tab:hover:!selected { border-color:" + hoverBorderD + "; border-width:0.5px; }"
             "QTabBar::tab:selected { background:" + primaryD + "; color:#FFFFFF; border:none; font-weight:600; }"
             "QTabBar::tab:focus:!selected { border-color:" + hoverBorderD + "; }";
 
-    const QString unifiedQss = (commonPane.arg(dark ? surfaceD : surfaceL, dark ? onSurfaceD : onSurfaceL, dark ? borderNeutralD : borderNeutralL)) + (dark ? tabsDark : tabsLight);
+        QString unifiedQss = (commonPane.arg(dark ? surfaceD : surfaceL, dark ? onSurfaceD : onSurfaceL, dark ? borderNeutralD : borderNeutralL)) + (dark ? tabsDark : tabsLight);
+        if (dark) {
+            // Match the tab bar baseline to inactive tab border in dark mode
+            unifiedQss += "QTabBar { border-bottom:0.5px solid #FFFFFF; }";
+        }
 
         if (m_pdfTabWidget) applyStyleWithTag(m_pdfTabWidget, unifiedQss, dark ? "unifiedMaterialDark" : "unifiedMaterialLight");
         if (m_pcbTabWidget) applyStyleWithTag(m_pcbTabWidget, unifiedQss, dark ? "unifiedMaterialDark" : "unifiedMaterialLight");
     }
 
     // Unified content area styling for both PDF and PCB
+    // Remove top border so it touches the tab bar; keep left/right/bottom borders
     const QString contentStyle = QStringLiteral(
-        "QStackedWidget { border:1px solid %1; border-radius:0; background:%2; }"
+        "QStackedWidget { border-top:0; border-left:1px solid %1; border-right:1px solid %1; border-bottom:1px solid %1; border-radius:0; background:%2; }"
     ).arg(dark ? "#3c4043" : "#e0e0e0",
           dark ? "#111111" : "#ffffff");
     
