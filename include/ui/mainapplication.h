@@ -77,6 +77,8 @@ private slots:
     void onTreeItemCollapsed(QTreeWidgetItem *item);
     void onAboutClicked();
     void onLogoutClicked();
+    void onHomeClicked();
+    void onThemeToggleChanged(bool checked);
     // Dual tab widget slots
     void onTabCloseRequestedByType(int index, DualTabWidget::TabType type);
     void onTabChangedByType(int index, DualTabWidget::TabType type);
@@ -117,6 +119,8 @@ private:
     QLineEdit *m_treeSearchEdit;    // search input
     QPushButton *m_treeSearchButton; // search/next button
     QToolButton *m_treeSearchClearButton; // clear input
+    QToolButton *m_homeButton { nullptr }; // Home button in menu bar (top-right)
+    QToolButton *m_themeToggle { nullptr }; // Dark/Light toggle button in menu bar (top-right)
     QPushButton *m_btnLocal;        // Local button
     QPushButton *m_btnServer;       // Server button
     QButtonGroup *m_sourceGroup;    // Exclusive selection
@@ -142,6 +146,8 @@ private:
     void setupSourceToggleBar(); // create Local/Server toggle UI
     void setupTabWidget();  // Changed from setupContentArea
     void applyTreeViewTheme(); // Apply adaptive dark/light stylesheet to tree view
+    void applyMenuBarMaterialStyle(); // Apply Material-like style to menu bar and right controls
+    void applyAppPalette(bool dark);  // Switch global palette to dark or light
     void updateUserInfo();
     void setTreeSource(TreeSource src, bool forceReload=false);
     void refreshCurrentTree();

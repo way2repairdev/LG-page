@@ -44,6 +44,82 @@
 #include <QMetaType>
 // QWidgetAction header may not be available in current include paths; we'll use addWidget helpers instead.
 
+// --- Premium toolbar helpers (icon tinting, hover/checked states) ---
+static QIcon makeTintedIcon(const QIcon &base, const QColor &color, const QSize &size)
+{
+    if (base.isNull()) return base;
+    QPixmap src = base.pixmap(size);
+    if (src.isNull()) return base;
+    QImage img = src.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    QImage colored(img.size(), QImage::Format_ARGB32_Premultiplied);
+    colored.fill(Qt::transparent);
+    QPainter p(&colored);
+    p.fillRect(colored.rect(), color);
+    p.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+    p.drawImage(0, 0, img);
+    p.end();
+    return QIcon(QPixmap::fromImage(colored));
+}
+
+class PremiumButtonFilter : public QObject {
+public:
+    PremiumButtonFilter(QToolButton* btn, const QIcon &normal, const QIcon &hover, const QIcon &disabled)
+        : QObject(btn), m_btn(btn), m_normal(normal), m_hover(hover), m_disabled(disabled) {}
+protected:
+    bool eventFilter(QObject *obj, QEvent *ev) override {
+        if (obj != m_btn) return QObject::eventFilter(obj, ev);
+        switch (ev->type()) {
+            case QEvent::Enter:
+                if (m_btn->isEnabled()) m_btn->setIcon(m_hover);
+                break;
+            case QEvent::Leave:
+                if (m_btn->isEnabled()) m_btn->setIcon((m_btn->isCheckable() && m_btn->isChecked()) ? m_hover : m_normal);
+                break;
+            case QEvent::EnabledChange:
+                m_btn->setIcon(m_btn->isEnabled() ? (m_btn->underMouse() || (m_btn->isCheckable() && m_btn->isChecked()) ? m_hover : m_normal) : m_disabled);
+                break;
+            default: break;
+        }
+        return QObject::eventFilter(obj, ev);
+    }
+private:
+    QToolButton* m_btn {nullptr};
+    QIcon m_normal, m_hover, m_disabled;
+};
+
+static void installPremiumButtonStyling(QToolBar *bar, const QColor &accent, bool dark)
+{
+    if (!bar) return;
+    const QSize iconSz(16, 16);
+    const QColor normal = dark ? QColor("#c7cacf") : QColor("#5f6368");
+    const QColor disabled = dark ? QColor("#6f7379") : QColor("#9e9e9e");
+
+    for (QAction *act : bar->actions()) {
+        if (!act || act->isSeparator()) continue;
+        if (auto *btn = qobject_cast<QToolButton*>(bar->widgetForAction(act))) {
+            const QIcon baseIcon = act->icon();
+            QIcon iconNormal = makeTintedIcon(baseIcon, normal, iconSz);
+            QIcon iconHover  = makeTintedIcon(baseIcon, accent, iconSz);
+            QIcon iconDis    = makeTintedIcon(baseIcon, disabled, iconSz);
+            btn->setAutoRaise(true);
+            btn->setCursor(Qt::PointingHandCursor);
+            btn->setIconSize(iconSz);
+            btn->setToolButtonStyle(Qt::ToolButtonIconOnly);
+            btn->setIcon(act->isEnabled() ? iconNormal : iconDis);
+            btn->setAttribute(Qt::WA_Hover, true);
+            auto *filter = new PremiumButtonFilter(btn, iconNormal, iconHover, iconDis);
+            btn->installEventFilter(filter);
+            QObject::connect(btn, &QToolButton::toggled, btn, [btn, iconNormal, iconHover]() {
+                if (!btn->isEnabled()) return;
+                btn->setIcon(btn->isChecked() ? iconHover : (btn->underMouse() ? iconHover : iconNormal));
+            });
+            QObject::connect(act, &QAction::changed, btn, [btn, act, iconNormal, iconDis]() {
+                btn->setIcon(act->isEnabled() ? iconNormal : iconDis);
+            });
+        }
+    }
+}
+
 // Enhanced debug logging for PCBViewerWidget
 void WritePCBDebugToFile(const QString& message) {
     static QFile debugFile;
@@ -485,8 +561,9 @@ void PCBViewerWidget::setupToolbar()
     m_toolbar->setMovable(false);
     // Theme-aware red accent (match tab styling: #E53935/#b71c1c family)
     const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+    // Use opaque backgrounds like PDF so theme switching is obvious visually
     const QString tbStyleLight =
-        "QToolBar{background:transparent;border:none;min-height:30px;}"
+        "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:30px;}"
         "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(229,57,53,0.10);border-color:rgba(229,57,53,0.35);}" 
         "QToolBar QToolButton:pressed{background:rgba(229,57,53,0.18);border-color:#E53935;}"
@@ -494,7 +571,7 @@ void PCBViewerWidget::setupToolbar()
         "QToolBar QToolButton:disabled{color:#9e9e9e;background:transparent;border-color:transparent;}"
         "QToolBar::separator{background:rgba(0,0,0,0.12);width:1px;margin:0 6px;}";
     const QString tbStyleDark =
-        "QToolBar{background:transparent;border:none;min-height:30px;}"
+        "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:30px;}"
         "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(183,28,28,0.22);border-color:#cf6679;}"
         "QToolBar QToolButton:pressed{background:rgba(183,28,28,0.30);border-color:#b71c1c;}"
@@ -706,15 +783,11 @@ void PCBViewerWidget::setupToolbar()
                 PCBThemeSpec spec;
                 QVariantMap m = data.toMap();
                 auto str = [&](const char* k){ return m.value(k).toString(); };
-                auto dbl = [&](const char* k, double d){ return m.contains(k) ? m.value(k).toDouble() : d; };
                 auto parseColorHex = [&](const QString &hex, float &r, float &g, float &b){
                     QColor c(hex);
                     if (!c.isValid()) return false;
                     r = c.redF(); g = c.greenF(); b = c.blueF();
                     return true;
-                };
-                auto parseColorTriple = [&](const char* kr, const char* kg, const char* kb, float &r, float &g, float &b){
-                    r = (float)dbl(kr, r); g = (float)dbl(kg, g); b = (float)dbl(kb, b);
                 };
 
                 spec.name = str("name").toStdString();
@@ -778,37 +851,8 @@ void PCBViewerWidget::setupToolbar()
     WritePCBDebugToFile("Zoom and rotation/flip actions added to PCB toolbar");
     WritePCBDebugToFile("Split window action removed (feature deprecated)");
     WritePCBDebugToFile("PCB Qt toolbar setup completed with PDF viewer styling");
-
-    // Optional: Icon tinting to red on hover/checked similar to PDF (local inline since helpers are in PDF file)
-    {
-    const QSize iconSz(16, 16);
-        const QColor accent = QColor(dark ? "#cf6679" : "#E53935");
-        const QColor normal = dark ? QColor("#c7cacf") : QColor("#5f6368");
-        const QColor disabled = dark ? QColor("#6f7379") : QColor("#9e9e9e");
-        auto makeTint = [&](const QIcon &base, const QColor &c){
-            QPixmap src = base.pixmap(iconSz);
-            if (src.isNull()) return base;
-            QImage img = src.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied);
-            QImage colored(img.size(), QImage::Format_ARGB32_Premultiplied);
-            colored.fill(Qt::transparent);
-            QPainter p(&colored); p.fillRect(colored.rect(), c); p.setCompositionMode(QPainter::CompositionMode_DestinationIn); p.drawImage(0,0,img); p.end();
-            return QIcon(QPixmap::fromImage(colored));
-        };
-        for (QAction *act : m_toolbar->actions()) {
-            if (!act || act->isSeparator()) continue;
-            if (auto *btn = qobject_cast<QToolButton*>(m_toolbar->widgetForAction(act))) {
-                QIcon n = makeTint(act->icon(), normal);
-                QIcon h = makeTint(act->icon(), accent);
-                QIcon d = makeTint(act->icon(), disabled);
-                btn->setIcon(act->isEnabled() ? n : d);
-                btn->setIconSize(iconSz);
-                btn->setAttribute(Qt::WA_Hover, true);
-                btn->installEventFilter(new QObject(btn));
-                QObject::connect(btn, &QToolButton::toggled, btn, [btn, n, h](){ if (btn->isEnabled()) btn->setIcon(btn->isChecked() ? h : (btn->underMouse()?h:n)); });
-                QObject::connect(act, &QAction::changed, btn, [btn, act, n, d](){ btn->setIcon(act->isEnabled()?n:d); });
-            }
-        }
-    }
+    // Install premium icon tinting/hover behavior like PDF
+    installPremiumButtonStyling(m_toolbar, QColor(dark ? "#cf6679" : "#E53935"), dark);
 }
 
 void PCBViewerWidget::positionLayerBar()
@@ -951,7 +995,7 @@ void PCBViewerWidget::applyToolbarTheme()
     if (!m_toolbar) return;
     const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
     const QString tbStyleLight =
-        "QToolBar{background:transparent;border:none;min-height:30px;}"
+        "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:30px;}"
         "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(229,57,53,0.10);border-color:rgba(229,57,53,0.35);}" 
         "QToolBar QToolButton:pressed{background:rgba(229,57,53,0.18);border-color:#E53935;}"
@@ -959,7 +1003,7 @@ void PCBViewerWidget::applyToolbarTheme()
         "QToolBar QToolButton:disabled{color:#9e9e9e;background:transparent;border-color:transparent;}"
         "QToolBar::separator{background:rgba(0,0,0,0.12);width:1px;margin:0 6px;}";
     const QString tbStyleDark =
-        "QToolBar{background:transparent;border:none;min-height:30px;}"
+        "QToolBar{background:#202124;border-bottom:1px solid #3c4043;min-height:30px;}"
         "QToolBar QToolButton{color:#e8eaed;border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
         "QToolBar QToolButton:hover{background:rgba(183,28,28,0.22);border-color:#cf6679;}"
         "QToolBar QToolButton:pressed{background:rgba(183,28,28,0.30);border-color:#b71c1c;}"
@@ -967,6 +1011,8 @@ void PCBViewerWidget::applyToolbarTheme()
         "QToolBar QToolButton:disabled{color:#9aa0a6;background:transparent;border-color:transparent;}"
         "QToolBar::separator{background:rgba(255,255,255,0.12);width:1px;margin:0 6px;}";
     m_toolbar->setStyleSheet(dark ? tbStyleDark : tbStyleLight);
+    // Reinstall premium icon tinting for the new theme
+    installPremiumButtonStyling(m_toolbar, QColor(dark ? "#cf6679" : "#E53935"), dark);
     // Update net combo and button styles to match theme
     if (m_netCombo) {
         const QString border = dark ? "#5f6368" : "#ccc";
@@ -1013,36 +1059,12 @@ void PCBViewerWidget::applyToolbarTheme()
               dark ? "#332222" : "#f0f0f0",
               dark ? "#2b1f1f" : "#e8e8e8"));
     }
-    // Retint icons for new theme (reuse local inline block logic)
-    const QSize iconSz(16, 16);
-    const QColor accent = QColor(dark ? "#cf6679" : "#E53935");
-    const QColor normal = dark ? QColor("#c7cacf") : QColor("#5f6368");
-    const QColor disabled = dark ? QColor("#6f7379") : QColor("#9e9e9e");
-    auto makeTint = [&](const QIcon &base, const QColor &c){
-        QPixmap src = base.pixmap(iconSz);
-        if (src.isNull()) return base;
-        QImage img = src.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied);
-        QImage colored(img.size(), QImage::Format_ARGB32_Premultiplied);
-        colored.fill(Qt::transparent);
-        QPainter p(&colored); p.fillRect(colored.rect(), c); p.setCompositionMode(QPainter::CompositionMode_DestinationIn); p.drawImage(0,0,img); p.end();
-        return QIcon(QPixmap::fromImage(colored));
-    };
-    for (QAction *act : m_toolbar->actions()) {
-        if (!act || act->isSeparator()) continue;
-        if (auto *btn = qobject_cast<QToolButton*>(m_toolbar->widgetForAction(act))) {
-            QIcon n = makeTint(act->icon(), normal);
-            QIcon h = makeTint(act->icon(), accent);
-            QIcon d = makeTint(act->icon(), disabled);
-            btn->setIcon(act->isEnabled() ? n : d);
-            btn->setIconSize(iconSz);
-            // Hover filter reuses existing QObject; icons are reset here only.
-        }
-    }
+    // (Icon hover behavior is handled by premium filters above.)
 }
 
 void PCBViewerWidget::changeEvent(QEvent *event)
 {
-    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange) {
+    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::ApplicationPaletteChange || event->type() == QEvent::StyleChange) {
         applyToolbarTheme();
     }
     QWidget::changeEvent(event);

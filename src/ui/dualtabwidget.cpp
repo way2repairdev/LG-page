@@ -20,6 +20,9 @@
 #include <QApplication>
 #include <QPalette>
 #include <QFontDatabase>
+#include <QEvent>
+#include <QEvent>
+#include <QToolBar>
 
 // Forward declaration for logging helper used below
 void logDebug(const QString &message);
@@ -397,6 +400,9 @@ void DualTabWidget::setupUI()
     m_pdfTabWidget->tabBar()->setExpanding(false);
     // Disable icon space completely - this is critical for proper text alignment
     m_pdfTabWidget->setIconSize(QSize(0, 0));
+    // Ensure QSS background/border rules apply to the tab bar itself
+    m_pdfTabWidget->tabBar()->setAttribute(Qt::WA_StyledBackground, true);
+    m_pdfTabWidget->tabBar()->setAutoFillBackground(true);
     applyCompactTabBar(m_pdfTabWidget->tabBar());
     // Styles will be applied by theme helper
     m_pcbTabWidget = new QTabWidget();
@@ -417,6 +423,9 @@ void DualTabWidget::setupUI()
     m_pcbTabWidget->tabBar()->setExpanding(false);
     // Disable icon space completely - this is critical for proper text alignment
     m_pcbTabWidget->setIconSize(QSize(0, 0));
+    // Ensure QSS background/border rules apply to the tab bar itself
+    m_pcbTabWidget->tabBar()->setAttribute(Qt::WA_StyledBackground, true);
+    m_pcbTabWidget->tabBar()->setAutoFillBackground(true);
     applyCompactTabBar(m_pcbTabWidget->tabBar());
     
     // Apply theme and create close buttons deferred to avoid constructor-time style engine churn
@@ -1203,8 +1212,38 @@ void DualTabWidget::forceStyleRefresh()
     
     applyStyleWithTag(m_pdfTabWidget, pdfStyle, "forced-reapply");
     applyStyleWithTag(m_pcbTabWidget, pcbStyle, "forced-reapply");
+
+    // Repolish tab bars and widgets to pick up palette/metrics immediately
+    auto repolishAll = [](QWidget* w){
+        if (!w) return;
+        if (w->style()) { w->style()->unpolish(w); w->style()->polish(w); }
+        w->update();
+    };
+    if (m_pdfTabWidget) { repolishAll(m_pdfTabWidget->tabBar()); repolishAll(m_pdfTabWidget); }
+    if (m_pcbTabWidget) { repolishAll(m_pcbTabWidget->tabBar()); repolishAll(m_pcbTabWidget); }
     
-    qDebug() << "Forced style refresh by re-applying stylesheets";
+    // Proactively propagate palette change to all existing viewer widgets so their toolbars re-theme immediately
+    auto propagatePaletteChange = [](QWidget* w){
+        if (!w) return;
+        QEvent ev(QEvent::ApplicationPaletteChange);
+        QApplication::sendEvent(w, &ev);
+        // Also notify any toolbars directly and force a small repolish/update
+        const auto bars = w->findChildren<QToolBar*>();
+        for (QToolBar* bar : bars) {
+            QApplication::sendEvent(bar, &ev);
+            if (bar->style()) {
+                bar->style()->unpolish(bar);
+                bar->style()->polish(bar);
+            }
+            bar->update();
+        }
+        w->update();
+    };
+
+    for (QWidget* w : m_pdfWidgets) propagatePaletteChange(w);
+    for (QWidget* w : m_pcbWidgets) propagatePaletteChange(w);
+
+    qDebug() << "Forced style refresh by re-applying stylesheets and dispatching ApplicationPaletteChange to viewer widgets";
 }
 
 void DualTabWidget::setDarkTheme(bool dark)
@@ -1268,21 +1307,21 @@ void DualTabWidget::applyCurrentThemeStyles()
             "    font-family: 'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif;"
             "}"
             "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
-            "QTabBar { qproperty-drawBase:0; background:#e8e8e8; }"
-            "QTabBar::tab { background:#f0f0f0; border:3px solid #555; color:#333; margin:0px 1px; min-height:20px; min-width:140px; max-width:300px; font-size:11px; font-weight:500; letter-spacing:0.2px; }"
-            "QTabBar::tab:selected { background:#ffffff; color:#0066cc; border:none; font-weight:600; padding-left:5px; }"
-            "QTabBar::tab:hover:!selected { background:rgba(227,242,253,0.8); border:3px solid #6A9FE8; color:#1976d2; }"
-            "QTabBar::tab:first { margin-left:2px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
+            "QTabBar { qproperty-drawBase:0; background:#f6f7f9; border-bottom:1px solid #e2e5ea; }"
+            "QTabBar::tab { background:#ffffff; border:1px solid #d3d7de; color:#333; margin:0px 2px; min-height:20px; min-width:140px; max-width:300px; font-size:11px; font-weight:500; letter-spacing:0.2px; }"
+            "QTabBar::tab:selected { background:#ffffff; color:#0b63c5; border:2px solid #6aa0e8; padding-left:5px; }"
+            "QTabBar::tab:hover:!selected { background:#f0f6ff; border:1px solid #6A9FE8; color:#1976d2; }"
+            "QTabBar::tab:first { margin-left:2px; } QTabBar::tab:last { margin-right:2px; } QTabBar::tab:focus { outline:none; }"
             ;
 
         const QString darkTheme =
             "QTabWidget { background:#111; color:#e8eaed; font-family:'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif; }"
             "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
-            "QTabBar { qproperty-drawBase:0; background:#202124; }"
-            "QTabBar::tab { background:#2a2b2d; border:3px solid rgba(255,255,255,0.2); color:#e8eaed; margin:0px 1px; min-height:20px; min-width:140px; max-width:320px; font-size:11px; font-weight:500; letter-spacing:.2px; }"
-            "QTabBar::tab:selected { background:#1f2937; color:#8ab4f8; border:none; font-weight:600; padding-left:5px; }"
-            "QTabBar::tab:hover:!selected { background:#263238; border:3px solid #2F5F7F; color:#90caf9; }"
-            "QTabBar::tab:first { margin-left:2px; } QTabBar::tab:last { margin-right:0; } QTabBar::tab:focus { outline:none; }"
+            "QTabBar { qproperty-drawBase:0; background:#1e242a; border-bottom:1px solid #2b3239; }"
+            "QTabBar::tab { background:#22272e; border:1px solid #2f363d; color:#e8eaed; margin:0px 2px; min-height:20px; min-width:140px; max-width:320px; font-size:11px; font-weight:500; letter-spacing:.2px; }"
+            "QTabBar::tab:selected { background:#1b2026; color:#8ab4f8; border:2px solid #355a7a; padding-left:5px; }"
+            "QTabBar::tab:hover:!selected { background:#263238; border:1px solid #2F5F7F; color:#90caf9; }"
+            "QTabBar::tab:first { margin-left:2px; } QTabBar::tab:last { margin-right:2px; } QTabBar::tab:focus { outline:none; }"
             ;
 
         const QString unifiedStyle = dark ? darkTheme : lightTheme;
@@ -1309,7 +1348,7 @@ void DualTabWidget::applyCurrentThemeStyles()
         const QString commonPane =
             "QTabWidget { background:%1; color:%2; }"
             "QTabWidget::pane { border:0; background:transparent; margin:0; padding:0; }"
-            "QTabBar { qproperty-drawBase:0; background:transparent; }"
+            "QTabBar { qproperty-drawBase:0; background:%1; border-bottom:1px solid %3; }"
             "QTabBar::tear { width:0; height:0; }";
 
         const QString tabsBase =
@@ -1332,7 +1371,7 @@ void DualTabWidget::applyCurrentThemeStyles()
             "QTabBar::tab:selected { background:" + primaryD + "; color:#FFFFFF; border:none; font-weight:600; }"
             "QTabBar::tab:focus:!selected { border-color:" + hoverBorderD + "; }";
 
-        const QString unifiedQss = (commonPane.arg(dark ? surfaceD : surfaceL, dark ? onSurfaceD : onSurfaceL)) + (dark ? tabsDark : tabsLight);
+    const QString unifiedQss = (commonPane.arg(dark ? surfaceD : surfaceL, dark ? onSurfaceD : onSurfaceL, dark ? borderNeutralD : borderNeutralL)) + (dark ? tabsDark : tabsLight);
 
         if (m_pdfTabWidget) applyStyleWithTag(m_pdfTabWidget, unifiedQss, dark ? "unifiedMaterialDark" : "unifiedMaterialLight");
         if (m_pcbTabWidget) applyStyleWithTag(m_pcbTabWidget, unifiedQss, dark ? "unifiedMaterialDark" : "unifiedMaterialLight");
@@ -1406,8 +1445,39 @@ void DualTabWidget::applyCurrentThemeStyles()
     // Update close button visibility after applying styles
     updateCloseButtonVisibility(PDF_TAB);
     updateCloseButtonVisibility(PCB_TAB);
+
+    // Repolish to ensure stylesheet and palette changes take effect instantly
+    auto repolish = [](QWidget *w){ if (!w) return; if (w->style()) { w->style()->unpolish(w); w->style()->polish(w);} w->update(); };
+    if (m_pdfTabWidget) { repolish(m_pdfTabWidget->tabBar()); repolish(m_pdfTabWidget); }
+    if (m_pcbTabWidget) { repolish(m_pcbTabWidget->tabBar()); repolish(m_pcbTabWidget); }
 }
 
 // Close button functionality removed - resizeEvent no longer needed
 
 // (Removed) updateCloseButtonsTheme: no longer needed
+
+void DualTabWidget::changeEvent(QEvent *event)
+{
+    if (!event) { QWidget::changeEvent(event); return; }
+    switch (event->type()) {
+    case QEvent::ApplicationPaletteChange:
+    case QEvent::PaletteChange:
+    case QEvent::StyleChange:
+    {
+        // Keep internal dark flag aligned with the app palette unless explicitly overridden
+        if (!this->property("explicitTheme").toBool()) {
+            const bool appDark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+            m_darkTheme = appDark;
+        }
+        // Re-apply QSS for both tab widgets
+        applyCurrentThemeStyles();
+        // Force repolish on tab bars to immediately reflect colors/metrics
+        auto repolish = [](QWidget *w){ if (!w) return; w->style()->unpolish(w); w->style()->polish(w); w->update(); };
+        if (m_pdfTabWidget) repolish(m_pdfTabWidget->tabBar());
+        if (m_pcbTabWidget) repolish(m_pcbTabWidget->tabBar());
+        break;
+    }
+    default: break;
+    }
+    QWidget::changeEvent(event);
+}

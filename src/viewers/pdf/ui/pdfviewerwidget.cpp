@@ -393,7 +393,7 @@ void PDFViewerWidget::applyToolbarTheme()
 
 void PDFViewerWidget::changeEvent(QEvent *event)
 {
-    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange) {
+    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::ApplicationPaletteChange || event->type() == QEvent::StyleChange) {
         applyToolbarTheme();
     }
     QWidget::changeEvent(event);

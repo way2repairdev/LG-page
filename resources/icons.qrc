@@ -27,5 +27,8 @@
     <file>images/icons/tree_branch_open_light.svg</file>
     <file>images/icons/chevron_down.svg</file>
     <file>images/icons/chevron_down_light.svg</file>
+    <file>images/icons/home.svg</file>
+    <file>images/icons/sun.svg</file>
+    <file>images/icons/moon.svg</file>
     </qresource>
 </RCC>

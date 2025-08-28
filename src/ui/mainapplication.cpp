@@ -154,27 +154,99 @@ void MainApplication::setupUI()
     mainLayout->addWidget(m_splitter);
 }
 
+void MainApplication::applyMenuBarMaterialStyle()
+{
+    QMenuBar *menuBar = this->menuBar();
+    if (!menuBar) return;
+    // Material-inspired palette
+    QColor base = palette().color(QPalette::Window);
+    const bool dark = base.lightness() < 128;
+    const QString colBar      = dark ? "#20262c" : "#ffffff";   // AppBar surface
+    const QString colText     = dark ? "#e2e8ef" : "#1a1a1a";   // On-surface text
+    const QString colOutline  = dark ? "#2c333a" : "#e6e8ee";   // Divider/border
+    const QString colHover    = dark ? "rgba(255,255,255,28)" : "rgba(30,136,229,28)"; // subtle overlay
+    const QString colPressed  = dark ? "rgba(255,255,255,38)" : "rgba(30,136,229,38)"; // pressed overlay
+    const QString colAccent   = dark ? "#64b5f6" : "#1E88E5";   // Primary
+
+    QString mbStyle;
+    mbStyle += "QMenuBar {"
+               "  background: " + colBar + ";"
+               "  color: " + colText + ";"
+               "  border: none;"
+               "  border-bottom: 1px solid " + colOutline + ";"
+               "  font-family: 'Segoe UI', Arial, sans-serif;"
+               // Compact height like before
+               "  min-height: 14px;"
+               "}";
+    // MenuBar items with underline indicator and hover overlay
+    mbStyle += "QMenuBar::item {"
+               // Old compact padding
+               "  padding: 6px 12px;"
+               "  margin: 0;"
+               "  color: " + colText + ";"
+               "  border: none;"
+               "  border-bottom: 2px solid transparent;"
+               "}"
+               "QMenuBar::item:selected {"
+               "  background: transparent;"
+               "  border-bottom: 2px solid " + colAccent + ";"
+               "}"
+               "QMenuBar::item:pressed {"
+               "  background: " + colPressed + ";"
+               "  border-bottom: 2px solid " + colAccent + ";"
+               "}";
+    // Popup menus (Material-ish)
+    mbStyle += "QMenu {"
+               "  background: " + (dark ? QString("#1b2025") : QString("#ffffff")) + ";"
+               "  color: " + colText + ";"
+               "  border: 1px solid " + colOutline + ";"
+               "  border-radius: 8px;"
+               "  padding: 6px;"
+               "}"
+               "QMenu::separator {"
+               "  height: 1px;"
+               "  background: " + colOutline + ";"
+               "  margin: 6px 8px;"
+               "}"
+               "QMenu::item {"
+               "  padding: 8px 14px;"
+               "  border-radius: 6px;"
+               "  margin: 2px;"
+               "}"
+               "QMenu::item:selected {"
+               "  background: " + (dark ? QString("rgba(255,255,255,18)") : QString("rgba(30,136,229,14)")) + ";"
+               "  color: " + colText + ";"
+               "}";
+    menuBar->setStyleSheet(mbStyle);
+
+    // Style right-side buttons to match
+    auto styleTool = [&](QToolButton *btn){
+        if (!btn) return;
+        btn->setStyleSheet(
+            QString(
+                "QToolButton {"
+                "  padding: 4px 8px;"
+                "  border: none;"
+                "  border-radius: 6px;"
+                "  color: %1;"
+                "}"
+                "QToolButton:hover {"
+                "  background: %2;"
+                "}"
+                "QToolButton:pressed {"
+                "  background: %3;"
+                "}"
+            ).arg(colText, colHover, colPressed)
+        );
+    };
+    styleTool(m_homeButton);
+    styleTool(m_themeToggle);
+}
+
 void MainApplication::setupMenuBar()
 {
     QMenuBar *menuBar = this->menuBar();
-    menuBar->setStyleSheet(
-        "QMenuBar {"
-        "    background-color: #f8f9ff;"
-        "    color: #2c3e50;"
-        "    border-bottom: 1px solid #d4e1f5;"
-        "    font-family: 'Segoe UI', Arial, sans-serif;"
-        "}"
-        "QMenuBar::item {"
-        "    padding: 6px 12px;"
-        "    background: transparent;"
-        "}"
-        "QMenuBar::item:selected {"
-        "    background-color: #4285f4;"
-        "    color: white;"
-        "    border-radius: 3px;"
-        "}"
-    );
-    
+    applyMenuBarMaterialStyle();
     // File menu
     QMenu *fileMenu = menuBar->addMenu("&File");
     QAction *logoutAction = fileMenu->addAction("&Logout");
@@ -212,6 +284,133 @@ void MainApplication::setupMenuBar()
     // Help menu
     QMenu *helpMenu = menuBar->addMenu("&Help");
     helpMenu->addAction("&About", this, &MainApplication::onAboutClicked);
+
+    // Add right-side container with Home + Theme Toggle
+    if (!m_homeButton || !m_themeToggle) {
+        QWidget *rightContainer = new QWidget(menuBar);
+        auto *rightLayout = new QHBoxLayout(rightContainer);
+        rightLayout->setContentsMargins(0, 0, 6, 0);
+        rightLayout->setSpacing(4);
+
+        // Home
+        if (!m_homeButton) {
+            m_homeButton = new QToolButton(rightContainer);
+            m_homeButton->setText(" Home");
+            m_homeButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+            m_homeButton->setCursor(Qt::PointingHandCursor);
+            m_homeButton->setAutoRaise(true);
+            QIcon homeIcon;
+            if (QFile(":/icons/images/icons/home.svg").exists()) {
+                homeIcon.addFile(":/icons/images/icons/home.svg");
+            }
+            if (homeIcon.isNull()) {
+                homeIcon = style()->standardIcon(QStyle::SP_DirHomeIcon);
+            }
+            m_homeButton->setIcon(homeIcon);
+            m_homeButton->setIconSize(QSize(16, 16));
+            m_homeButton->setToolTip("Go to Home (root view)");
+            connect(m_homeButton, &QToolButton::clicked, this, &MainApplication::onHomeClicked);
+        }
+
+        // Theme toggle (moon = dark, sun = light)
+        if (!m_themeToggle) {
+            m_themeToggle = new QToolButton(rightContainer);
+            m_themeToggle->setCheckable(true);
+            m_themeToggle->setCursor(Qt::PointingHandCursor);
+            m_themeToggle->setAutoRaise(true);
+            m_themeToggle->setToolTip("Toggle Dark/Light");
+            // Initial state based on current palette heuristic
+            const bool isDark = palette().color(QPalette::Window).lightness() < 128;
+            m_themeToggle->setChecked(isDark);
+            QIcon sunIcon(":/icons/images/icons/sun.svg");
+            QIcon moonIcon(":/icons/images/icons/moon.svg");
+            m_themeToggle->setIcon(isDark ? moonIcon : sunIcon);
+            m_themeToggle->setIconSize(QSize(16, 16));
+            connect(m_themeToggle, &QToolButton::toggled, this, &MainApplication::onThemeToggleChanged);
+        }
+
+        rightLayout->addWidget(m_homeButton, 0, Qt::AlignVCenter);
+        rightLayout->addSpacing(2);
+        rightLayout->addWidget(m_themeToggle, 0, Qt::AlignVCenter);
+        rightContainer->setLayout(rightLayout);
+        menuBar->setCornerWidget(rightContainer, Qt::TopRightCorner);
+
+        applyMenuBarMaterialStyle();
+    }
+}
+
+void MainApplication::onHomeClicked()
+{
+    // Ensure tree is visible and reset to a clean root state
+    setTreeViewVisible(true);
+    if (m_treeWidget) {
+        // Clear search view/results
+        if (m_treeSearchEdit) m_treeSearchEdit->clear();
+        m_isSearchView = false;
+        if (m_searchResultsRoot) m_searchResultsRoot->setHidden(true);
+
+        // Reset and focus the tree
+        m_treeWidget->clearSelection();
+        m_treeWidget->collapseAll();
+        if (m_treeWidget->topLevelItemCount() > 0) {
+            auto *first = m_treeWidget->topLevelItem(0);
+            if (first) {
+                m_treeWidget->setCurrentItem(first);
+                m_treeWidget->scrollToItem(first, QAbstractItemView::PositionAtTop);
+            }
+        }
+        m_treeWidget->setFocus();
+    }
+    statusBar()->showMessage("Home");
+}
+
+void MainApplication::onThemeToggleChanged(bool checked)
+{
+    // checked = dark
+    applyAppPalette(checked);
+    // Update toggle icon
+    if (m_themeToggle) {
+        QIcon sunIcon(":/icons/images/icons/sun.svg");
+        QIcon moonIcon(":/icons/images/icons/moon.svg");
+        m_themeToggle->setIcon(checked ? moonIcon : sunIcon);
+    }
+    // Reapply styles
+    applyMenuBarMaterialStyle();
+    applyTreeViewTheme();
+    if (m_tabWidget) {
+        // Sync dark flag so tab bars adopt the palette immediately
+        m_tabWidget->setDarkTheme(checked);
+        m_tabWidget->forceStyleRefresh();
+    // DualTabWidget will repolish its tab bars on palette change via changeEvent
+    }
+}
+
+void MainApplication::applyAppPalette(bool dark)
+{
+    QPalette pal;
+    if (dark) {
+        pal.setColor(QPalette::Window, QColor(32, 38, 44));
+        pal.setColor(QPalette::WindowText, QColor(226, 232, 239));
+        pal.setColor(QPalette::Base, QColor(27, 32, 37));
+        pal.setColor(QPalette::AlternateBase, QColor(27, 32, 37));
+        pal.setColor(QPalette::ToolTipBase, QColor(45, 53, 61));
+        pal.setColor(QPalette::ToolTipText, QColor(226, 232, 239));
+        pal.setColor(QPalette::Text, QColor(226, 232, 239));
+        pal.setColor(QPalette::Button, QColor(32, 38, 44));
+        pal.setColor(QPalette::ButtonText, QColor(226, 232, 239));
+        pal.setColor(QPalette::BrightText, QColor(255, 0, 0));
+        pal.setColor(QPalette::Highlight, QColor(47, 125, 216));
+        pal.setColor(QPalette::HighlightedText, QColor(255, 255, 255));
+    } else {
+        pal = qApp->style()->standardPalette();
+        // Normalize a touch for consistency
+        pal.setColor(QPalette::Window, QColor(255, 255, 255));
+        pal.setColor(QPalette::Base, QColor(255, 255, 255));
+        pal.setColor(QPalette::AlternateBase, QColor(255, 255, 255));
+        pal.setColor(QPalette::Highlight, QColor(0, 120, 212));
+        pal.setColor(QPalette::HighlightedText, QColor(255, 255, 255));
+    }
+    qApp->setPalette(pal);
 }
 
 void MainApplication::setupStatusBar()
@@ -584,43 +783,66 @@ void MainApplication::applyTreeViewTheme()
     }
     // Style search widgets to match theme
     if (m_treeSearchBar) {
-        // Clean, compact field
+        // Clean, compact field - explicit background/text for reliable dark/light
         if (m_treeSearchEdit) {
+            // Slightly stronger hover border than base
+            QString hoverBorder = dark ? "#4a5560" : "#c7ccd6";
             m_treeSearchEdit->setStyleSheet(QString(
                 "QLineEdit {"
+                "  background: %2;"
+                "  color: %3;"
                 "  border: 1px solid %1;"
                 "  border-radius: 8px;"
                 "  padding: 6px 10px;"
+                "  selection-background-color: %6;"
+                "  selection-color: %7;"
                 "}"
                 "QLineEdit::placeholder { color: %5; }"
-                "QLineEdit:focus {"
-                "  border: 1px solid %4;"
-                "}")
-                .arg(border, bg, text, focusOutline, placeholder, selectedBg, selectedText));
+                "QLineEdit:hover { border-color: %8; }"
+                "QLineEdit:focus { border: 1px solid %4; }"
+                "QLineEdit > QToolButton { border: none; background: transparent; padding: 0 6px; }"
+                "QLineEdit > QToolButton:hover { background: rgba(127,127,127,32); border-radius: 6px; }"
+            )
+            .arg(border, bg, text, focusOutline, placeholder, selectedBg, selectedText, hoverBorder));
         }
     }
     // No title bar to style
     if (m_treeSearchButton) {
-        // Outlined button, neutral until hovered/pressed
+        // Primary (contained) button for clear affordance
+        QString acc = selectedBg;
+        QString accText = selectedText;
+        QString accHover = dark ? "#3a8ae6" : "#1e8fe8";  // hover tint
+        QString accPressed = dark ? "#2567b4" : "#0062b1"; // pressed tint
         m_treeSearchButton->setStyleSheet(QString(
             "QPushButton {"
-            "  background: %2;"
-            "  color: %3;"
+            "  background: %1;"
+            "  color: %2;"
             "  border: 1px solid %1;"
             "  border-radius: 8px;"
             "  padding: 6px 12px;"
+            "  font-weight: 600;"
             "}"
-            "QPushButton:hover {"
-            "  background: %5;"
-            "}"
-            "QPushButton:pressed {"
-            "  background: %12;"
-            "}")
-            .arg(border, bg, text, focusOutline, hover, selectedBg, selectedText, selectedBgInactive, scrollbarGroove, scrollbarHandle, scrollbarHandleHover, bgAlt));
+            "QPushButton:hover { background: %3; border-color: %3; }"
+            "QPushButton:pressed { background: %4; border-color: %4; }"
+            "QPushButton:disabled { background: %5; color: %6; border-color: %7; }"
+        ).arg(acc, accText, accHover, accPressed, bg, textDisabled, border));
     }
     if (m_treeSearchClearButton) {
         // No visible clear button; style reset to avoid theme artifacts if ever shown
         m_treeSearchClearButton->setStyleSheet("QToolButton { border: none; background: transparent; } QToolButton:hover { background: transparent; }");
+    }
+
+    // Re-style Server/Local toggle buttons to reflect theme changes
+    if (m_btnServer && m_btnLocal) {
+        auto styleToggleBtn = [&](QPushButton *b){
+            b->setStyleSheet(QString(
+                "QPushButton { padding: 6px 12px; border: 1px solid %1; background: %2; color: %3; border-radius: 8px; }"
+                "QPushButton:hover { background: %4; }"
+                "QPushButton:checked { background: %5; color: %6; border-color: %5; }"
+            ).arg(border, bg, text, hover, selectedBg, selectedText));
+        };
+        styleToggleBtn(m_btnServer);
+        styleToggleBtn(m_btnLocal);
     }
 }
 
@@ -902,7 +1124,8 @@ void MainApplication::changeEvent(QEvent *event)
 {
     QMainWindow::changeEvent(event);
     if (event->type() == QEvent::PaletteChange || event->type() == QEvent::ApplicationPaletteChange || event->type() == QEvent::StyleChange) {
-        applyTreeViewTheme();
+    applyMenuBarMaterialStyle();
+    applyTreeViewTheme();
     }
 }
 

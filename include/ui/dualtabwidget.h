@@ -70,6 +70,7 @@ public:
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
+    void changeEvent(QEvent *event) override; // react to palette/style changes
     // resizeEvent removed - close button functionality removed
 
 signals:
