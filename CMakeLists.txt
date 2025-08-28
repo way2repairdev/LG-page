@@ -510,6 +510,22 @@ if(WIN32)
     )
 endif()
 
+# Always copy PCB theme config into the build output so runtime can find it
+# The application looks for "config/pcb_themes.json" relative to the exe/CWD.
+set(PCB_THEME_JSON "${CMAKE_CURRENT_SOURCE_DIR}/config/pcb_themes.json")
+if(EXISTS ${PCB_THEME_JSON})
+    add_custom_command(TARGET Way2RepairLoginSystem POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/config
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PCB_THEME_JSON} ${CMAKE_CURRENT_BINARY_DIR}/config/pcb_themes.json
+        COMMENT "Copying PCB themes JSON to build/config"
+    )
+    # Also install it when using "cmake --install"
+    install(FILES ${PCB_THEME_JSON} DESTINATION config)
+    message(STATUS "PCB themes JSON will be copied/installed: ${PCB_THEME_JSON}")
+else()
+    message(WARNING "PCB themes JSON not found at ${PCB_THEME_JSON}. Themes may fall back to built-ins.")
+endif()
+
 # Print configuration info
 message(STATUS "Project: ${PROJECT_NAME}")
 message(STATUS "Version: ${PROJECT_VERSION}")
