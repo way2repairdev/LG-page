@@ -136,6 +136,10 @@ public:
     // Clears all search highlights/handles/state and triggers a light repaint.
     void clearSearchHighlights();
 
+    // Search options
+    void setWholeWordSearch(bool enabled);
+    bool wholeWordSearch() const { return m_wholeWordSearch; }
+
     /**
      * Force this viewer to become the active global PDF context and schedule a
      * visible regeneration. Use this when switching from external views (e.g.,
@@ -276,4 +280,7 @@ private:
 
     // Ensure global viewer pointers point to this instance before executing actions
     void ensureActiveGlobals();
+
+    // Search options
+    bool m_wholeWordSearch { false }; // default: substring search until user toggles
 };

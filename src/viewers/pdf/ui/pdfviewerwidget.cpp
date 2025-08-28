@@ -334,6 +334,12 @@ void PDFViewerWidget::setupToolbar()
     m_actionFindNext->setToolTip("Find Next");
     connect(m_actionFindNext, &QAction::triggered, this, &PDFViewerWidget::findNext);
 
+    // Whole-word search toggle
+    m_actionWholeWord = m_toolbar->addAction(QIcon(":/icons/images/icons/whole_word.svg"), "");
+    m_actionWholeWord->setToolTip("Whole word: Off");
+    m_actionWholeWord->setCheckable(true);
+    connect(m_actionWholeWord, &QAction::toggled, this, &PDFViewerWidget::toggleWholeWord);
+
     // Removed compact status area (page/zoom label) per request
     // Previously: trailing separator + m_statusInfoLabel showing "Pg x/y 35%"
 
@@ -599,6 +605,7 @@ void PDFViewerWidget::syncToolbarStates()
     bool hasSearch = m_searchInput && !m_searchInput->text().trimmed().isEmpty();
     if (m_actionFindNext)     m_actionFindNext->setEnabled(hasSearch);
     if (m_actionFindPrevious) m_actionFindPrevious->setEnabled(hasSearch);
+    if (m_actionWholeWord)    m_actionWholeWord->setEnabled(true);
     if (m_totalPagesLabel)    m_totalPagesLabel->setText(QString("/ %1").arg(total));
 }
 
@@ -800,9 +807,29 @@ void PDFViewerWidget::searchText()
 {
     if (isPDFLoaded() && m_pdfEmbedder && m_searchInput) {
         QString term = m_searchInput->text().trimmed();
-        if (!term.isEmpty())
+        if (!term.isEmpty()) {
+            // Apply current whole-word mode before searching
+            if (m_pdfEmbedder) m_pdfEmbedder->setWholeWordSearch(m_wholeWordEnabled);
             m_pdfEmbedder->findText(term.toStdString());
+        }
     }
+}
+
+void PDFViewerWidget::toggleWholeWord(bool checked)
+{
+    m_wholeWordEnabled = checked;
+    if (m_actionWholeWord)
+        m_actionWholeWord->setToolTip(checked ? "Whole word: On" : "Whole word: Off");
+    if (m_pdfEmbedder)
+        m_pdfEmbedder->setWholeWordSearch(checked);
+    // If there's an active term, rerun search to update results
+    if (m_searchInput) {
+        QString term = m_searchInput->text().trimmed();
+        if (!term.isEmpty() && m_pdfEmbedder) {
+            m_pdfEmbedder->findText(term.toStdString());
+        }
+    }
+    syncToolbarStates();
 }
 
 void PDFViewerWidget::findNext()

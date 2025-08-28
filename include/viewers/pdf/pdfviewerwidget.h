@@ -118,6 +118,7 @@ public slots:
     void searchText();
     void findNext();
     void findPrevious();
+    void toggleWholeWord(bool checked);
 
     // Ensure viewport and renderer are synced after activation/tab switch
     void ensureViewportSync();
@@ -195,6 +196,7 @@ private:
     QAction* m_actionZoomOut;
     QAction* m_actionFindPrevious;
     QAction* m_actionFindNext;
+    QAction* m_actionWholeWord;
     
     // Panel-specific actions removed
     
@@ -206,6 +208,7 @@ private:
     // Search widgets (shared/main toolbar)
     QLabel* m_searchLabel;
     QLineEdit* m_searchInput;
+    bool m_wholeWordEnabled { false };
     QLabel* m_statusInfoLabel = nullptr;    // Compact status (page & zoom); may be absent
     
     // Split view navigation widgets removed

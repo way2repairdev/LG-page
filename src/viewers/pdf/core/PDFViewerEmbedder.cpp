@@ -2609,8 +2609,8 @@ bool PDFViewerEmbedder::findText(const std::string& searchTerm)
     if (!m_scrollState) return false;
     
     m_scrollState->textSearch.searchTerm = searchTerm;
-    // Default to whole-word matching to avoid partial hits unless UI toggles it later
-    m_scrollState->textSearch.matchWholeWord = true;
+    // Honor current whole-word preference from UI
+    m_scrollState->textSearch.matchWholeWord = m_wholeWordSearch;
     m_scrollState->textSearch.needsUpdate = true;
     m_scrollState->textSearch.searchChanged = true;
     
@@ -2676,9 +2676,8 @@ bool PDFViewerEmbedder::findTextFreshAndFocusFirst(const std::string& term)
 
     // 2) Set new term and request a fresh search
     m_scrollState->textSearch.searchTerm = term;
-    // For cross-tab searches, enforce whole-word/exact-token matching to avoid partial hits
-    // like matching "L001" inside "L001_1".
-    m_scrollState->textSearch.matchWholeWord = true;
+    // Honor current whole-word preference (UI may have toggled it)
+    m_scrollState->textSearch.matchWholeWord = m_wholeWordSearch;
     m_scrollState->textSearch.needsUpdate = true;
     m_scrollState->textSearch.searchChanged = true;
 
@@ -2712,8 +2711,8 @@ bool PDFViewerEmbedder::findTextFreshAndFocusFirstOptimized(const std::string& t
 
     // 2) Set new term and request a fresh search
     m_scrollState->textSearch.searchTerm = term;
-    // For cross-tab searches, enforce whole-word/exact-token matching to avoid partial hits
-    m_scrollState->textSearch.matchWholeWord = true;
+    // Honor current whole-word preference (UI may have toggled it)
+    m_scrollState->textSearch.matchWholeWord = m_wholeWordSearch;
     m_scrollState->textSearch.needsUpdate = true;
     m_scrollState->textSearch.searchChanged = true;
 
@@ -2761,6 +2760,22 @@ void PDFViewerEmbedder::clearSearchHighlights()
     
     // Skip expensive visible page regeneration during cross-search clearing
     // The optimized cross-search will handle regeneration with proper timing
+}
+
+// Configure whole-word search behavior from UI
+void PDFViewerEmbedder::setWholeWordSearch(bool enabled)
+{
+    m_wholeWordSearch = enabled;
+    if (m_scrollState) {
+        m_scrollState->textSearch.matchWholeWord = enabled;
+        // If a term is present, request recompute
+        if (!m_scrollState->textSearch.searchTerm.empty()) {
+            m_scrollState->textSearch.needsUpdate = true;
+            m_scrollState->textSearch.searchChanged = true;
+            // Prefer a crisp settled pass after toggle
+            scheduleVisibleRegeneration(true);
+        }
+    }
 }
 
 // --- Async visible regeneration helpers ---
