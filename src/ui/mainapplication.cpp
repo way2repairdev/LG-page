@@ -32,12 +32,94 @@
 #include <QMenuBar>
 #include <QVBoxLayout>
 #include <QStyle>
+#include <QPropertyAnimation>
+#include <QParallelAnimationGroup>
 #include <functional>
 #include <memory>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <windowsx.h>
 #endif
+
+// Forward declaration for local logging helper defined later in this file
+namespace { void writeTransitionLog(const QString &msg); }
+
+void MainApplication::toggleMaximizeRestore()
+{
+    // If OS believes we're maximized, treat it as our custom maximized
+    if (isMaximized() && !m_customMaximized) {
+        m_customMaximized = true;
+    }
+    writeTransitionLog(QString("toggleMaximizeRestore: isMaximized=%1 custom=%2 geom=%3x%4@(%5,%6)")
+                       .arg(isMaximized())
+                       .arg(m_customMaximized)
+                       .arg(width()).arg(height()).arg(x()).arg(y()));
+    if (m_customMaximized) doRestore(); else doMaximize();
+}
+
+void MainApplication::doMaximize()
+{
+    if (m_customMaximized) return;
+    // Save a sane normal geometry if not valid or accidentally large
+    QRect g = geometry();
+    if (!m_savedNormalGeometry.isValid() || g.width() < 200 || g.height() < 150) {
+        m_savedNormalGeometry = g;
+    }
+    QScreen *scr = QGuiApplication::screenAt(frameGeometry().center());
+    if (!scr) scr = QGuiApplication::primaryScreen();
+    if (scr) {
+        const QRect avail = scr->availableGeometry();
+        writeTransitionLog(QString("doMaximize: to %1x%2@(%3,%4) on screen '%5'")
+                           .arg(avail.width()).arg(avail.height()).arg(avail.x()).arg(avail.y())
+                           .arg(scr->name()));
+        setGeometry(avail);
+    } else {
+        writeTransitionLog("doMaximize: no screen found, skipping");
+    }
+    m_customMaximized = true;
+    if (m_titleBar) { m_titleBar->updateMaximizeIcon(); m_titleBar->update(); }
+}
+
+void MainApplication::doRestore()
+{
+    if (!m_customMaximized) return;
+    if (m_savedNormalGeometry.isValid()) {
+        writeTransitionLog(QString("doRestore: to %1x%2@(%3,%4)")
+                           .arg(m_savedNormalGeometry.width()).arg(m_savedNormalGeometry.height())
+                           .arg(m_savedNormalGeometry.x()).arg(m_savedNormalGeometry.y()));
+        setGeometry(m_savedNormalGeometry);
+    } else {
+        writeTransitionLog("doRestore: no saved geometry");
+    }
+    m_customMaximized = false;
+    if (m_titleBar) { m_titleBar->updateMaximizeIcon(); m_titleBar->update(); }
+}
+
+void MainApplication::maximizeWindow()
+{
+    // Ensure we have a valid restore geometry captured before maximizing
+    if (!m_savedNormalGeometry.isValid()) {
+        // Use current geometry or a centered default
+        QRect g = geometry();
+        if (!g.isValid() || g.width() < 200 || g.height() < 150) {
+            if (QScreen *s = QGuiApplication::primaryScreen()) {
+                QRect avail = s->availableGeometry();
+                QSize sz(1400, 900);
+                sz.setWidth(std::min(sz.width(), avail.width()));
+                sz.setHeight(std::min(sz.height(), avail.height()));
+                QRect centered(QPoint(0,0), sz);
+                centered.moveCenter(avail.center());
+                g = centered;
+                setGeometry(g);
+            }
+        }
+        m_savedNormalGeometry = g;
+    }
+    writeTransitionLog(QString("maximizeWindow: captured normal %1x%2@(%3,%4)")
+                       .arg(m_savedNormalGeometry.width()).arg(m_savedNormalGeometry.height())
+                       .arg(m_savedNormalGeometry.x()).arg(m_savedNormalGeometry.y()));
+    doMaximize();
+}
 
 namespace {
 inline void writeTransitionLog(const QString &msg) {
@@ -148,6 +230,9 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
         const int y = (screenGeometry.height() - height()) / 2;
         move(x, y);
     }
+
+    // Capture initial normal geometry for restore before any maximize
+    m_savedNormalGeometry = geometry();
     
     // Set application/window icon from SVG with multiple declared sizes for crisp scaling
     {
@@ -188,13 +273,40 @@ bool MainApplication::nativeEvent(const QByteArray &eventType, void *message, qi
     if (!msg) return false;
 
     switch (msg->message) {
+    case WM_GETMINMAXINFO: {
+        // Ensure correct maximize bounds for frameless window (snap, Win+Up, etc.)
+        MINMAXINFO* mmi = reinterpret_cast<MINMAXINFO*>(msg->lParam);
+        // lParam here is a MINMAXINFO*, not coordinates. Use our window's screen.
+        QScreen *scr = QGuiApplication::screenAt(frameGeometry().center());
+        if (!scr) scr = QGuiApplication::screenAt(QCursor::pos());
+        if (!scr) scr = QGuiApplication::primaryScreen();
+        if (scr) {
+            const QRect avail = scr->availableGeometry();
+            mmi->ptMaxPosition.x = avail.left();
+            mmi->ptMaxPosition.y = avail.top();
+            mmi->ptMaxSize.x = avail.width();
+            mmi->ptMaxSize.y = avail.height();
+            // Respect our minimum size
+            const QSize minSz = minimumSize();
+            if (minSz.isValid()) {
+                mmi->ptMinTrackSize.x = std::max<LONG>(minSz.width(), 200);
+                mmi->ptMinTrackSize.y = std::max<LONG>(minSz.height(), 150);
+            }
+            writeTransitionLog(QString("WM_GETMINMAXINFO: avail %1x%2@(%3,%4) on '%5'")
+                               .arg(avail.width()).arg(avail.height()).arg(avail.x()).arg(avail.y())
+                               .arg(scr->name()));
+        }
+        *result = 0;
+        return true;
+    }
     case WM_NCHITTEST: {
         // Allow resizing from edges/corners and dragging in the title bar area (outside of buttons)
         const QPoint globalPos(GET_X_LPARAM(msg->lParam), GET_Y_LPARAM(msg->lParam));
         const QPoint pos = mapFromGlobal(globalPos);
 
-        // First: edge/corner resize hit testing (disabled when maximized)
-        if (!isMaximized()) {
+    // First: edge/corner resize hit testing (disabled when maximized)
+    const bool reallyMax = isMaximized() || m_customMaximized;
+    if (!reallyMax) {
             const int border = 8; // resize border thickness in device-independent pixels
             const int x = pos.x();
             const int y = pos.y();
@@ -217,13 +329,13 @@ bool MainApplication::nativeEvent(const QByteArray &eventType, void *message, qi
         }
 
         // Then: treat the custom title bar area as caption for dragging
-        if (m_titleBar) {
+    if (m_titleBar) {
             QRect tbRect = m_titleBar->geometry();
             if (tbRect.contains(pos)) {
                 // Avoid dragging when interacting with buttons
                 QWidget *child = childAt(pos);
                 if (child && qobject_cast<QToolButton*>(child)) break;
-                *result = HTCAPTION;
+        if (!reallyMax) *result = HTCAPTION; else *result = HTNOWHERE;
                 return true;
             }
         }
@@ -304,11 +416,154 @@ void MainApplication::setupTitleBar()
     // Use requested brand title
     m_titleBar->setTitle(QStringLiteral("Way2Solutions"));
     m_titleBar->setIcon(windowIcon());
-    connect(m_titleBar, &TitleBarWidget::minimizeRequested, this, [this]{ this->showMinimized(); });
-    connect(m_titleBar, &TitleBarWidget::maximizeRestoreRequested, this, [this]{
-        if (isMaximized()) showNormal(); else showMaximized();
+    connect(m_titleBar, &TitleBarWidget::minimizeRequested, this, [this]{ animateMinimize(); });
+    connect(m_titleBar, &TitleBarWidget::maximizeRestoreRequested, this, [this]{ toggleMaximizeRestore(); });
+    connect(m_titleBar, &TitleBarWidget::closeRequested, this, [this]{ animateClose(); });
+}
+void MainApplication::closeEvent(QCloseEvent *event)
+{
+    if (m_closingNow) {
+        event->accept();
+        return;
+    }
+    event->ignore();
+    animateClose();
+}
+
+namespace {
+// Lightweight top-most ghost that paints a snapshot while the real window is hidden
+class MinimizeGhost final : public QWidget {
+public:
+    explicit MinimizeGhost(const QPixmap &px, QWidget *parent = nullptr)
+        : QWidget(nullptr, Qt::FramelessWindowHint | Qt::Tool | Qt::WindowStaysOnTopHint)
+        , m_px(px)
+    {
+        Q_UNUSED(parent);
+        setAttribute(Qt::WA_TranslucentBackground, true);
+        setAttribute(Qt::WA_TransparentForMouseEvents, true);
+        setWindowOpacity(1.0);
+    }
+protected:
+    void paintEvent(QPaintEvent *) override {
+        QPainter p(this);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        p.drawPixmap(rect(), m_px);
+    }
+private:
+    QPixmap m_px;
+};
+
+#ifdef Q_OS_WIN
+static QRect taskbarRectForPoint(const QPoint &pt)
+{
+    // Try to find the Windows taskbar; fallback to bottom strip of the screen
+    HWND hTaskbar = FindWindow(L"Shell_TrayWnd", NULL);
+    if (hTaskbar) {
+        RECT r; GetWindowRect(hTaskbar, &r);
+        return QRect(r.left, r.top, r.right - r.left, r.bottom - r.top);
+    }
+    QScreen *scr = QGuiApplication::screenAt(pt);
+    if (!scr) scr = QGuiApplication::primaryScreen();
+    QRect g = scr ? scr->availableGeometry() : QRect(0,0,1280,720);
+    return QRect(g.left(), g.bottom() - 56, g.width(), 56);
+}
+#else
+static QRect taskbarRectForPoint(const QPoint &pt)
+{
+    QScreen *scr = QGuiApplication::screenAt(pt);
+    if (!scr) scr = QGuiApplication::primaryScreen();
+    QRect g = scr ? scr->availableGeometry() : QRect(0,0,1280,720);
+    return QRect(g.left(), g.bottom() - 56, g.width(), 56);
+}
+#endif
+}
+
+void MainApplication::animateMinimize()
+{
+    // Prevent duplicate animations
+    if (isMinimized()) { showMinimized(); return; }
+    if (m_minimizeAnim) { m_minimizeAnim->stop(); m_minimizeAnim->deleteLater(); m_minimizeAnim = nullptr; }
+
+    // Take a snapshot of the current window and animate a ghost instead of the real window
+    const QRect startFrame = frameGeometry();
+    const QPixmap snapshot = this->grab();
+    auto *ghost = new MinimizeGhost(snapshot, this);
+    ghost->setGeometry(startFrame);
+    ghost->show();
+
+    // Hide real window immediately to avoid flicker, then animate ghost toward the taskbar
+    this->hide();
+
+    const QRect taskbar = taskbarRectForPoint(startFrame.center());
+    const bool horizontal = taskbar.width() >= taskbar.height();
+
+    // Target size reminiscent of macOS minimize (small tile near the bar)
+    const int targetW = std::max(120, startFrame.width() / 8);
+    const int targetH = std::max(80,  startFrame.height() / 8);
+    QRect target(QPoint(0,0), QSize(targetW, targetH));
+
+    QPoint targetCenter;
+    if (horizontal) {
+        const bool bottomBar = taskbar.center().y() >= startFrame.center().y();
+        int y = bottomBar ? taskbar.bottom() - targetH/2 - 6 : taskbar.top() + targetH/2 + 6;
+        int x = taskbar.left() + std::min(200, taskbar.width()/4); // left cluster approximation
+        targetCenter = QPoint(x, y);
+    } else { // vertical bar (left/right)
+        const bool rightBar = taskbar.center().x() >= startFrame.center().x();
+        int x = rightBar ? taskbar.right() - targetW/2 - 6 : taskbar.left() + targetW/2 + 6;
+        int y = taskbar.top() + taskbar.height()/2;
+        targetCenter = QPoint(x, y);
+    }
+    target.moveCenter(targetCenter);
+
+    // Single smooth shrink-and-slide animation (no opacity on the real window)
+    auto *geoAnim = new QPropertyAnimation(ghost, "geometry", ghost);
+    geoAnim->setDuration(220);
+    geoAnim->setStartValue(startFrame);
+    geoAnim->setEndValue(target);
+    geoAnim->setEasingCurve(QEasingCurve::InCubic);
+    connect(geoAnim, &QPropertyAnimation::finished, this, [this, ghost]() {
+        ghost->deleteLater();
+        // On Windows frameless, explicitly set minimized state then show
+        setWindowState(windowState() | Qt::WindowMinimized);
+        QTimer::singleShot(0, this, [this]{ showMinimized(); });
+    writeTransitionLog("animateMinimize: finished -> showMinimized");
     });
-    connect(m_titleBar, &TitleBarWidget::closeRequested, this, &QWidget::close);
+    geoAnim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+void MainApplication::animateClose()
+{
+    if (m_closeAnim) {
+        m_closeAnim->stop();
+        m_closeAnim->deleteLater();
+    }
+    // Fade + slight shrink
+    auto *fade = new QPropertyAnimation(this, "windowOpacity", this);
+    fade->setDuration(160);
+    fade->setStartValue(windowOpacity());
+    fade->setEndValue(0.0);
+    fade->setEasingCurve(QEasingCurve::OutCubic);
+
+    QRect startG = geometry();
+    QRect endG = startG;
+    endG.setWidth(int(startG.width() * 0.98));
+    endG.setHeight(int(startG.height() * 0.98));
+    endG.moveCenter(startG.center());
+    auto *scale = new QPropertyAnimation(this, "geometry", this);
+    scale->setDuration(160);
+    scale->setStartValue(startG);
+    scale->setEndValue(endG);
+    scale->setEasingCurve(QEasingCurve::OutCubic);
+
+    m_closeAnim = new QParallelAnimationGroup(this);
+    m_closeAnim->addAnimation(fade);
+    m_closeAnim->addAnimation(scale);
+    connect(m_closeAnim, &QParallelAnimationGroup::finished, this, [this]{
+        m_closingNow = true;
+        close();
+    });
+    m_closeAnim->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
 void MainApplication::applyMenuBarMaterialStyle()

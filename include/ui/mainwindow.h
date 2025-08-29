@@ -12,6 +12,9 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include "database/databasemanager.h"
+#include <QPointer>
+class QParallelAnimationGroup;
+class QPropertyAnimation;
 
 // Forward declaration
 class MainApplication;
@@ -57,9 +60,16 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
 
 private:
     QPoint m_dragPosition;
     bool m_dragging;
+    // Animations
+    void animateMinimize();
+    void animateClose();
+    QPointer<QParallelAnimationGroup> m_minimizeAnim;
+    QPointer<QParallelAnimationGroup> m_closeAnim;
+    bool m_closingNow { false };
 };
 #endif // MAINWINDOW_H

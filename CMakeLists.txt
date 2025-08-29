@@ -105,12 +105,12 @@ set(CMAKE_AUTOUIC_SEARCH_PATHS ${RESOURCES_DIR}/ui)
 # Include directories - all paths relative to project directory
 include_directories(
     ${INCLUDE_DIR}
-    ${INCLUDE_DIR}/core
     ${INCLUDE_DIR}/ui
     ${INCLUDE_DIR}/database
-    ${INCLUDE_DIR}/network
     ${INCLUDE_DIR}/viewers/pdf
     ${INCLUDE_DIR}/viewers/pcb
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/database
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/viewers/pdf/third_party/third_party/extern/pdfium/include

@@ -26,50 +26,89 @@ TitleBarWidget::TitleBarWidget(QWidget *parent) : QWidget(parent) {
     m_titleLabel->setStyleSheet("font-size: 16px; font-weight: 700; color: #0F172A;");
     layout->addWidget(m_titleLabel, 1, Qt::AlignVCenter);
 
-    m_minButton = new QToolButton(this);
+    // Controls cluster container for a compact, premium look
+    m_controlsContainer = new QWidget(this);
+    auto *controlsLayout = new QHBoxLayout(m_controlsContainer);
+    controlsLayout->setContentsMargins(6, 2, 6, 2);
+    controlsLayout->setSpacing(4);
+    m_controlsContainer->setLayout(controlsLayout);
+    m_controlsContainer->setObjectName("controlsCluster");
+
+    m_minButton = new QToolButton(m_controlsContainer);
     m_minButton->setAutoRaise(true);
-    m_minButton->setIcon(style()->standardIcon(QStyle::SP_TitleBarMinButton));
+    m_minButton->setIcon(makeMinIcon(Qt::white));
     m_minButton->setIconSize(QSize(16,16));
-    m_minButton->setFixedSize(QSize(36,36)); // Material circular hit area
+    m_minButton->setFixedSize(QSize(32,32)); // tighter, less bulky
+    m_minButton->setToolTip("Minimize");
+    m_minButton->setAccessibleName("Minimize window");
     connect(m_minButton, &QToolButton::clicked, this, &TitleBarWidget::minimizeRequested);
 
-    m_maxButton = new QToolButton(this);
+    m_maxButton = new QToolButton(m_controlsContainer);
     m_maxButton->setAutoRaise(true);
-    m_maxButton->setIcon(style()->standardIcon(QStyle::SP_TitleBarMaxButton));
+    m_maxButton->setIcon(makeMaxIcon(Qt::white));
     m_maxButton->setIconSize(QSize(16,16));
-    m_maxButton->setFixedSize(QSize(36,36)); // Material circular hit area
+    m_maxButton->setFixedSize(QSize(32,32));
+    m_maxButton->setToolTip("Maximize");
+    m_maxButton->setAccessibleName("Maximize or restore window");
     connect(m_maxButton, &QToolButton::clicked, this, &TitleBarWidget::maximizeRestoreRequested);
 
-    m_closeButton = new QToolButton(this);
+    m_closeButton = new QToolButton(m_controlsContainer);
     m_closeButton->setAutoRaise(true);
-    m_closeButton->setIcon(style()->standardIcon(QStyle::SP_TitleBarCloseButton));
+    m_closeButton->setIcon(makeCloseIcon(Qt::white));
     m_closeButton->setIconSize(QSize(16,16));
-    m_closeButton->setFixedSize(QSize(36,36)); // Material circular hit area
+    m_closeButton->setFixedSize(QSize(32,32));
+    m_closeButton->setToolTip("Close");
+    m_closeButton->setAccessibleName("Close window");
     connect(m_closeButton, &QToolButton::clicked, this, &TitleBarWidget::closeRequested);
 
-    layout->addWidget(m_minButton);
-    layout->addWidget(m_maxButton);
-    layout->addWidget(m_closeButton);
+    controlsLayout->addWidget(m_minButton);
+    controlsLayout->addWidget(m_maxButton);
+    controlsLayout->addWidget(m_closeButton);
+    layout->addWidget(m_controlsContainer);
 
     setLayout(layout);
 
     setAttribute(Qt::WA_StyledBackground, true);
-    // Material Light Surface + subtle tint: dark content on near-white surface
-            setStyleSheet(
-                "TitleBarWidget {"
-                "  color: #0F172A;"
-                "  border: none;"
-                "}"
-                "TitleBarWidget QLabel { color: #0F172A; }"
-                "QToolButton {"
-                "  padding: 6px;"
-                "  border-radius: 18px;"  /* circular for 36px buttons */
-                "  background: transparent;"
-                "  color: #0F172A;"
-                "}"
-                "QToolButton:hover { background: rgba(0,0,0,0.08); }"  /* Material hover */
-                "QToolButton:pressed { background: rgba(0,0,0,0.12); }" /* Material pressed */
-            );
+    // Material-like controls with clear affordances and accessibility
+    setStyleSheet(
+        "TitleBarWidget {"
+        "  color: #0F172A;"
+        "  border: none;"
+        "}"
+        "TitleBarWidget QLabel { color: #0F172A; }"
+    "#controlsCluster {"
+    "  background: rgba(255,255,255,0.14);" /* subtle pill over blue */
+    "  border-radius: 18px;"
+    "}"
+    "QToolButton {"
+    "  padding: 6px;"                     /* 32px buttons */
+    "  border-radius: 16px;"              /* circular for 32px */
+        "  background: transparent;"
+        "  color: #0F172A;"
+        "  outline: none;"
+        "}"
+        "QToolButton:hover {"
+    "  background: rgba(255,255,255,0.18);" /* neutral hover tuned for blue bg */
+        "}"
+        "QToolButton:pressed {"
+    "  background: rgba(255,255,255,0.26);" /* pressed */
+        "}"
+    "QToolButton:focus {"
+    "  box-shadow: 0 0 0 2px rgba(255,255,255,0.6);" /* focus ring visible on blue */
+        "}"
+        /* Close button with caution color on hover/press */
+    "QToolButton#closeBtn:hover { background: rgba(244, 67, 54, 0.18); }"
+    "QToolButton#closeBtn:pressed { background: rgba(244, 67, 54, 0.26); }"
+    );
+
+    // Give the close button an object name for targeted styling
+    m_closeButton->setObjectName("closeBtn");
+
+    // Keep maximize icon in sync with window state
+    if (auto *w = window()) {
+        w->installEventFilter(this);
+    updateMaximizeIcon();
+    }
 }
 
 void TitleBarWidget::setTitle(const QString &title) {
@@ -101,6 +140,21 @@ void TitleBarWidget::mouseDoubleClickEvent(QMouseEvent *e) {
     if (e->button() == Qt::LeftButton) emit maximizeRestoreRequested();
 }
 
+bool TitleBarWidget::eventFilter(QObject *watched, QEvent *event) {
+    if (watched == window()) {
+        switch (event->type()) {
+            case QEvent::WindowStateChange:
+            case QEvent::Show:
+            case QEvent::Resize:
+                updateMaximizeIcon();
+                break;
+            default:
+                break;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
 void TitleBarWidget::paintEvent(QPaintEvent *event) {
     Q_UNUSED(event);
     // Custom paint: Material light surface with subtle horizontal tint + bottom divider
@@ -124,4 +178,80 @@ void TitleBarWidget::paintEvent(QPaintEvent *event) {
 
     // Bottom separator line (very light)
     p.fillRect(QRect(0, r.height() - 1, r.width(), 1), QColor("#E6ECF5"));
+}
+
+void TitleBarWidget::updateMaximizeIcon() {
+    auto *w = window();
+    if (!w || !m_maxButton) return;
+    bool maximized = w->isMaximized();
+    if (!maximized) {
+        // Heuristic: treat as maximized if the frame fills the available screen area
+        const QRect frame = w->frameGeometry();
+        QScreen *scr = QGuiApplication::screenAt(frame.center());
+        if (!scr) scr = QGuiApplication::primaryScreen();
+        if (scr) {
+            const QRect avail = scr->availableGeometry();
+            // Allow small off-by-ones due to DPI and borders
+            const int tol = 2;
+            maximized = std::abs(frame.left() - avail.left()) <= tol &&
+                        std::abs(frame.top() - avail.top()) <= tol &&
+                        std::abs(frame.right() - avail.right()) <= tol &&
+                        std::abs(frame.bottom() - avail.bottom()) <= tol;
+        }
+    }
+    m_maxButton->setIcon(maximized ? makeRestoreIcon(Qt::white) : makeMaxIcon(Qt::white));
+    m_maxButton->setToolTip(maximized ? "Restore" : "Maximize");
+}
+
+// --- Simple crisp white glyph icons ---
+static QIcon makeGlyph(const QSize &size, std::function<void(QPainter&, const QRectF&)> draw) {
+    QImage img(size, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    QRectF box(0, 0, size.width(), size.height());
+    draw(p, box.adjusted(2, 2, -2, -2));
+    p.end();
+    return QIcon(QPixmap::fromImage(img));
+}
+
+QIcon TitleBarWidget::makeMinIcon(const QColor &color, const QSize &size) {
+    return makeGlyph(size, [color](QPainter &p, const QRectF &r){
+        QPen pen(color, 2.0, Qt::SolidLine, Qt::SquareCap);
+        p.setPen(pen);
+        const qreal y = r.center().y();
+        p.drawLine(QPointF(r.left(), y), QPointF(r.right(), y));
+    });
+}
+
+QIcon TitleBarWidget::makeMaxIcon(const QColor &color, const QSize &size) {
+    return makeGlyph(size, [color](QPainter &p, const QRectF &r){
+        QPen pen(color, 2.0);
+        p.setPen(pen);
+        p.setBrush(Qt::NoBrush);
+        QRectF box = r.adjusted(1, 1, -1, -1);
+        p.drawRect(box);
+    });
+}
+
+QIcon TitleBarWidget::makeRestoreIcon(const QColor &color, const QSize &size) {
+    return makeGlyph(size, [color](QPainter &p, const QRectF &r){
+        QPen pen(color, 2.0);
+        p.setPen(pen);
+        p.setBrush(Qt::NoBrush);
+        // Draw two overlapping squares
+        QRectF back = QRectF(r.left()+3, r.top(), r.width()-3, r.height()-3);
+        QRectF front = QRectF(r.left(), r.top()+3, r.width()-3, r.height()-3);
+        p.drawRect(back);
+        p.drawRect(front);
+    });
+}
+
+QIcon TitleBarWidget::makeCloseIcon(const QColor &color, const QSize &size) {
+    return makeGlyph(size, [color](QPainter &p, const QRectF &r){
+        QPen pen(color, 2.0, Qt::SolidLine, Qt::RoundCap);
+        p.setPen(pen);
+        p.drawLine(r.topLeft(), r.bottomRight());
+        p.drawLine(r.topRight(), r.bottomLeft());
+    });
 }

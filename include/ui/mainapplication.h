@@ -33,6 +33,9 @@
 #include <QWidget>
 #include <QWidgetAction>
 #include <QWindow>
+#include <QPointer>
+class QParallelAnimationGroup;
+class QPropertyAnimation;
 
 #include "ui/dualtabwidget.h"
 #include "ui/titlebarwidget.h"
@@ -97,12 +100,15 @@ public slots:
     void toggleFullScreenPDF();
     // Allow configuring server root path at runtime
     void setServerRootPath(const QString &path);
+    // Maximize using our custom frameless logic
+    void maximizeWindow();
 
 protected:
     void changeEvent(QEvent *event) override; // Re-apply theme on palette changes
 #ifdef Q_OS_WIN
     bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
 #endif
+    void closeEvent(QCloseEvent *event) override;
 
 private:
     UserSession m_userSession;
@@ -161,6 +167,9 @@ private:
     void applyMenuBarMaterialStyle(); // Apply Material-like style to menu bar and right controls
     void applyAppPalette(bool dark);  // Switch global palette to dark or light
     void updateUserInfo();
+    void toggleMaximizeRestore();
+    void doMaximize();
+    void doRestore();
     void setTreeSource(TreeSource src, bool forceReload=false);
     void refreshCurrentTree();
     QString currentRootPath() const;
@@ -195,6 +204,10 @@ private:
     void debugToolbarStates(); // Debug helper method
     void forceToolbarIsolation(); // Complete toolbar isolation method
 
+    // Window animations
+    void animateMinimize();
+    void animateClose();
+
     // Tree search UI and logic
     void setupTreeSearchBar();
     void onTreeSearchTriggered();
@@ -202,6 +215,14 @@ private:
     bool revealPathInTree(const QString &absPath);
     static void expandToItem(QTreeWidgetItem *item);
     void renderSearchResultsFlat(const QVector<QString> &results, const QString &term);
+
+    // Animation state
+    QPointer<QParallelAnimationGroup> m_minimizeAnim;
+    QPointer<QParallelAnimationGroup> m_closeAnim;
+    bool m_closingNow { false }; // guard to allow close after animation
+    // Custom maximize/restore state (for frameless window reliability on Windows)
+    bool m_customMaximized { false };
+    QRect m_savedNormalGeometry;
     
     // Server-side methods (commented out for local file loading)
     //void loadFileList();

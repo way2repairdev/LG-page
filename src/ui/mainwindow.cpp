@@ -10,6 +10,15 @@
 #include <QDateTime>
 #include <QDir>
 #include <QIcon>
+#include <QPropertyAnimation>
+#include <QParallelAnimationGroup>
+#include <QPainter>
+#include <QScreen>
+#include <QGuiApplication>
+#include <algorithm>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 namespace {
 // Append a timestamped line to build/tab_debug.txt (next to the exe)
@@ -96,8 +105,8 @@ void MainWindow::setupLoginConnections()
     connect(ui->usernameLineEdit, &QLineEdit::textChanged, this, &MainWindow::onUsernameChanged);
     connect(ui->passwordLineEdit, &QLineEdit::textChanged, this, &MainWindow::onPasswordChanged);
     
-    // Connect close button to quit application
-    connect(ui->closeButton, &QPushButton::clicked, this, &QApplication::quit);
+    // Connect close button with animated close
+    connect(ui->closeButton, &QPushButton::clicked, this, [this]{ animateClose(); });
 }
 
 void MainWindow::setupDatabaseConnection()
@@ -324,9 +333,10 @@ void MainWindow::launchMainApplication(const QString &username, const UserInfo &
     connect(m_mainApp, &MainApplication::logoutRequested, this, &MainWindow::closeLoginWindow);
     writeTransitionLog("launchMainApplication: logoutRequested signal connected");
     
-    // Show main application maximized
-    m_mainApp->showMaximized();
-    writeTransitionLog("launchMainApplication: MainApplication shown (maximized)");
+    // Show main application using custom frameless maximize
+    m_mainApp->show();
+    m_mainApp->maximizeWindow();
+    writeTransitionLog("launchMainApplication: MainApplication shown (custom maximized)");
     
     // Hide login window
     this->hide();
@@ -385,9 +395,121 @@ void MainWindow::mouseReleaseEvent(QMouseEvent *event)
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
     if (event->key() == Qt::Key_Escape) {
-        // Allow ESC key to close the application
-        QApplication::quit();
+        // ESC closes with animation
+        animateClose();
     } else {
         QMainWindow::keyPressEvent(event);
     }
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    if (m_closingNow) { event->accept(); return; }
+    event->ignore();
+    animateClose();
+}
+
+void MainWindow::animateMinimize()
+{
+    if (isMinimized()) { showMinimized(); return; }
+    if (m_minimizeAnim) { m_minimizeAnim->stop(); m_minimizeAnim->deleteLater(); m_minimizeAnim = nullptr; }
+
+    // Use the ghost approach defined in mainapplication.cpp anonymous namespace
+    const QRect startFrame = frameGeometry();
+    const QPixmap snapshot = this->grab();
+
+    class Ghost : public QWidget {
+    public:
+        explicit Ghost(const QPixmap &px)
+            : QWidget(nullptr, Qt::FramelessWindowHint | Qt::Tool | Qt::WindowStaysOnTopHint)
+        {
+            setAttribute(Qt::WA_TranslucentBackground, true);
+            setAttribute(Qt::WA_TransparentForMouseEvents, true);
+            m_label = new QLabel(this);
+            m_label->setScaledContents(true);
+            m_label->setPixmap(px);
+            m_label->setGeometry(rect());
+        }
+    protected:
+        void resizeEvent(QResizeEvent*) override { if (m_label) m_label->setGeometry(rect()); }
+    private:
+        QLabel *m_label { nullptr };
+    };
+
+    auto *ghost = new Ghost(snapshot);
+    ghost->setGeometry(startFrame);
+    ghost->show();
+    this->hide();
+
+    auto taskbarRectForPoint = [](const QPoint &pt)->QRect {
+#ifdef Q_OS_WIN
+        HWND hTaskbar = FindWindow(L"Shell_TrayWnd", NULL);
+        if (hTaskbar) { RECT r; GetWindowRect(hTaskbar, &r); return QRect(r.left, r.top, r.right - r.left, r.bottom - r.top); }
+#endif
+        QScreen *scr = QGuiApplication::screenAt(pt); if (!scr) scr = QGuiApplication::primaryScreen();
+        QRect g = scr ? scr->availableGeometry() : QRect(0,0,1280,720);
+        return QRect(g.left(), g.bottom() - 56, g.width(), 56);
+    };
+
+    const QRect taskbar = taskbarRectForPoint(startFrame.center());
+    const bool horizontal = taskbar.width() >= taskbar.height();
+    const int targetW = std::max(120, startFrame.width() / 8);
+    const int targetH = std::max(80,  startFrame.height() / 8);
+    QRect target(QPoint(0,0), QSize(targetW, targetH));
+    QPoint targetCenter;
+    if (horizontal) {
+        const bool bottomBar = taskbar.center().y() >= startFrame.center().y();
+        int y = bottomBar ? taskbar.bottom() - targetH/2 - 6 : taskbar.top() + targetH/2 + 6;
+        int x = taskbar.left() + std::min(200, taskbar.width()/4);
+        targetCenter = QPoint(x, y);
+    } else {
+        const bool rightBar = taskbar.center().x() >= startFrame.center().x();
+        int x = rightBar ? taskbar.right() - targetW/2 - 6 : taskbar.left() + targetW/2 + 6;
+        int y = taskbar.top() + taskbar.height()/2;
+        targetCenter = QPoint(x, y);
+    }
+    target.moveCenter(targetCenter);
+
+    auto *geoAnim = new QPropertyAnimation(ghost, "geometry", ghost);
+    geoAnim->setDuration(200);
+    geoAnim->setStartValue(startFrame);
+    geoAnim->setEndValue(target);
+    geoAnim->setEasingCurve(QEasingCurve::InCubic);
+    connect(geoAnim, &QPropertyAnimation::finished, this, [this, ghost]() {
+        ghost->deleteLater();
+        setWindowState(windowState() | Qt::WindowMinimized);
+        QTimer::singleShot(0, this, [this]{ showMinimized(); });
+    });
+    geoAnim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+void MainWindow::animateClose()
+{
+    if (m_closeAnim) { m_closeAnim->stop(); m_closeAnim->deleteLater(); }
+    auto *fade = new QPropertyAnimation(this, "windowOpacity", this);
+    fade->setDuration(140);
+    fade->setStartValue(windowOpacity());
+    fade->setEndValue(0.0);
+    fade->setEasingCurve(QEasingCurve::OutCubic);
+
+    QRect startG = geometry();
+    QRect endG = startG;
+    endG.setWidth(int(startG.width() * 0.985));
+    endG.setHeight(int(startG.height() * 0.985));
+    endG.moveCenter(startG.center());
+    auto *scale = new QPropertyAnimation(this, "geometry", this);
+    scale->setDuration(140);
+    scale->setStartValue(startG);
+    scale->setEndValue(endG);
+    scale->setEasingCurve(QEasingCurve::OutCubic);
+
+    m_closeAnim = new QParallelAnimationGroup(this);
+    m_closeAnim->addAnimation(fade);
+    m_closeAnim->addAnimation(scale);
+    connect(m_closeAnim, &QParallelAnimationGroup::finished, this, [this]{
+        m_closingNow = true;
+        close();
+        qApp->quit();
+    });
+    m_closeAnim->start(QAbstractAnimation::DeleteWhenStopped);
 }

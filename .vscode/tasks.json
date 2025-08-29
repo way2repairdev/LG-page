@@ -335,6 +335,58 @@
 			],
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "Agent Build Now",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build",
+				"--target",
+				"Way2RepairLoginSystem"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Agent Build",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build",
+				"--target",
+				"Way2RepairLoginSystem"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Agent Build (controls cluster)",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build",
+				"--target",
+				"Way2RepairLoginSystem"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Agent Build Anim",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"--build",
+				"build",
+				"--target",
+				"Way2RepairLoginSystem"
+			],
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }
