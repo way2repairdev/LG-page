@@ -261,6 +261,47 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
     writeTransitionLog("ctor: end");
 }
 
+// Smooth entrance animation when shown after login
+void MainApplication::animateEnter()
+{
+    // Stop any existing enter animation
+    if (m_enterAnim) { m_enterAnim->stop(); m_enterAnim->deleteLater(); m_enterAnim = nullptr; }
+
+    // Prepare a subtle fade + scale from 98.5% to 100%
+    setWindowOpacity(0.0);
+    QRect endG = geometry();
+    QRect startG = endG;
+    startG.setWidth(int(endG.width() * 0.985));
+    startG.setHeight(int(endG.height() * 0.985));
+    startG.moveCenter(endG.center());
+    setGeometry(startG);
+
+    auto *fade = new QPropertyAnimation(this, "windowOpacity", this);
+    fade->setDuration(200);
+    fade->setStartValue(0.0);
+    fade->setEndValue(1.0);
+    fade->setEasingCurve(QEasingCurve::OutCubic);
+
+    auto *scale = new QPropertyAnimation(this, "geometry", this);
+    scale->setDuration(200);
+    scale->setStartValue(startG);
+    scale->setEndValue(endG);
+    scale->setEasingCurve(QEasingCurve::OutCubic);
+
+    m_enterAnim = new QParallelAnimationGroup(this);
+    m_enterAnim->addAnimation(fade);
+    m_enterAnim->addAnimation(scale);
+    connect(m_enterAnim, &QParallelAnimationGroup::finished, this, [this]{
+        // Ensure final state
+        setWindowOpacity(1.0);
+        m_enterAnim->deleteLater();
+        m_enterAnim = nullptr;
+        writeTransitionLog("animateEnter: finished");
+    });
+    writeTransitionLog("animateEnter: start");
+    m_enterAnim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
 MainApplication::~MainApplication()
 {
     // Clean up

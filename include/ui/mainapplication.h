@@ -76,6 +76,8 @@ class MainApplication : public QMainWindow
 public:
     MainApplication(const UserSession &userSession, QWidget *parent = nullptr);
     ~MainApplication();
+    // Smooth entrance animation when shown after login
+    void animateEnter();
 
 private slots:
     void onTreeItemClicked(QTreeWidgetItem *item, int column);
@@ -205,6 +207,7 @@ private:
     void forceToolbarIsolation(); // Complete toolbar isolation method
 
     // Window animations
+    QPointer<QParallelAnimationGroup> m_enterAnim;
     void animateMinimize();
     void animateClose();
 

@@ -419,6 +419,8 @@ void MainWindow::launchMainApplication(const QString &username, const UserInfo &
     // Show main application using custom frameless maximize
     m_mainApp->show();
     m_mainApp->maximizeWindow();
+    // Smooth entrance animation
+    m_mainApp->animateEnter();
     writeTransitionLog("launchMainApplication: MainApplication shown (custom maximized)");
     
     // Hide login window
