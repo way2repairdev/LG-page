@@ -29,6 +29,13 @@
 #include <QToolButton>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QMenuBar>
+#include <QVBoxLayout>
+#include <QStyle>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <windowsx.h>
+#endif
 
 namespace {
 inline void writeTransitionLog(const QString &msg) {
@@ -63,6 +70,11 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
     //, m_baseUrl("http://localhost/api") // WAMP server API endpoint
 {
     writeTransitionLog("ctor: begin");
+    // Optional: make the window frameless so we can control the top area height
+#ifdef Q_OS_WIN
+    setWindowFlag(Qt::FramelessWindowHint, true);
+    setAttribute(Qt::WA_TranslucentBackground, false);
+#endif
     setupUI();
     writeTransitionLog("ctor: after setupUI");
     setupMenuBar();
@@ -123,13 +135,83 @@ MainApplication::~MainApplication()
     // Clean up
 }
 
+#ifdef Q_OS_WIN
+bool MainApplication::nativeEvent(const QByteArray &eventType, void *message, qintptr *result)
+{
+    MSG* msg = reinterpret_cast<MSG*>(message);
+    if (!msg) return false;
+
+    switch (msg->message) {
+    case WM_NCHITTEST: {
+        // Allow resizing from edges/corners and dragging in the title bar area (outside of buttons)
+        const QPoint globalPos(GET_X_LPARAM(msg->lParam), GET_Y_LPARAM(msg->lParam));
+        const QPoint pos = mapFromGlobal(globalPos);
+
+        // First: edge/corner resize hit testing (disabled when maximized)
+        if (!isMaximized()) {
+            const int border = 8; // resize border thickness in device-independent pixels
+            const int x = pos.x();
+            const int y = pos.y();
+            const int w = width();
+            const int h = height();
+
+            const bool left   = (x >= 0 && x < border);
+            const bool right  = (x <= w && x > w - border);
+            const bool top    = (y >= 0 && y < border);
+            const bool bottom = (y <= h && y > h - border);
+
+            if (top && left)   { *result = HTTOPLEFT;    return true; }
+            if (top && right)  { *result = HTTOPRIGHT;   return true; }
+            if (bottom && left){ *result = HTBOTTOMLEFT; return true; }
+            if (bottom && right){*result = HTBOTTOMRIGHT;return true; }
+            if (left)   { *result = HTLEFT;   return true; }
+            if (right)  { *result = HTRIGHT;  return true; }
+            if (top)    { *result = HTTOP;    return true; }
+            if (bottom) { *result = HTBOTTOM; return true; }
+        }
+
+        // Then: treat the custom title bar area as caption for dragging
+        if (m_titleBar) {
+            QRect tbRect = m_titleBar->geometry();
+            if (tbRect.contains(pos)) {
+                // Avoid dragging when interacting with buttons
+                QWidget *child = childAt(pos);
+                if (child && qobject_cast<QToolButton*>(child)) break;
+                *result = HTCAPTION;
+                return true;
+            }
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    return QMainWindow::nativeEvent(eventType, message, result);
+}
+#endif
+
 void MainApplication::setupUI()
 {
-    m_centralWidget = new QWidget(this);
-    setCentralWidget(m_centralWidget);
+    // Create a root container that hosts a custom title bar + menubar + content
+    QWidget *root = new QWidget(this);
+    auto *rootLayout = new QVBoxLayout(root);
+    rootLayout->setContentsMargins(0,0,0,0);
+    rootLayout->setSpacing(0);
+
+    // Custom title bar (tall, with big icon) + keep a standard menu bar below it
+    setupTitleBar();
+    if (m_titleBar) rootLayout->addWidget(m_titleBar);
+
+    // Create a dedicated menu bar we control, do not use the QMainWindow native one
+    m_customMenuBar = new QMenuBar(root);
+    rootLayout->addWidget(m_customMenuBar);
+    // Redirect setupMenuBar to use m_customMenuBar
+    QMenuBar *saved = QMainWindow::menuBar(); // not used when frameless
+    Q_UNUSED(saved);
     
-    // Create main layout
-    QHBoxLayout *mainLayout = new QHBoxLayout(m_centralWidget);
+    m_centralWidget = new QWidget(root);
+    // Content margins
+    auto *mainLayout = new QHBoxLayout(m_centralWidget);
     mainLayout->setContentsMargins(5, 5, 5, 5);
     
     // Create splitter for tree view and tab widget
@@ -165,11 +247,27 @@ void MainApplication::setupUI()
     m_splitterSizes = {300, 900};
     
     mainLayout->addWidget(m_splitter);
+    rootLayout->addWidget(m_centralWidget, 1);
+    setCentralWidget(root);
+}
+
+void MainApplication::setupTitleBar()
+{
+    if (m_titleBar) return;
+    m_titleBar = new TitleBarWidget(this);
+    // Use requested brand title
+    m_titleBar->setTitle(QStringLiteral("Way2Solutions"));
+    m_titleBar->setIcon(windowIcon());
+    connect(m_titleBar, &TitleBarWidget::minimizeRequested, this, [this]{ this->showMinimized(); });
+    connect(m_titleBar, &TitleBarWidget::maximizeRestoreRequested, this, [this]{
+        if (isMaximized()) showNormal(); else showMaximized();
+    });
+    connect(m_titleBar, &TitleBarWidget::closeRequested, this, &QWidget::close);
 }
 
 void MainApplication::applyMenuBarMaterialStyle()
 {
-    QMenuBar *menuBar = this->menuBar();
+    QMenuBar *menuBar = m_customMenuBar ? m_customMenuBar : QMainWindow::menuBar();
     if (!menuBar) return;
     // Material-inspired palette
     QColor base = palette().color(QPalette::Window);
@@ -188,7 +286,7 @@ void MainApplication::applyMenuBarMaterialStyle()
                "  border: none;"
                "  border-bottom: 1px solid " + colOutline + ";"
                "  font-family: 'Segoe UI', Arial, sans-serif;"
-               // Compact height like before
+               // Increase height so the brand logo is clearly visible
                "  min-height: 14px;"
                "}";
     // MenuBar items with underline indicator and hover overlay
@@ -258,8 +356,33 @@ void MainApplication::applyMenuBarMaterialStyle()
 
 void MainApplication::setupMenuBar()
 {
-    QMenuBar *menuBar = this->menuBar();
+    QMenuBar *menuBar = m_customMenuBar ? m_customMenuBar : QMainWindow::menuBar();
     applyMenuBarMaterialStyle();
+    
+    // Add left-side brand logo prominently (Way2Repair)
+    if (!m_brandContainer) {
+        m_brandContainer = new QWidget(menuBar);
+        auto *bl = new QHBoxLayout(m_brandContainer);
+        bl->setContentsMargins(6, 0, 8, 0);
+        bl->setSpacing(6);
+        m_brandLabel = new QLabel(m_brandContainer);
+        m_brandLabel->setObjectName("brandLabel");
+        m_brandLabel->setMinimumSize(28, 28); // visible size
+        m_brandLabel->setMaximumSize(36, 36);
+        m_brandLabel->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+        // Load SVG into pixmap at target size for crispness (Qt auto-renders SVG)
+        const QString svgPath = ":/icons/images/icons/Way2Repair_Logo.svg";
+        QIcon brand(svgPath);
+        const int brandSize = 28;
+        m_brandLabel->setPixmap(brand.pixmap(brandSize, brandSize));
+        m_brandLabel->setToolTip("Way2Repair");
+        bl->addWidget(m_brandLabel, 0, Qt::AlignVCenter);
+        m_brandContainer->setLayout(bl);
+        // Insert as a leading widget in the menu bar via QWidgetAction
+        auto *brandAction = new QWidgetAction(menuBar);
+        brandAction->setDefaultWidget(m_brandContainer);
+        menuBar->addAction(brandAction);
+    }
     // File menu
     QMenu *fileMenu = menuBar->addMenu("&File");
     QAction *logoutAction = fileMenu->addAction("&Logout");

@@ -30,8 +30,12 @@
 #include <QToolButton>
 #include <QVector>
 #include <QButtonGroup>
+#include <QWidget>
+#include <QWidgetAction>
+#include <QWindow>
 
 #include "ui/dualtabwidget.h"
+#include "ui/titlebarwidget.h"
 
 // Forward declaration for PDF viewer
 class PDFViewerWidget;
@@ -96,6 +100,9 @@ public slots:
 
 protected:
     void changeEvent(QEvent *event) override; // Re-apply theme on palette changes
+#ifdef Q_OS_WIN
+    bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
+#endif
 
 private:
     UserSession m_userSession;
@@ -121,11 +128,15 @@ private:
     QToolButton *m_treeSearchClearButton; // clear input
     QToolButton *m_homeButton { nullptr }; // Home button in menu bar (top-right)
     QToolButton *m_themeToggle { nullptr }; // Dark/Light toggle button in menu bar (top-right)
+    QWidget *m_brandContainer { nullptr };   // Left-side brand container
+    QLabel *m_brandLabel { nullptr };        // Brand logo label
     QPushButton *m_btnLocal;        // Local button
     QPushButton *m_btnServer;       // Server button
     QButtonGroup *m_sourceGroup;    // Exclusive selection
     DualTabWidget *m_tabWidget;  // Changed from QTabWidget to DualTabWidget
     QStatusBar *m_statusBar;
+    TitleBarWidget *m_titleBar { nullptr }; // Custom, tall title bar
+    QMenuBar *m_customMenuBar { nullptr };   // Menu bar used inside custom title area when frameless
     
     // Tree view state
     bool m_treeViewVisible;
@@ -139,6 +150,7 @@ private:
     bool m_isSearchView { false }; // when true, tree shows only search results (flat)
     
     void setupUI();
+    void setupTitleBar();
     void setupMenuBar();
     void setupStatusBar();
     void setupKeyboardShortcuts();

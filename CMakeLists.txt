@@ -132,6 +132,7 @@ set(CORE_SOURCES
 set(UI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/mainwindow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/mainapplication.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/titlebarwidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/dualtabwidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/LoadingOverlay.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/toastnotifier.cpp
@@ -190,6 +191,7 @@ set(NETWORK_SOURCES
 set(UI_HEADERS
     ${INCLUDE_DIR}/ui/mainwindow.h
     ${INCLUDE_DIR}/ui/mainapplication.h
+    ${INCLUDE_DIR}/ui/titlebarwidget.h
     ${INCLUDE_DIR}/ui/dualtabwidget.h
     ${INCLUDE_DIR}/ui/LoadingOverlay.h
     ${INCLUDE_DIR}/viewers/pdf/pdfviewerwidget.h
