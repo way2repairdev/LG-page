@@ -15,6 +15,10 @@
 #include <QPainter>
 #include <QScreen>
 #include <QGuiApplication>
+#include <QGraphicsDropShadowEffect>
+#include <QCheckBox>
+#include <QSettings>
+#include <QStandardPaths>
 #include <algorithm>
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -30,6 +34,13 @@ inline void writeTransitionLog(const QString &msg) {
         ts << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz")
            << " [login] " << msg << '\n';
     }
+}
+
+// Centralized settings accessor using an INI file in AppData for reliability
+inline QSettings appSettings() {
+    const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir().mkpath(appData);
+    return QSettings(appData + "/settings.ini", QSettings::IniFormat);
 }
 }
 
@@ -49,15 +60,26 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowTitle("Way2Repair - Login System");
     setFixedSize(580, 380);  // Compact size matching the screenshot
     setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
-    
-    // Center the window on screen
-    QWidget *parentWidget = qobject_cast<QWidget*>(parent);
-    if (parentWidget) {
-        move(parentWidget->geometry().center() - rect().center());
-    } else {
-        // Fallback - center on a common screen size
-        move(640 - width()/2, 360 - height()/2);
+
+    // Make outside background transparent so only the white card is visible
+    setAttribute(Qt::WA_TranslucentBackground, true);
+    setStyleSheet("background: transparent;");
+    if (ui->centralwidget) {
+        ui->centralwidget->setAutoFillBackground(false);
+        ui->centralwidget->setStyleSheet("background: transparent;");
     }
+
+    // Elevation: subtle drop shadow around the white card for premium feel
+    if (ui->loginContainer) {
+        auto *shadow = new QGraphicsDropShadowEffect(ui->loginContainer);
+        shadow->setBlurRadius(28);
+        shadow->setOffset(0, 12);
+        shadow->setColor(QColor(17, 24, 39, 45)); // #111827 @ ~18% opacity
+        ui->loginContainer->setGraphicsEffect(shadow);
+    }
+    
+    // Center the window on the active screen
+    centerOnScreen();
     
     // Remove menu bar and status bar for clean dialog look
     menuBar()->hide();
@@ -76,12 +98,69 @@ MainWindow::MainWindow(QWidget *parent)
         if (QFile(svgPath).exists()) {
             const QList<QSize> sizes = { {16,16}, {20,20}, {24,24}, {32,32}, {40,40}, {48,48}, {64,64}, {96,96}, {128,128}, {256,256} };
             for (const auto &sz : sizes) appIcon.addFile(svgPath, sz);
+            // Also set the logo inside the card
+            if (ui->logoLabel) ui->logoLabel->setPixmap(appIcon.pixmap(36, 36));
         }
         if (!appIcon.isNull()) {
             setWindowIcon(appIcon);
             QApplication::setWindowIcon(appIcon);
         }
     }
+
+    // Add an inline eye icon action inside the password field to toggle visibility
+    if (ui->passwordLineEdit) {
+        auto *toggleAction = new QAction(this);
+        auto updateIcon = [this, toggleAction]() {
+            const bool visible = ui->passwordLineEdit->echoMode() == QLineEdit::Normal;
+            toggleAction->setIcon(QIcon(visible ? ":/icons/images/icons/eye_off.svg" : ":/icons/images/icons/eye.svg"));
+            toggleAction->setToolTip(visible ? "Hide password" : "Show password");
+        };
+        QObject::connect(toggleAction, &QAction::triggered, this, [this, updateIcon]() mutable {
+            auto mode = ui->passwordLineEdit->echoMode();
+            ui->passwordLineEdit->setEchoMode(mode == QLineEdit::Password ? QLineEdit::Normal : QLineEdit::Password);
+            updateIcon();
+        });
+        ui->passwordLineEdit->addAction(toggleAction, QLineEdit::TrailingPosition);
+        updateIcon();
+    }
+
+    // Load any saved credentials BEFORE wiring handlers so programmatic changes don't overwrite values
+    loadSavedCredentials();
+
+    // Keep Remember me in sync: on toggle and while typing when enabled
+    if (ui->savePasswordCheckBox) {
+        QObject::connect(ui->savePasswordCheckBox, &QCheckBox::toggled, this, [this](bool on){
+            auto s = appSettings();
+            s.setValue("login/remember", on);
+            if (on) {
+                s.setValue("login/username", ui->usernameLineEdit ? ui->usernameLineEdit->text() : QString());
+                s.setValue("login/password", ui->passwordLineEdit ? ui->passwordLineEdit->text() : QString());
+                writeTransitionLog(QString("remember toggled=1 -> saved user_len=%1 pass_len=%2")
+                                    .arg(ui->usernameLineEdit ? ui->usernameLineEdit->text().length() : 0)
+                                    .arg(ui->passwordLineEdit ? ui->passwordLineEdit->text().length() : 0));
+            } else {
+                s.remove("login/username");
+                s.remove("login/password");
+                writeTransitionLog("remember toggled=0 -> cleared creds");
+            }
+            s.sync();
+        });
+        // Auto-save as user types when remember is checked
+        auto saveIfRemembered = [this]() {
+            if (!ui->savePasswordCheckBox->isChecked()) return;
+            auto s = appSettings();
+            s.setValue("login/username", ui->usernameLineEdit ? ui->usernameLineEdit->text() : QString());
+            s.setValue("login/password", ui->passwordLineEdit ? ui->passwordLineEdit->text() : QString());
+            writeTransitionLog(QString("autosave creds user_len=%1 pass_len=%2")
+                                .arg(ui->usernameLineEdit ? ui->usernameLineEdit->text().length() : 0)
+                                .arg(ui->passwordLineEdit ? ui->passwordLineEdit->text().length() : 0));
+            s.sync();
+        };
+        QObject::connect(ui->usernameLineEdit, &QLineEdit::textChanged, this, saveIfRemembered);
+        QObject::connect(ui->passwordLineEdit, &QLineEdit::textChanged, this, saveIfRemembered);
+    }
+
+    // (Loaded earlier to avoid signal side-effects)
 }
 
 MainWindow::~MainWindow()
@@ -217,6 +296,8 @@ void MainWindow::performLogin(const QString &username, const QString &password)
             UserInfo userInfo = m_dbManager->getUserInfo(username);
             
             // Launch main application instead of showing message box
+            // Persist remember choice if requested
+            persistRememberChoice(username, password);
             launchMainApplication(username, userInfo);
             
             qDebug() << "Database login successful for user:" << username;
@@ -250,6 +331,8 @@ void MainWindow::performLogin(const QString &username, const QString &password)
             offlineUserInfo.isActive = true;
             
             // Launch main application in offline mode
+            // Persist remember choice if requested
+            persistRememberChoice(username, password);
             launchMainApplication(username, offlineUserInfo);
             return; // Exit early since we're launching the main app
         } else {
@@ -353,9 +436,10 @@ void MainWindow::closeLoginWindow()
         m_mainApp = nullptr;
     }
     
-    // Clear login form and show login window again
+    // Clear then reload any remembered credentials, and show login window again
     ui->usernameLineEdit->clear();
     ui->passwordLineEdit->clear();
+    loadSavedCredentials();
     ui->usernameLineEdit->setFocus();
     
     // Show login window again
@@ -512,4 +596,103 @@ void MainWindow::animateClose()
         qApp->quit();
     });
     m_closeAnim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+void MainWindow::centerOnScreen()
+{
+    // Prefer screen where cursor is; fall back to primary
+    QScreen *screen = QGuiApplication::screenAt(QCursor::pos());
+    if (!screen) screen = QGuiApplication::primaryScreen();
+    const QRect avail = screen ? screen->availableGeometry() : QRect(0,0,1280,720);
+    const QPoint center = avail.center();
+    move(center.x() - width()/2, center.y() - height()/2);
+}
+
+void MainWindow::showEvent(QShowEvent *event)
+{
+    QMainWindow::showEvent(event);
+    if (!m_firstShowDone) {
+        m_firstShowDone = true;
+        // Ensure correct centering in case of DPI/layout changes
+        centerOnScreen();
+        animateShow();
+    }
+}
+
+void MainWindow::animateShow()
+{
+    if (m_showAnim) { m_showAnim->stop(); m_showAnim->deleteLater(); }
+
+    setWindowOpacity(0.0);
+    QRect startG = geometry();
+    QRect endG = startG;
+    // Slight pop-in scale from 96% to 100%
+    startG.setWidth(int(endG.width() * 0.96));
+    startG.setHeight(int(endG.height() * 0.96));
+    startG.moveCenter(endG.center());
+    setGeometry(startG);
+
+    auto *fade = new QPropertyAnimation(this, "windowOpacity", this);
+    fade->setDuration(180);
+    fade->setStartValue(0.0);
+    fade->setEndValue(1.0);
+    fade->setEasingCurve(QEasingCurve::OutCubic);
+
+    auto *scale = new QPropertyAnimation(this, "geometry", this);
+    scale->setDuration(180);
+    scale->setStartValue(startG);
+    scale->setEndValue(endG);
+    scale->setEasingCurve(QEasingCurve::OutCubic);
+
+    m_showAnim = new QParallelAnimationGroup(this);
+    m_showAnim->addAnimation(fade);
+    m_showAnim->addAnimation(scale);
+    connect(m_showAnim, &QParallelAnimationGroup::finished, this, [this]{
+        if (m_showAnim) { m_showAnim->deleteLater(); m_showAnim = nullptr; }
+    });
+    m_showAnim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+// --- Remember me persistence ---
+void MainWindow::loadSavedCredentials()
+{
+    auto s = appSettings();
+    // Log where settings.ini lives to aid troubleshooting
+    const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    writeTransitionLog(QString("settings path: %1/settings.ini").arg(appData));
+    const bool remember = s.value("login/remember", false).toBool();
+    if (ui->savePasswordCheckBox) {
+        QSignalBlocker b(ui->savePasswordCheckBox);
+        ui->savePasswordCheckBox->setChecked(remember);
+    }
+
+    if (remember) {
+        const QString savedUser = s.value("login/username").toString();
+        const QString savedPass = s.value("login/password").toString();
+        writeTransitionLog(QString("loadSavedCredentials remember=1 user='%1' pass_len=%2").arg(savedUser).arg(savedPass.length()));
+        if (ui->usernameLineEdit) { QSignalBlocker b(ui->usernameLineEdit); ui->usernameLineEdit->setText(savedUser); }
+        if (ui->passwordLineEdit) { QSignalBlocker b(ui->passwordLineEdit); ui->passwordLineEdit->setText(savedPass); }
+        onUsernameChanged();
+        onPasswordChanged();
+    } else {
+        writeTransitionLog("loadSavedCredentials remember=0");
+    }
+}
+
+void MainWindow::persistRememberChoice(const QString &username, const QString &password)
+{
+    if (!ui->savePasswordCheckBox) return;
+    const bool remember = ui->savePasswordCheckBox->isChecked();
+    auto s = appSettings();
+    s.setValue("login/remember", remember);
+    if (remember) {
+        s.setValue("login/username", username);
+        s.setValue("login/password", password);
+    writeTransitionLog(QString("persistRememberChoice saved user='%1' pass_len=%2").arg(username).arg(password.length()));
+    } else {
+        s.remove("login/username");
+        s.remove("login/password");
+    writeTransitionLog("persistRememberChoice cleared creds");
+    }
+    s.sync();
 }

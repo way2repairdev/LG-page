@@ -53,6 +53,9 @@ private:
     void enableLoginControls(bool enabled);
     void launchMainApplication(const QString &username, const UserInfo &userInfo);
     void closeLoginWindow();
+    // Remember me persistence
+    void loadSavedCredentials();
+    void persistRememberChoice(const QString &username, const QString &password);
     
     // Mouse event handlers for frameless window
 protected:
@@ -61,6 +64,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
+    void showEvent(QShowEvent *event) override;
 
 private:
     QPoint m_dragPosition;
@@ -68,8 +72,12 @@ private:
     // Animations
     void animateMinimize();
     void animateClose();
+    void animateShow();
+    void centerOnScreen();
     QPointer<QParallelAnimationGroup> m_minimizeAnim;
     QPointer<QParallelAnimationGroup> m_closeAnim;
+    QPointer<QParallelAnimationGroup> m_showAnim;
     bool m_closingNow { false };
+    bool m_firstShowDone { false };
 };
 #endif // MAINWINDOW_H

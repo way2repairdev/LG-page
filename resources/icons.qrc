@@ -32,5 +32,7 @@
     <file>images/icons/sun.svg</file>
     <file>images/icons/moon.svg</file>
     <file>images/icons/Way2Repair_Logo.svg</file>
+    <file>images/icons/eye.svg</file>
+    <file>images/icons/eye_off.svg</file>
     </qresource>
 </RCC>

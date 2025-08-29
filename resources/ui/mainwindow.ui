@@ -6,421 +6,286 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>580</width>
-    <height>380</height>
+    <width>600</width>
+    <height>420</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Login Page</string>
+   <string>Way2Repair — Sign in</string>
   </property>
-  <property name="styleSheet">
-   <string notr="true">QMainWindow {
-    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
-                               stop: 0 #667eea, stop: 1 #764ba2);
-}</string>
-  </property>
-  <widget class="QWidget" name="centralwidget">
-   <property name="styleSheet">
-    <string notr="true">QWidget#centralwidget {
-    background: transparent;
-}</string>
-   </property>
-   <widget class="QWidget" name="loginContainer" native="true">
-    <property name="geometry">
-     <rect>
-      <x>50</x>
-      <y>30</y>
-      <width>480</width>
-      <height>320</height>
-     </rect>
-    </property>
     <property name="styleSheet">
-     <string notr="true">QWidget#loginContainer {
-    background-color: rgba(255, 255, 255, 0.95);
-    border: none;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-}</string>
+     <string notr="true">/* Keep only typography; make window transparent via code */
+QLabel, QLineEdit, QPushButton, QCheckBox { font-family: 'Segoe UI', Arial, sans-serif; }
+QStatusBar { background: transparent; }
+</string>
     </property>
-    <widget class="QLabel" name="titleLabel">
-     <property name="geometry">
-      <rect>
-       <x>30</x>
-       <y>30</y>
-       <width>300</width>
-       <height>40</height>
-      </rect>
+  <widget class="QWidget" name="centralwidget">
+    <layout class="QVBoxLayout" name="centralLayout">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+     <property name="leftMargin">
+      <number>0</number>
      </property>
-     <property name="font">
-      <font>
-       <pointsize>20</pointsize>
-       <weight>75</weight>
-       <bold>true</bold>
-      </font>
+     <property name="topMargin">
+      <number>0</number>
      </property>
-     <property name="styleSheet">
-      <string notr="true">color: #2c3e50;
-QLabel {
-    background: transparent;
-    font-family: 'Segoe UI', Arial, sans-serif;
-}</string>
+     <property name="rightMargin">
+      <number>0</number>
      </property>
-     <property name="text">
-      <string>Way2Repair Solutions</string>
+     <property name="bottomMargin">
+      <number>0</number>
      </property>
-     <property name="alignment">
-      <set>Qt::AlignLeft|Qt::AlignVCenter</set>
-     </property>
-    </widget>
-    <widget class="QLabel" name="versionLabel">
-     <property name="geometry">
-      <rect>
-       <x>350</x>
-       <y>35</y>
-       <width>50</width>
-       <height>20</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>9</pointsize>
-       <weight>50</weight>
-       <bold>false</bold>
-      </font>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">QLabel {
-    background-color: #3498db;
-    color: white;
+    <item>
+      <spacer name="topSpacer">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+          <width>20</width>
+          <height>24</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item>
+     <widget class="QFrame" name="loginContainer">
+      <property name="styleSheet">
+       <string notr="true">QFrame#loginContainer {
+    background: #ffffff;
+    border: none;
+    border-radius: 16px;
+}
+/* Inputs */
+QLineEdit {
+    border: 1px solid #E5E7EB;
     border-radius: 10px;
-    padding: 2px 6px;
-    font-family: 'Segoe UI', Arial, sans-serif;
-}</string>
-     </property>
-     <property name="text">
-      <string>V1.0</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-    </widget>
-    <widget class="QLabel" name="subtitleLabel">
-     <property name="geometry">
-      <rect>
-       <x>30</x>
-       <y>75</y>
-       <width>420</width>
-       <height>30</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>9</pointsize>
-       <weight>50</weight>
-       <bold>false</bold>
-      </font>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">color: #7f8c8d;
-QLabel {
-    background: transparent;
-    font-family: 'Segoe UI', Arial, sans-serif;
-}</string>
-     </property>
-    <property name="text">
-     <string>India's NO.1 Schemetics tools</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignLeft|Qt::AlignTop</set>
-     </property>
-     <property name="wordWrap">
-      <bool>true</bool>
-     </property>
-    </widget>
-    <widget class="QLabel" name="quickLoginLabel">
-     <property name="geometry">
-      <rect>
-       <x>310</x>
-       <y>100</y>
-       <width>140</width>
-       <height>16</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>8</pointsize>
-       <weight>50</weight>
-       <bold>false</bold>
-      </font>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">QLabel {
-    color: #3498db;
-    background: transparent;
-    font-family: 'Segoe UI', Arial, sans-serif;
-}</string>
-     </property>
-     <property name="text">
-      <string>Quick login here →</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignRight|Qt::AlignVCenter</set>
-     </property>
-    </widget>
-    <widget class="QLineEdit" name="usernameLineEdit">
-     <property name="geometry">
-      <rect>
-       <x>30</x>
-       <y>125</y>
-       <width>420</width>
-       <height>35</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>10</pointsize>
-       <family>Segoe UI</family>
-      </font>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">QLineEdit {
-    border: 1px solid #d4e1f5;
-    border-radius: 6px;
-    padding: 8px 12px;
-    background-color: #f8f9ff;
-    color: #2c3e50;
-    font-family: 'Segoe UI', Arial, sans-serif;
+    padding: 10px 12px;
+    background: #F9FAFB;
+    color: #111827;
 }
 QLineEdit:focus {
-    border: 2px solid #4285f4;
-    background-color: white;
-    outline: none;
+    border: 2px solid #3F51B5;
+    background: #FFFFFF;
 }
-QLineEdit:hover {
-    border: 1px solid #4285f4;
-}</string>
-     </property>
-     <property name="placeholderText">
-      <string>Enter your username</string>
-     </property>
-    </widget>
-    <widget class="QLineEdit" name="passwordLineEdit">
-     <property name="geometry">
-      <rect>
-       <x>30</x>
-       <y>170</y>
-       <width>420</width>
-       <height>35</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>10</pointsize>
-       <family>Segoe UI</family>
-      </font>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">QLineEdit {
-    border: 1px solid #d4e1f5;
-    border-radius: 6px;
-    padding: 8px 12px;
-    background-color: #f8f9ff;
-    color: #2c3e50;
-    font-family: 'Segoe UI', Arial, sans-serif;
-}
-QLineEdit:focus {
-    border: 2px solid #4285f4;
-    background-color: white;
-    outline: none;
-}
-QLineEdit:hover {
-    border: 1px solid #4285f4;
-}</string>
-     </property>
-     <property name="echoMode">
-      <enum>QLineEdit::Password</enum>
-     </property>
-     <property name="placeholderText">
-      <string>Enter your password</string>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="loginButton">
-     <property name="geometry">
-      <rect>
-       <x>30</x>
-       <y>220</y>
-       <width>420</width>
-       <height>35</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>11</pointsize>
-       <weight>75</weight>
-       <bold>true</bold>
-       <family>Segoe UI</family>
-      </font>
-     </property>
-     <property name="cursor">
-      <cursorShape>PointingHandCursor</cursorShape>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">QPushButton {
-    background-color: #4285f4;
-    color: white;
+QLineEdit::placeholder { color: #9AA4B2; }
+/* Primary button */
+QPushButton#loginButton {
+    background: #3F51B5;
+    color: #ffffff;
     border: none;
-    border-radius: 6px;
-    padding: 10px;
-    font-weight: bold;
-    font-family: 'Segoe UI', Arial, sans-serif;
+    border-radius: 10px;
+    padding: 10px 16px;
+    min-height: 40px;
+    font-weight: 600;
+    font-size: 14px;
 }
-QPushButton:hover {
-    background-color: #3367d6;
-}
-QPushButton:pressed {
-    background-color: #2a56c6;
-}
-QPushButton:disabled {
-    background-color: #cccccc;
-    color: #888888;
-}</string>
-     </property>
-     <property name="text">
-      <string>Login</string>
-     </property>
-    </widget>
-    <widget class="QCheckBox" name="savePasswordCheckBox">
-     <property name="geometry">
-      <rect>
-       <x>30</x>
-       <y>270</y>
-       <width>120</width>
-       <height>20</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>9</pointsize>
-       <family>Segoe UI</family>
-      </font>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">QCheckBox {
-    color: #5f6368;
-    font-family: 'Segoe UI', Arial, sans-serif;
+QPushButton#loginButton:hover { background: #3949A3; }
+QPushButton#loginButton:pressed { background: #2F3E8F; }
+QPushButton#loginButton:disabled { background: #C7CAE3; color: #6B7280; }
+/* Close button */
+QPushButton#closeButton {
     background: transparent;
-}
-QCheckBox::indicator {
-    width: 14px;
-    height: 14px;
-    border: 1px solid #dadce0;
-    border-radius: 2px;
-    background-color: white;
-}
-QCheckBox::indicator:checked {
-    background-color: #4285f4;
-    border: 1px solid #4285f4;
-    image: url(:/icons/check.png); /* You can add a checkmark icon */
-}</string>
-     </property>
-     <property name="text">
-      <string>Save password</string>
-     </property>
-    </widget>
-    <widget class="QLabel" name="recoverLabel">
-     <property name="geometry">
-      <rect>
-       <x>370</x>
-       <y>270</y>
-       <width>80</width>
-       <height>20</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>9</pointsize>
-       <family>Segoe UI</family>
-      </font>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">QLabel {
-    color: #4285f4;
-    background: transparent;
-    font-family: 'Segoe UI', Arial, sans-serif;
-}
-QLabel:hover {
-    text-decoration: underline;
-}</string>
-     </property>
-     <property name="text">
-      <string>Recover?</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignRight|Qt::AlignVCenter</set>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="closeButton">
-     <property name="geometry">
-      <rect>
-       <x>440</x>
-       <y>10</y>
-       <width>30</width>
-       <height>30</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>14</pointsize>
-       <weight>75</weight>
-       <bold>true</bold>
-      </font>
-     </property>
-     <property name="cursor">
-      <cursorShape>PointingHandCursor</cursorShape>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">QPushButton {
-    background-color: transparent;
-    color: #999999;
+    color: #9AA4B2;
     border: none;
-    border-radius: 15px;
-    padding: 0px;
-    font-weight: bold;
+    border-radius: 12px;
 }
-QPushButton:hover {
-    background-color: #ff4757;
-    color: white;
-}
-QPushButton:pressed {
-    background-color: #ff3742;
-}</string>
-     </property>
-     <property name="text">
-      <string>×</string>
-     </property>
-    </widget>
-   </widget>
+QPushButton#closeButton:hover { background: #EF4444; color: #ffffff; }
+/* Links */
+QLabel#recoverLabel { color: #3F51B5; }
+QLabel#recoverLabel:hover { text-decoration: underline; }
+</string>
+      </property>
+            <layout class="QVBoxLayout" name="cardLayout">
+       <property name="spacing">
+        <number>14</number>
+       </property>
+       <property name="leftMargin">
+                <number>24</number>
+       </property>
+       <property name="topMargin">
+                <number>18</number>
+       </property>
+       <property name="rightMargin">
+                <number>24</number>
+       </property>
+       <property name="bottomMargin">
+                <number>18</number>
+       </property>
+       <item>
+        <layout class="QHBoxLayout" name="headerLayout">
+         <item>
+          <widget class="QLabel" name="logoLabel">
+           <property name="minimumSize">
+            <size>
+             <width>36</width>
+             <height>36</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>36</width>
+             <height>36</height>
+            </size>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <layout class="QVBoxLayout" name="titleLayout">
+           <item>
+            <widget class="QLabel" name="titleLabel">
+             <property name="text">
+              <string>Way2Repair</string>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">QLabel { color: #111827; font-size: 20px; font-weight: 700; }</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="subtitleLabel">
+             <property name="text">
+              <string>Sign in to continue</string>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">QLabel { color: #6B7280; font-size: 12px; }</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <spacer name="headerSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="closeButton">
+           <property name="minimumSize">
+            <size>
+             <width>28</width>
+             <height>28</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>28</width>
+             <height>28</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>×</string>
+           </property>
+           <property name="cursor">
+            <cursorShape>PointingHandCursor</cursorShape>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QVBoxLayout" name="formLayout">
+         <property name="spacing">
+          <number>10</number>
+         </property>
+         <item>
+          <widget class="QLineEdit" name="usernameLineEdit">
+           <property name="placeholderText">
+            <string>Username or email</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="passwordLineEdit">
+           <property name="echoMode">
+            <enum>QLineEdit::Password</enum>
+           </property>
+           <property name="placeholderText">
+            <string>Password</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="loginButton">
+           <property name="text">
+            <string>Sign in</string>
+           </property>
+           <property name="cursor">
+            <cursorShape>PointingHandCursor</cursorShape>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="footerLayout">
+         <item>
+          <widget class="QCheckBox" name="savePasswordCheckBox">
+           <property name="text">
+            <string>Remember me</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="footerSpacer">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QLabel" name="recoverLabel">
+           <property name="text">
+            <string>Forgot password?</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <spacer name="bottomSpacer">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+      <width>20</width>
+      <height>24</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+   </layout>
   </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>800</width>
-     <height>22</height>
-    </rect>
-   </property>
+  <widget class="QMenuBar" name="menubar"/>
+  <widget class="QStatusBar" name="statusbar"/>
   </widget>
-  <widget class="QStatusBar" name="statusbar">
-   <property name="styleSheet">
-    <string notr="true">QStatusBar {
-    background: transparent;
-    color: white;
-    font-weight: bold;
-}</string>
-   </property>
-  </widget>
- </widget>
- <resources/>
- <connections/>
+  <tabstops>
+   <tabstop>usernameLineEdit</tabstop>
+   <tabstop>passwordLineEdit</tabstop>
+   <tabstop>loginButton</tabstop>
+  </tabstops>
+  <resources/>
+  <connections/>
 </ui>
