@@ -32,6 +32,8 @@
 #include <QMenuBar>
 #include <QVBoxLayout>
 #include <QStyle>
+#include <functional>
+#include <memory>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <windowsx.h>
@@ -56,6 +58,56 @@ inline void showTreeIssue(MainApplication* self, const QString &context, const Q
     ToastNotifier::show(self, msg);
     if (self && self->statusBar()) self->statusBar()->showMessage(msg, 5000);
     writeTransitionLog(QString("tree-issue: ") + msg);
+}
+
+// Cheap availability check for directories (including UNC shares)
+inline bool isDirAvailable(const QString &path) {
+    if (path.trimmed().isEmpty()) return false;
+    QDir d(path);
+    return d.exists(); // Avoid heavy listing to keep it fast and non-blocking
+}
+
+// Asynchronous, time-bounded directory availability check to prevent UI stalls on slow/unreachable shares
+static void checkDirAvailableAsync(QObject *ctx, const QString &path, int timeoutMs, std::function<void(bool)> callback) {
+    // If no path, return quickly
+    if (!ctx) { if (callback) callback(false); return; }
+    if (path.trimmed().isEmpty()) { if (callback) callback(false); return; }
+
+    // Thread worker using lambda, no signals/slots to avoid automoc requirements
+    auto *thread = new QThread(ctx);
+
+    // Completion coordination flag
+    auto done = std::make_shared<bool>(false);
+
+    QObject::connect(thread, &QThread::started, thread, [ctx, path, callback, done, thread]() {
+        bool ok = false;
+        try {
+            QDir d(path);
+            ok = d.exists();
+        } catch (...) {
+            ok = false;
+        }
+        // Post result back to ctx's thread; ignore if timed out already
+        QMetaObject::invokeMethod(ctx, [callback, done, ok, thread]() {
+            if (*done) return;
+            *done = true;
+            if (callback) callback(ok);
+            thread->quit();
+        }, Qt::QueuedConnection);
+    });
+
+    QObject::connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+
+    // Timeout guard – resolve false if worker is slow/unreachable
+    QTimer::singleShot(timeoutMs, ctx, [done, callback, thread]() mutable {
+        if (*done) return;
+        *done = true;
+        if (callback) callback(false);
+        thread->requestInterruption();
+        thread->quit();
+    });
+
+    thread->start();
 }
 }
 
@@ -113,15 +165,9 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
         }
     }
     
-    // Load initial tree: default to Server mode; fallback to Local until a server path is set
-    if (m_serverRootPath.isEmpty()) {
-        // No server path yet
-        // Ensure toggle reflects Local and load
-        // setTreeSource defined later; safe to call
-        setTreeSource(TreeSource::Local, true);
-    } else {
-        setTreeSource(TreeSource::Server, true);
-    }
+    // Load initial tree: prioritize fast startup by loading Local immediately.
+    // We'll probe the server lazily on demand to avoid UI "Not Responding" if network is slow.
+    setTreeSource(TreeSource::Local, true);
     writeTransitionLog("ctor: after loadLocalFiles");
     
     // Add welcome tab
@@ -1320,30 +1366,49 @@ void MainApplication::loadLocalFiles()
 
 void MainApplication::loadServerFiles()
 {
-    statusBar()->showMessage("Loading files from server directory...");
-    m_treeWidget->clear();
-    m_searchResultsRoot = nullptr;
+    try {
+        statusBar()->showMessage("Loading files from server directory...");
+        m_treeWidget->clear();
+        m_searchResultsRoot = nullptr;
 
-    if (m_serverRootPath.isEmpty()) {
-        statusBar()->showMessage("Server path not set. Switch to Local or provide server path.");
-        return;
+        // Hardened: if not available, fall back to Local immediately
+        if (m_serverRootPath.isEmpty() || !isDirAvailable(m_serverRootPath)) {
+            showTreeIssue(this, "Server unavailable", m_serverRootPath.isEmpty() ? "Path not set" : m_serverRootPath);
+            statusBar()->showMessage("Server not available. Falling back to Local.");
+            setTreeSource(TreeSource::Local, false);
+            loadLocalFiles();
+            return;
+        }
+
+        QDir rootDir(m_serverRootPath);
+        if (!rootDir.exists()) {
+            showTreeIssue(this, "Server path not found", m_serverRootPath);
+            statusBar()->showMessage("Server path missing. Showing Local.");
+            setTreeSource(TreeSource::Local, false);
+            loadLocalFiles();
+            return;
+        }
+
+        populateTreeFromDirectory(m_serverRootPath);
+
+        m_searchResultsRoot = new QTreeWidgetItem(m_treeWidget);
+        m_searchResultsRoot->setText(0, "Search Results");
+        m_searchResultsRoot->setIcon(0, style()->standardIcon(QStyle::SP_FileDialogContentsView));
+        m_searchResultsRoot->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
+        m_searchResultsRoot->setHidden(true);
+        m_searchResultsRoot->setExpanded(false);
+
+        m_treeWidget->collapseAll();
+        statusBar()->showMessage(QString("Loaded files from: %1").arg(m_serverRootPath));
+    } catch (const std::exception &e) {
+        showTreeIssue(this, "Server load error", e.what());
+        setTreeSource(TreeSource::Local, false);
+        loadLocalFiles();
+    } catch (...) {
+        showTreeIssue(this, "Unknown server load error");
+        setTreeSource(TreeSource::Local, false);
+        loadLocalFiles();
     }
-    QDir rootDir(m_serverRootPath);
-    if (!rootDir.exists()) {
-        statusBar()->showMessage("Error: Server folder not accessible: " + m_serverRootPath);
-        return;
-    }
-    populateTreeFromDirectory(m_serverRootPath);
-
-    m_searchResultsRoot = new QTreeWidgetItem(m_treeWidget);
-    m_searchResultsRoot->setText(0, "Search Results");
-    m_searchResultsRoot->setIcon(0, style()->standardIcon(QStyle::SP_FileDialogContentsView));
-    m_searchResultsRoot->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
-    m_searchResultsRoot->setHidden(true);
-    m_searchResultsRoot->setExpanded(false);
-
-    m_treeWidget->collapseAll();
-    statusBar()->showMessage(QString("Loaded files from: %1").arg(m_serverRootPath));
 }
 
 void MainApplication::setServerRootPath(const QString &path)
@@ -1356,17 +1421,87 @@ void MainApplication::setServerRootPath(const QString &path)
 void MainApplication::setTreeSource(TreeSource src, bool forceReload)
 {
     if (!forceReload && m_treeSource == src) return;
-    m_treeSource = src;
-    if (m_btnServer && m_btnLocal) {
-        m_btnServer->blockSignals(true);
-        m_btnLocal->blockSignals(true);
-        m_btnServer->setChecked(src == TreeSource::Server);
-        m_btnLocal->setChecked(src == TreeSource::Local);
-        m_btnServer->blockSignals(false);
-        m_btnLocal->blockSignals(false);
+
+    // If switching to Local, do it immediately (fast, non-blocking)
+    if (src == TreeSource::Local) {
+        m_treeSource = TreeSource::Local;
+        loadLocalFiles();
+        if (m_btnServer && m_btnLocal) {
+            m_btnServer->blockSignals(true);
+            m_btnLocal->blockSignals(true);
+            m_btnServer->setChecked(false);
+            m_btnLocal->setChecked(true);
+            m_btnServer->blockSignals(false);
+            m_btnLocal->blockSignals(false);
+        }
+        return;
     }
-    // No title label to update
-    refreshCurrentTree();
+
+    // For Server, check availability asynchronously with a short timeout to avoid UI stalls
+    if (src == TreeSource::Server) {
+        const QString path = m_serverRootPath;
+        // If no path configured, keep Local and inform the user
+        if (path.trimmed().isEmpty()) {
+            m_treeSource = TreeSource::Local;
+            showTreeIssue(this, "Server unavailable", "Path not set");
+            statusBar()->showMessage("Server not configured. Showing Local.");
+            loadLocalFiles();
+            return;
+        }
+
+        // Show a brief non-blocking hint and prevent rapid toggles until resolved
+        statusBar()->showMessage("Checking server...");
+        if (m_btnServer && m_btnLocal) {
+            m_btnServer->setEnabled(false);
+            m_btnLocal->setEnabled(false);
+        }
+
+        // Capture 'this' safely; MainApplication owns ctx for timer & cleanup
+        checkDirAvailableAsync(this, path, /*timeoutMs*/ 800, [this, path](bool ok){
+            // If user toggled back to Local while checking, honor current choice
+            // If user already switched back to Local, honor it
+            if (m_btnLocal && m_btnLocal->isChecked()) {
+                m_treeSource = TreeSource::Local;
+                loadLocalFiles();
+                if (m_btnServer && m_btnLocal) {
+                    m_btnServer->setEnabled(true);
+                    m_btnLocal->setEnabled(true);
+                }
+                return;
+            }
+
+            if (ok) {
+                m_treeSource = TreeSource::Server;
+                loadServerFiles();
+                if (m_btnServer && m_btnLocal) {
+                    m_btnServer->blockSignals(true);
+                    m_btnLocal->blockSignals(true);
+                    m_btnServer->setChecked(true);
+                    m_btnLocal->setChecked(false);
+                    m_btnServer->blockSignals(false);
+                    m_btnLocal->blockSignals(false);
+                    m_btnServer->setEnabled(true);
+                    m_btnLocal->setEnabled(true);
+                }
+            } else {
+                m_treeSource = TreeSource::Local;
+                showTreeIssue(this, "Server unavailable", path);
+                statusBar()->showMessage("Server unavailable. Showing Local.");
+                loadLocalFiles();
+                if (m_btnServer && m_btnLocal) {
+                    m_btnServer->blockSignals(true);
+                    m_btnLocal->blockSignals(true);
+                    m_btnServer->setChecked(false);
+                    m_btnLocal->setChecked(true);
+                    m_btnServer->blockSignals(false);
+                    m_btnLocal->blockSignals(false);
+                    m_btnServer->setEnabled(true);
+                    m_btnLocal->setEnabled(true);
+                }
+            }
+        });
+        return;
+    }
 }
 
 QString MainApplication::currentRootPath() const
@@ -1378,16 +1513,8 @@ QString MainApplication::currentRootPath() const
 
 void MainApplication::refreshCurrentTree()
 {
-    if (m_treeSource == TreeSource::Server) {
-        if (m_serverRootPath.isEmpty()) {
-            statusBar()->showMessage("Server path not set. Showing Local.");
-            loadLocalFiles();
-        } else {
-            loadServerFiles();
-        }
-    } else {
-        loadLocalFiles();
-    }
+    // Delegate to setTreeSource with force (keeps logic in one place)
+    setTreeSource(m_treeSource, true);
 }
 
 void MainApplication::populateTreeFromDirectory(const QString &dirPath, QTreeWidgetItem *parentItem)
@@ -1425,6 +1552,8 @@ void MainApplication::populateTreeFromDirectory(const QString &dirPath, QTreeWid
                 item->setData(0, Qt::UserRole, entry.absoluteFilePath()); // Store file path
                 item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
             }
+            // Yield occasionally to keep UI responsive when folders contain many items
+            if ((count % 200) == 0) QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
         }
     } catch (const std::exception &e) {
         showTreeIssue(this, "Error loading folder", e.what());
