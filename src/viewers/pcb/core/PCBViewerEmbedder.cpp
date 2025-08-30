@@ -1143,7 +1143,11 @@ void PCBViewerEmbedder::mouseButtonCallback(GLFWwindow* window, int button, int 
 
                         // Skip quick menu for ground nets
                         auto isGroundNet2 = [](const std::string& n){
-                            if (n.empty()) return false; std::string u=n; std::transform(u.begin(), u.end(), u.begin(), ::toupper);
+                            if (n.empty()) {
+                                return false;
+                            }
+                            std::string u = n;
+                            std::transform(u.begin(), u.end(), u.begin(), ::toupper);
                             return u=="GND" || u=="GROUND" || u=="VSS" || u=="AGND" || u=="DGND" || u=="PGND" || u=="SGND" || u.rfind("GND",0)==0 || u.rfind("GROUND",0)==0;
                         };
                         if ((!part.empty() || !net.empty()) && !isGroundNet2(net) && embedder->m_quickRightClickCallback) {
