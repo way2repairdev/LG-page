@@ -103,7 +103,8 @@ void PDFViewerEmbedder::activateForCrossSearchAndRefresh(bool highQuality)
     g_pageWidths = &m_pageWidths;
 
     // Make sure our GL context is current before any GL uploads later
-    if (m_glfwWindow) glfwMakeContextCurrent(m_glfwWindow);
+    // Avoid forcing GL context on the UI thread here; uploads happen in update() when active
+    // if (m_glfwWindow) glfwMakeContextCurrent(m_glfwWindow);
 
     // Cancel any stale async work from previous tab and schedule visible regen
     if (m_asyncQueue) m_asyncQueue->cancelAll();
@@ -488,20 +489,17 @@ void PDFViewerEmbedder::update()
         return;
     }
 
-    // If globals point elsewhere (another active tab), skip heavy work to avoid race
+    // If globals point elsewhere (another active tab), skip any work that could block Qt
     if (!(g_scrollState == m_scrollState.get() && g_renderer == m_renderer.get())) {
         // Try to detect if this viewer should become the active one. Conditions:
         // 1. No active global viewer (globals null)
         // 2. Our window currently has focus
-        // 3. Our parent HWND is foreground window (tab switched at higher UI layer)
         bool claimGlobals = false;
         if (!g_scrollState && !g_renderer) {
             claimGlobals = true;
         }
 #ifdef _WIN32
         else if (m_childHwnd && GetFocus() == m_childHwnd) {
-            claimGlobals = true;
-        } else if (m_parentHwnd && GetForegroundWindow() == m_parentHwnd) {
             claimGlobals = true;
         }
 #endif
@@ -522,12 +520,7 @@ void PDFViewerEmbedder::update()
             }
             std::cout << "PDFViewerEmbedder["<<m_viewerId<<"] claimed global active viewer context" << std::endl;
         } else {
-            // Not active: still allow lightweight rendering of existing textures so previously
-            // generated content remains visible instead of a blank window. Skip regeneration.
-            glfwMakeContextCurrent(m_glfwWindow);
-            renderFrame();
-            glfwSwapBuffers(m_glfwWindow);
-            glfwPollEvents();
+            // Not active: do nothing to avoid starving Qt's event loop (no GL work, no GLFW polling)
             return;
         }
     }
