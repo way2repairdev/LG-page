@@ -198,7 +198,7 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
     , m_userSession(userSession)
     , m_dbManager(new DatabaseManager(this))
     , m_rootFolderPath("C:\\W2R_Schematics")  // Local default folder
-    , m_serverRootPath("\\\\192.168.1.2\\SharedFiles\\W2R_Schematics") // Default server UNC path
+    , m_serverRootPath("\\\\192.168.1.2\\share\\W2R_Schematics") // Default server UNC path
     // Server-side initialization (commented out for local file loading)
     //, m_networkManager(new QNetworkAccessManager(this))
     //, m_baseUrl("http://localhost/api") // WAMP server API endpoint
