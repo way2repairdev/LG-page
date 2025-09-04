@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 
+# Configure vcpkg toolchain before project declaration
+set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
+
 project(Way2RepairLoginSystem VERSION 1.0.0 LANGUAGES CXX)
 
 # Set C++ standard
@@ -132,6 +135,7 @@ set(CORE_SOURCES
 set(UI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/mainwindow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/mainapplication.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/awsconfigdialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/titlebarwidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/dualtabwidget.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/LoadingOverlay.cpp
@@ -183,7 +187,7 @@ set(DATABASE_SOURCES
 )
 
 set(NETWORK_SOURCES
-    # Add network source files here if needed
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/network/awsclient.cpp
 )
 
 # Header files
@@ -191,6 +195,7 @@ set(NETWORK_SOURCES
 set(UI_HEADERS
     ${INCLUDE_DIR}/ui/mainwindow.h
     ${INCLUDE_DIR}/ui/mainapplication.h
+    ${INCLUDE_DIR}/ui/awsconfigdialog.h
     ${INCLUDE_DIR}/ui/titlebarwidget.h
     ${INCLUDE_DIR}/ui/dualtabwidget.h
     ${INCLUDE_DIR}/ui/LoadingOverlay.h
@@ -234,7 +239,7 @@ set(DATABASE_HEADERS
 )
 
 set(NETWORK_HEADERS
-    # Add network header files here if needed
+    ${INCLUDE_DIR}/network/awsclient.h
 )
 
 # UI files - using dynamic paths
@@ -320,7 +325,8 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         # If a source .ico exists in resources, prefer that
         if(EXISTS ${APP_ICO_SRC})
             message(STATUS "App icon (.ico) found - embedding into executable")
-            target_sources(Way2RepairLoginSystem PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/resources/app_icon.rc)
+            # Temporarily disabled due to windres error
+            # target_sources(Way2RepairLoginSystem PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/resources/app_icon.rc)
         elseif(EXISTS ${APP_ICO_GEN})
             # Fallback if generated earlier in configuration
             set(APP_RC_GEN "${CMAKE_CURRENT_BINARY_DIR}/app_icon_gen.rc")
@@ -353,6 +359,27 @@ target_link_libraries(Way2RepairLoginSystem PRIVATE
     Qt${QT_VERSION_MAJOR}::OpenGLWidgets
     ${OPENGL_LIBRARIES}
 )
+
+# AWS SDK detection and configuration using vcpkg
+# Add vcpkg prefix path for package discovery - use MinGW static triplet
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/installed/x64-mingw-static")
+set(AWSSDK_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/installed/x64-mingw-static")
+message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
+message(STATUS "AWSSDK_ROOT_DIR set to: ${AWSSDK_ROOT_DIR}")
+
+find_package(AWSSDK CONFIG COMPONENTS core s3)
+
+if(AWSSDK_FOUND)
+    message(STATUS "AWS SDK found via vcpkg - enabling AWS functionality")
+    message(STATUS "AWSSDK_INCLUDE_DIRS: ${AWSSDK_INCLUDE_DIRS}")
+    message(STATUS "AWSSDK_LIBRARIES: ${AWSSDK_LIBRARIES}")
+    target_link_libraries(Way2RepairLoginSystem PRIVATE ${AWSSDK_LIBRARIES})
+    target_include_directories(Way2RepairLoginSystem PRIVATE ${AWSSDK_INCLUDE_DIRS})
+    target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_AWS_SDK)
+else()
+    message(WARNING "AWS SDK not found via vcpkg - AWS functionality will be disabled")
+    message(STATUS "To enable AWS functionality, install AWS SDK via: ./vcpkg/vcpkg install aws-sdk-cpp[core,s3]:x64-mingw-static")
+endif()
 
 # Link Windows DbgHelp for minidump generation
 if(WIN32)

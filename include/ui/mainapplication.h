@@ -34,6 +34,8 @@
 #include <QWidgetAction>
 #include <QWindow>
 #include <QPointer>
+#include "network/awsclient.h"
+#include "ui/awsconfigdialog.h"
 class QParallelAnimationGroup;
 class QPropertyAnimation;
 
@@ -117,7 +119,9 @@ private:
     DatabaseManager *m_dbManager;
     QString m_rootFolderPath;  // Local folder path to load files from
     QString m_serverRootPath;  // Server folder path (will be provided later)
-    enum class TreeSource { Server, Local };
+    QString m_awsRootPath;     // AWS-mounted/local sync folder path (optional)
+    AwsClient m_aws;           // Simple S3 client (dev mode with access keys)
+    enum class TreeSource { Server, Local, AWS };
     TreeSource m_treeSource { TreeSource::Server }; // default to Server
     
     // Server-side members (commented out for local file loading)
@@ -129,7 +133,7 @@ private:
     QSplitter *m_splitter;
     QWidget *m_treePanel;           // container for search bar + tree
     QWidget *m_treeSearchBar;       // search bar container (for theming)
-    QWidget *m_sourceToggleBar;     // Local/Server toggle bar
+    QWidget *m_sourceToggleBar;     // Local/Server/AWS toggle bar
     QTreeWidget *m_treeWidget;
     QLineEdit *m_treeSearchEdit;    // search input
     QPushButton *m_treeSearchButton; // search/next button
@@ -140,6 +144,7 @@ private:
     QLabel *m_brandLabel { nullptr };        // Brand logo label
     QPushButton *m_btnLocal;        // Local button
     QPushButton *m_btnServer;       // Server button
+    QPushButton *m_btnAws;          // AWS button
     QButtonGroup *m_sourceGroup;    // Exclusive selection
     DualTabWidget *m_tabWidget;  // Changed from QTabWidget to DualTabWidget
     QStatusBar *m_statusBar;
@@ -177,6 +182,9 @@ private:
     QString currentRootPath() const;
     void loadLocalFiles();  // Changed from loadFileList
     void loadServerFiles(); // Mirror of local loader using m_serverRootPath
+    void loadAwsFiles();    // Mirror of local loader using m_awsRootPath
+    void setAwsRootPath(const QString &path);
+    void autoLoadAwsCredentials(); // Auto-load saved AWS credentials if remember is enabled
     void loadLocalFileContent(const QString &filePath);  // Changed from loadFileContent
     void populateTreeFromDirectory(const QString &dirPath, QTreeWidgetItem *parentItem = nullptr);
     void openFileInTab(const QString &filePath);
