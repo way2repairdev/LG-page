@@ -22,6 +22,8 @@
 #include <QThread>
 #include <QToolTip>
 #include <QCursor>
+#include <QMutex>
+#include <QMutexLocker>
 #include "toastnotifier.h"
 #include <QPainter>
 #include <QEasingCurve>
@@ -1576,33 +1578,70 @@ void MainApplication::onTreeSearchTriggered()
         return;
     }
 
+    // Show searching status immediately
+    statusBar()->showMessage("Searching...");
+    
+    // Disable search controls to prevent multiple concurrent searches
+    if (m_treeSearchEdit) m_treeSearchEdit->setEnabled(false);
+    if (m_treeSearchButton) m_treeSearchButton->setEnabled(false);
+    
     // Recompute full result list when term changes
     if (term.compare(m_lastSearchTerm, Qt::CaseInsensitive) != 0) {
-        m_searchResultPaths = findMatchingFiles(term, -1);
-        m_lastSearchTerm = term;
-        m_searchResultIndex = -1; // kept for potential future use, not used to navigate anymore
+        
+        // Use QTimer to perform search asynchronously and prevent UI blocking
+        QTimer::singleShot(10, this, [this, term]() {
+            try {
+                // Perform search with progress updates for large operations
+                m_searchResultPaths = findMatchingFilesAsync(term, -1);
+                m_lastSearchTerm = term;
+                m_searchResultIndex = -1;
 
-        if (m_searchResultPaths.isEmpty()) {
-            // If we were in a search-only view, restore the tree
-            if (m_isSearchView) {
-                m_isSearchView = false;
-                loadLocalFiles();
-            }
-            // Hide Search Results section if present
-            if (m_searchResultsRoot) {
-                m_searchResultsRoot->takeChildren();
-                m_searchResultsRoot->setHidden(true);
-                m_searchResultsRoot->setExpanded(false);
-            }
-            statusBar()->showMessage("No files found");
-            return;
-        }
+                // Re-enable search controls
+                if (m_treeSearchEdit) m_treeSearchEdit->setEnabled(true);
+                if (m_treeSearchButton) m_treeSearchButton->setEnabled(true);
 
-        // Show a flat list view with only the matching files
-        renderSearchResultsFlat(m_searchResultPaths, term);
-        statusBar()->showMessage(QString("%1 match(es)").arg(m_searchResultPaths.size()));
-        return; // do not auto-select or navigate on first Find
+                if (m_searchResultPaths.isEmpty()) {
+                    // If we were in a search-only view, restore the tree
+                    if (m_isSearchView) {
+                        m_isSearchView = false;
+                        QTimer::singleShot(5, this, [this]() { loadLocalFiles(); });
+                    }
+                    // Hide Search Results section if present
+                    if (m_searchResultsRoot) {
+                        m_searchResultsRoot->takeChildren();
+                        m_searchResultsRoot->setHidden(true);
+                        m_searchResultsRoot->setExpanded(false);
+                    }
+                    statusBar()->showMessage("No files found");
+                    return;
+                }
+
+                // Show results asynchronously to prevent UI freezing
+                QTimer::singleShot(5, this, [this, term]() {
+                    renderSearchResultsFlat(m_searchResultPaths, term);
+                    statusBar()->showMessage(QString("%1 match(es)").arg(m_searchResultPaths.size()));
+                });
+                
+            } catch (const std::exception &e) {
+                // Re-enable controls on error
+                if (m_treeSearchEdit) m_treeSearchEdit->setEnabled(true);
+                if (m_treeSearchButton) m_treeSearchButton->setEnabled(true);
+                statusBar()->showMessage(QString("Search error: %1").arg(e.what()));
+                qDebug() << "Search error:" << e.what();
+            } catch (...) {
+                // Re-enable controls on error
+                if (m_treeSearchEdit) m_treeSearchEdit->setEnabled(true);
+                if (m_treeSearchButton) m_treeSearchButton->setEnabled(true);
+                statusBar()->showMessage("Unknown search error occurred");
+                qDebug() << "Unknown search error occurred";
+            }
+        });
+        return;
     }
+
+    // Re-enable controls immediately for unchanged search term
+    if (m_treeSearchEdit) m_treeSearchEdit->setEnabled(true);
+    if (m_treeSearchButton) m_treeSearchButton->setEnabled(true);
 
     // Term unchanged -> do not navigate; just reaffirm results count
     if (m_searchResultPaths.isEmpty()) {
@@ -1687,6 +1726,56 @@ QVector<QString> MainApplication::findMatchingFiles(const QString &term, int max
             }
         }
     }
+    return results;
+}
+
+QVector<QString> MainApplication::findMatchingFilesAsync(const QString &term, int maxResults) const
+{
+    QVector<QString> results;
+    QString rootPath = currentRootPath();
+    if (rootPath.isEmpty()) return results;
+    QDir root(rootPath);
+    if (!root.exists()) return results;
+
+    // Enhanced async search with progress updates and UI responsiveness
+    QList<QString> dirs; dirs << root.absolutePath();
+    const Qt::CaseSensitivity cs = Qt::CaseInsensitive;
+    const bool noCap = (maxResults < 0);
+    int processedCount = 0;
+    const int progressInterval = 100; // Process events every 100 files
+    
+    while (!dirs.isEmpty() && (noCap || results.size() < maxResults)) {
+        const QString d = dirs.takeFirst();
+        QDir dir(d);
+        
+        QFileInfoList entries = dir.entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot | QDir::NoSymLinks,
+                              QDir::DirsFirst | QDir::Name);
+        
+        for (const QFileInfo &fi : entries) {
+            ++processedCount;
+            
+            // Process events periodically to keep UI responsive
+            if (processedCount % progressInterval == 0) {
+                QApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 5);
+            }
+            
+            if (fi.isDir()) {
+                dirs << fi.absoluteFilePath();
+            } else {
+                if (fi.fileName().contains(term, cs)) {
+                    results.push_back(fi.absoluteFilePath());
+                    if (!noCap && results.size() >= maxResults) break;
+                }
+            }
+            
+            // Safety limit to prevent extremely long searches
+            if (processedCount > 50000) {
+                qDebug() << "Search stopped at 50000 files for performance";
+                break;
+            }
+        }
+    }
+    
     return results;
 }
 
@@ -2496,100 +2585,107 @@ void MainApplication::onTabChangedByType(int index, DualTabWidget::TabType type)
 {
     qDebug() << "=== Tab Changed to Index:" << index << "Type:" << (type == DualTabWidget::PDF_TAB ? "PDF" : "PCB") << "===";
     
-    // Light isolation: just ensure other toolbars hidden (avoid hiding GL widgets to prevent context glitches)
-    // Additionally, throttle PDF viewers in inactive tabs to cut GPU usage.
-    for (int t = 0; t < m_tabWidget->count(DualTabWidget::PDF_TAB); ++t) {
-        if (QWidget *w = m_tabWidget->widget(t, DualTabWidget::PDF_TAB)) {
-            if (auto pdf = qobject_cast<PDFViewerWidget*>(w)) {
-                // If not the newly selected tab, hide (stops its timer in hideEvent)
-                if (!(type == DualTabWidget::PDF_TAB && t == index)) {
-                    pdf->hide();
-                } else {
-                    pdf->show();
-                }
-            }
-        }
-    }
-    hideAllViewerToolbars();
-    
-    // If no valid tab is selected, return
+    // Early validation to prevent invalid operations
     if (index < 0 || index >= m_tabWidget->count(type)) {
         statusBar()->showMessage("No active tab");
-        qDebug() << "Invalid tab index, returning";
+        qDebug() << "Invalid tab index, returning early";
         return;
     }
     
-    // Get the current widget
     QWidget *currentWidget = m_tabWidget->widget(index, type);
     if (!currentWidget) {
         statusBar()->showMessage("Invalid tab selected");
-        qDebug() << "Current widget is null, returning";
+        qDebug() << "Current widget is null, returning early";
         return;
     }
     
     QString tabName = m_tabWidget->tabText(index, type);
     qDebug() << "Switching to tab:" << tabName;
     
-    // Force focus and bring current widget to front
-    currentWidget->setFocus();
-    currentWidget->raise();
-    currentWidget->activateWindow();
-    
-    // Removed sleep; unnecessary and could stall UI
-    
-    // Split view removed: no cross-embedded viewers to restore
-
-    // Show appropriate toolbar based on widget type
-    if (type == DualTabWidget::PDF_TAB) {
-        if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(currentWidget)) {
-            qDebug() << "Activating PDF viewer for tab:" << tabName;
-            
-            // Ensure PDF viewer is properly initialized and visible
-            pdfViewer->setVisible(true);
-            pdfViewer->raise();
-            
-            // No toolbar to show - PDF viewer is now toolbar-free
-            
-            // Force layout updates
-            pdfViewer->updateGeometry();
-            pdfViewer->update();
-
-            // Ensure viewport/camera sync after activation (fixes horizontal gap)
-            QTimer::singleShot(0, this, [pdfViewer]() { pdfViewer->ensureViewportSync(); });
-            
-            statusBar()->showMessage("PDF viewer active - Use keyboard shortcuts for navigation");
-        }
-    } else if (type == DualTabWidget::PCB_TAB) {
-        if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(currentWidget)) {
-            qDebug() << "Activating PCB viewer for tab:" << tabName;
-            
-            // Ensure PCB viewer is properly initialized and visible
-            pcbViewer->setVisible(true);
-            pcbViewer->raise();
-            
-            // Enable PCB toolbar
-            pcbViewer->setToolbarVisible(true);
-            
-            // Force layout updates
-            pcbViewer->updateGeometry();
-            pcbViewer->update();
-
-            // Ensure viewport/camera sync after activation
-            QTimer::singleShot(0, this, [pcbViewer]() { pcbViewer->ensureViewportSync(); });
-            
-            statusBar()->showMessage("PCB viewer active - Qt toolbar controls available");
-        }
-    }
-    
-    // Force multiple event processing cycles to ensure complete showing
-    QApplication::processEvents();
-    QApplication::processEvents();
-    
-    qDebug() << "=== Tab Change Complete ===";
-    refreshViewerLinkNames();
+    // Use deferred processing to prevent UI blocking
+    QTimer::singleShot(0, this, [this, index, type, currentWidget, tabName]() {
+        performTabSwitch(index, type, currentWidget, tabName);
+    });
 }
 
-    int MainApplication::linkedPcbForPdf(int pdfIndex) const {
+void MainApplication::performTabSwitch(int index, DualTabWidget::TabType type, QWidget *currentWidget, const QString &tabName)
+{
+    // Disable UI during switch to prevent user interactions that could cause issues
+    setEnabled(false);
+    
+    try {
+        // Light isolation: manage PDF viewers without blocking
+        for (int t = 0; t < m_tabWidget->count(DualTabWidget::PDF_TAB); ++t) {
+            if (QWidget *w = m_tabWidget->widget(t, DualTabWidget::PDF_TAB)) {
+                if (auto pdf = qobject_cast<PDFViewerWidget*>(w)) {
+                    // Defer hide/show operations to prevent OpenGL context issues
+                    if (!(type == DualTabWidget::PDF_TAB && t == index)) {
+                        QTimer::singleShot(10, pdf, [pdf]() { pdf->hide(); });
+                    } else {
+                        pdf->show();
+                    }
+                }
+            }
+        }
+        
+        // Hide toolbars asynchronously to prevent blocking
+        QTimer::singleShot(5, this, [this]() { hideAllViewerToolbars(); });
+        
+        // Activate the current widget with proper focus management
+        currentWidget->setVisible(true);
+        currentWidget->raise();
+        
+        // Handle widget-specific activation
+        if (type == DualTabWidget::PDF_TAB) {
+            if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(currentWidget)) {
+                qDebug() << "Activating PDF viewer for tab:" << tabName;
+                
+                // Deferred geometry updates to prevent UI freezing
+                QTimer::singleShot(20, this, [pdfViewer]() {
+                    pdfViewer->updateGeometry();
+                    pdfViewer->update();
+                    pdfViewer->ensureViewportSync();
+                });
+                
+                statusBar()->showMessage("PDF viewer active - Use keyboard shortcuts for navigation");
+            }
+        } else if (type == DualTabWidget::PCB_TAB) {
+            if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(currentWidget)) {
+                qDebug() << "Activating PCB viewer for tab:" << tabName;
+                
+                // Enable toolbar with delay to prevent freezing
+                QTimer::singleShot(10, this, [pcbViewer]() {
+                    pcbViewer->setToolbarVisible(true);
+                });
+                
+                // Deferred geometry and viewport sync
+                QTimer::singleShot(20, this, [pcbViewer]() {
+                    pcbViewer->updateGeometry();
+                    pcbViewer->update();
+                    pcbViewer->ensureViewportSync();
+                });
+                
+                statusBar()->showMessage("PCB viewer active - Qt toolbar controls available");
+            }
+        }
+        
+        // Final setup with delay to ensure all operations complete
+        QTimer::singleShot(50, this, [this, currentWidget]() {
+            currentWidget->setFocus();
+            currentWidget->activateWindow();
+            refreshViewerLinkNames();
+            setEnabled(true);  // Re-enable UI
+            qDebug() << "=== Tab Change Complete ===";
+        });
+        
+    } catch (const std::exception &e) {
+        qDebug() << "Exception during tab switch:" << e.what();
+        setEnabled(true);  // Ensure UI is re-enabled even on error
+    } catch (...) {
+        qDebug() << "Unknown exception during tab switch";
+        setEnabled(true);  // Ensure UI is re-enabled even on error
+    }
+}    int MainApplication::linkedPcbForPdf(int pdfIndex) const {
             for (const auto &l : m_tabLinks) {
                 if (l.pdfIndex == pdfIndex)
                     return l.pcbIndex;
@@ -2674,48 +2770,69 @@ void MainApplication::onTabChanged(int index)
 
 void MainApplication::hideAllViewerToolbars()
 {
+    // Use thread-safe toolbar management to prevent freezing
+    static QMutex toolbarMutex;
+    QMutexLocker locker(&toolbarMutex);
+    
     qDebug() << "=== Hiding All Viewer Toolbars ===";
     
-    // Iterate through all PDF tabs and hide their toolbars
-    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
-        QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PDF_TAB);
-        if (!widget) continue;
-        
-        QString tabName = m_tabWidget->tabText(i, DualTabWidget::PDF_TAB);
-        
-        if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(widget)) {
-            qDebug() << "Hiding PDF viewer for tab:" << tabName;
-            // No toolbar currently; do NOT hide the OpenGL child window to avoid corrupted buffer on restore
-            // Just ensure geometry up to date
-            pdfViewer->updateGeometry();
-            pdfViewer->update();
+    // Process PDF tabs with error handling
+    try {
+        for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
+            QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PDF_TAB);
+            if (!widget) continue;
             
-            qDebug() << "PDF toolbar hidden for tab:" << i;
+            QString tabName = m_tabWidget->tabText(i, DualTabWidget::PDF_TAB);
+            
+            if (auto pdfViewer = qobject_cast<PDFViewerWidget*>(widget)) {
+                qDebug() << "Processing PDF viewer for tab:" << tabName;
+                // PDF viewer has no toolbar currently - just ensure geometry is up to date
+                pdfViewer->updateGeometry();
+                pdfViewer->update();
+                qDebug() << "PDF viewer processed for tab:" << i;
+            }
         }
+    } catch (const std::exception &e) {
+        qDebug() << "Exception in PDF toolbar hiding:" << e.what();
     }
     
-    // Iterate through all PCB tabs and hide their toolbars  
-    for (int i = 0; i < m_tabWidget->count(DualTabWidget::PCB_TAB); ++i) {
-        QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PCB_TAB);
-        if (!widget) continue;
-        
-        QString tabName = m_tabWidget->tabText(i, DualTabWidget::PCB_TAB);
-        
-        if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(widget)) {
-            qDebug() << "Hiding PCB viewer toolbar for tab:" << tabName;
+    // Process PCB tabs with error handling and async operations
+    try {
+        QList<PCBViewerWidget*> pcbViewers;
+        for (int i = 0; i < m_tabWidget->count(DualTabWidget::PCB_TAB); ++i) {
+            QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PCB_TAB);
+            if (!widget) continue;
             
-            // Hide only the toolbar; keep GL widget visible to preserve context
-            pcbViewer->setToolbarVisible(false);
-            pcbViewer->updateGeometry();
-            pcbViewer->update();
-            
-            qDebug() << "PCB toolbar hidden for tab:" << i;
+            if (auto pcbViewer = qobject_cast<PCBViewerWidget*>(widget)) {
+                pcbViewers.append(pcbViewer);
+            }
         }
+        
+        // Hide PCB toolbars asynchronously to prevent blocking
+        for (int i = 0; i < pcbViewers.size(); ++i) {
+            PCBViewerWidget* pcbViewer = pcbViewers[i];
+            QString tabName = m_tabWidget->tabText(i, DualTabWidget::PCB_TAB);
+            
+            // Use timer to defer the hide operation and prevent UI freezing
+            QTimer::singleShot(i * 5, this, [pcbViewer, tabName]() {
+                if (pcbViewer) {  // Safety check in case widget was deleted
+                    qDebug() << "Hiding PCB viewer toolbar for tab:" << tabName;
+                    pcbViewer->setToolbarVisible(false);
+                    pcbViewer->updateGeometry();
+                    pcbViewer->update();
+                    qDebug() << "PCB toolbar hidden for tab:" << tabName;
+                }
+            });
+        }
+        
+    } catch (const std::exception &e) {
+        qDebug() << "Exception in PCB toolbar hiding:" << e.what();
     }
     
-    // Force immediate processing of hide events multiple times
-    QApplication::processEvents();
-    QApplication::processEvents(); // Extra processing for complex layouts
+    // Single event processing to ensure operations are queued properly
+    QTimer::singleShot(50, this, []() {
+        QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    });
     
     qDebug() << "=== All Viewer Toolbars Hidden ===";
 }

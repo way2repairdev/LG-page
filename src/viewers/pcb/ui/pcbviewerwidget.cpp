@@ -4,6 +4,8 @@
 #include "ui/LoadingOverlay.h"
 #include <QtConcurrent/QtConcurrent>
 #include <QFutureWatcher>
+#include <QMutex>
+#include <QMutexLocker>
 
 #include <QResizeEvent>
 #include <QPaintEvent>
@@ -325,13 +327,43 @@ void PCBViewerWidget::setToolbarVisible(bool visible)
 {
     WritePCBDebugToFile("Setting PCB toolbar visible: " + QString(visible ? "true" : "false"));
     
+    // Use thread-safe approach to prevent race conditions
+    static QMutex toolbarMutex;
+    QMutexLocker locker(&toolbarMutex);
+    
     m_toolbarVisible = visible;
     if (m_toolbar) {
-        m_toolbar->setVisible(visible);
-        m_toolbar->setEnabled(visible);
-        
-        updateGeometry();
-        update();
+        // Use deferred operations to prevent UI freezing
+        QTimer::singleShot(0, this, [this, visible]() {
+            if (m_toolbar) {  // Double-check toolbar still exists
+                m_toolbar->setVisible(visible);
+                m_toolbar->setEnabled(visible);
+                
+                // Update child widgets asynchronously
+                if (visible && m_netCombo) {
+                    QTimer::singleShot(5, this, [this]() {
+                        if (m_netCombo) {
+                            m_netCombo->setEnabled(true);
+                            
+                            // If we have a pending selection, populate the list to ensure it's available
+                            if (!m_pendingSelection.isEmpty()) {
+                                qDebug() << "Toolbar became visible with pending selection:" << m_pendingSelection;
+                                populateNetAndComponentList();
+                            } else if (m_netCombo->count() == 0) {
+                                // Only populate if empty to avoid unnecessary refreshes
+                                populateNetAndComponentList();
+                            }
+                        }
+                    });
+                }
+                
+                // Deferred geometry updates
+                QTimer::singleShot(10, this, [this]() {
+                    updateGeometry();
+                    update();
+                });
+            }
+        });
     }
 }
 
@@ -1184,22 +1216,135 @@ void PCBViewerWidget::populateNetList() {
 
 void PCBViewerWidget::populateNetAndComponentList() {
     if (!m_pcbEmbedder || !m_pcbLoaded || !m_netCombo) return;
-    auto nets = m_pcbEmbedder->getNetNames(); // nets first
-    auto comps = m_pcbEmbedder->getComponentNames();
+    
+    // Disable combo during population to prevent user interaction
+    m_netCombo->setEnabled(false);
     QString current = m_netCombo->currentText();
-    m_netCombo->blockSignals(true);
-    m_netCombo->clear();
-    m_netCombo->addItem("");
-    // Add nets first
-    for (const auto &n : nets) m_netCombo->addItem(QString::fromStdString(n));
-    // Then add components (skip duplicates if same string)
-    for (const auto &c : comps) {
-        if (m_netCombo->findText(QString::fromStdString(c)) < 0)
-            m_netCombo->addItem(QString::fromStdString(c));
+    
+    // Use async processing to prevent UI freezing with large component/net lists
+    QTimer::singleShot(0, this, [this, current]() {
+        if (!m_pcbEmbedder || !m_netCombo) {
+            if (m_netCombo) m_netCombo->setEnabled(true);
+            return;
+        }
+        
+        try {
+            // Get data from embedder
+            auto nets = m_pcbEmbedder->getNetNames();
+            auto comps = m_pcbEmbedder->getComponentNames();
+            
+            m_netCombo->blockSignals(true);
+            m_netCombo->clear();
+            m_netCombo->addItem("");  // Empty option to clear highlights
+            
+            // Add nets first with progress updates for large lists
+            int count = 0;
+            for (const auto &n : nets) {
+                m_netCombo->addItem(QString::fromStdString(n));
+                
+                // Process events periodically to keep UI responsive
+                if (++count % 50 == 0) {
+                    QApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 5);
+                }
+                
+                // Safety limit for extremely large nets list
+                if (count > 5000) {
+                    qDebug() << "Net list truncated at 5000 items for performance";
+                    break;
+                }
+            }
+            
+            // Then add components (skip duplicates if same string)
+            count = 0;
+            for (const auto &c : comps) {
+                QString compName = QString::fromStdString(c);
+                if (m_netCombo->findText(compName) < 0) {
+                    m_netCombo->addItem(compName);
+                }
+                
+                // Process events periodically to keep UI responsive
+                if (++count % 50 == 0) {
+                    QApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 5);
+                }
+                
+                // Safety limit for extremely large component list
+                if (count > 5000) {
+                    qDebug() << "Component list truncated at 5000 items for performance";
+                    break;
+                }
+            }
+            
+            // Restore previous selection or handle pending selection
+            if (!m_pendingSelection.isEmpty() && m_selectionType != SelectionType::None) {
+                // Handle pending selection from viewer
+                int idx = m_netCombo->findText(m_pendingSelection);
+                if (idx >= 0) {
+                    m_netCombo->setCurrentIndex(idx);
+                    qDebug() << "Set pending selection:" << m_pendingSelection;
+                } else {
+                    qDebug() << "Pending selection not found in list:" << m_pendingSelection;
+                }
+                // Clear pending selection
+                m_pendingSelection.clear();
+                m_selectionType = SelectionType::None;
+            } else {
+                // Restore previous selection
+                int idx = m_netCombo->findText(current);
+                if (idx >= 0) m_netCombo->setCurrentIndex(idx);
+            }
+            
+            m_netCombo->blockSignals(false);
+            
+        } catch (const std::exception &e) {
+            qDebug() << "Exception during component list population:" << e.what();
+            m_netCombo->blockSignals(false);
+        } catch (...) {
+            qDebug() << "Unknown exception during component list population";
+            m_netCombo->blockSignals(false);
+        }
+        
+        // Re-enable combo after population
+        m_netCombo->setEnabled(true);
+    });
+}
+
+void PCBViewerWidget::setComboBoxSelection(const QString &text) {
+    if (!m_netCombo || text.isEmpty()) {
+        qDebug() << "setComboBoxSelection: Invalid combo or empty text";
+        return;
     }
-    int idx = m_netCombo->findText(current);
-    if (idx >= 0) m_netCombo->setCurrentIndex(idx);
-    m_netCombo->blockSignals(false);
+    
+    // Ensure combo is ready and enabled
+    if (!m_netCombo->isEnabled()) {
+        qDebug() << "setComboBoxSelection: Combo not enabled, deferring selection";
+        // Store as pending selection and try again later
+        m_pendingSelection = text;
+        QTimer::singleShot(50, this, [this, text]() {
+            setComboBoxSelection(text);
+        });
+        return;
+    }
+    
+    // Block signals during selection to prevent recursive calls
+    bool oldState = m_netCombo->blockSignals(true);
+    
+    int idx = m_netCombo->findText(text);
+    if (idx >= 0) {
+        m_netCombo->setCurrentIndex(idx);
+        qDebug() << "Successfully set combo selection to:" << text << "at index:" << idx;
+    } else {
+        qDebug() << "Text not found in combo:" << text;
+        // If not found, try partial match (useful for component names)
+        for (int i = 0; i < m_netCombo->count(); ++i) {
+            if (m_netCombo->itemText(i).contains(text, Qt::CaseInsensitive)) {
+                m_netCombo->setCurrentIndex(i);
+                qDebug() << "Set combo to partial match:" << m_netCombo->itemText(i);
+                break;
+            }
+        }
+    }
+    
+    m_netCombo->blockSignals(oldState);
 }
 
 void PCBViewerWidget::highlightCurrentNet() {
@@ -1215,42 +1360,139 @@ void PCBViewerWidget::highlightCurrentNet() {
 void PCBViewerWidget::onPinSelectedFromViewer(const std::string &pinName, const std::string &netName) {
     Q_UNUSED(pinName);
     if (!m_netCombo) return;
-    if (m_netCombo->count() == 0) populateNetAndComponentList();
+    
     QString qnet = QString::fromStdString(netName);
-    int idx = m_netCombo->findText(qnet);
-    if (idx >= 0) m_netCombo->setCurrentIndex(idx);
+    qDebug() << "Pin selected from viewer - Net:" << qnet;
+    
+    // If combo box is empty or being populated, ensure it's populated first
+    if (m_netCombo->count() == 0 || !m_netCombo->isEnabled()) {
+        // Store the target selection and populate async
+        m_pendingSelection = qnet;
+        m_selectionType = SelectionType::Net;
+        
+        // Ensure list is populated, then set selection
+        if (m_netCombo->count() == 0) {
+            populateNetAndComponentList();
+        }
+        
+        // Use a timer to wait for population and then set selection
+        QTimer::singleShot(100, this, [this, qnet]() {
+            setComboBoxSelection(qnet);
+        });
+        
+        // Backup timeout in case population takes too long
+        QTimer::singleShot(500, this, [this, qnet]() {
+            if (!m_pendingSelection.isEmpty() && m_pendingSelection == qnet) {
+                qDebug() << "Selection timeout, forcing combo refresh for:" << qnet;
+                if (m_netCombo && m_netCombo->isEnabled()) {
+                    setComboBoxSelection(qnet);
+                }
+            }
+        });
+    } else {
+        // Direct selection if combo is ready
+        setComboBoxSelection(qnet);
+    }
 }
 
 void PCBViewerWidget::onPartSelectedFromViewer(const std::string &partName) {
     if (!m_netCombo) return;
-    if (m_netCombo->count() == 0) populateNetAndComponentList();
+    
     QString qpart = QString::fromStdString(partName);
-    int idx = m_netCombo->findText(qpart);
-    if (idx >= 0) m_netCombo->setCurrentIndex(idx);
+    qDebug() << "Part selected from viewer - Component:" << qpart;
+    
+    // If combo box is empty or being populated, ensure it's populated first
+    if (m_netCombo->count() == 0 || !m_netCombo->isEnabled()) {
+        // Store the target selection and populate async
+        m_pendingSelection = qpart;
+        m_selectionType = SelectionType::Component;
+        
+        // Ensure list is populated, then set selection
+        if (m_netCombo->count() == 0) {
+            populateNetAndComponentList();
+        }
+        
+        // Use a timer to wait for population and then set selection
+        QTimer::singleShot(100, this, [this, qpart]() {
+            setComboBoxSelection(qpart);
+        });
+        
+        // Backup timeout in case population takes too long
+        QTimer::singleShot(500, this, [this, qpart]() {
+            if (!m_pendingSelection.isEmpty() && m_pendingSelection == qpart) {
+                qDebug() << "Selection timeout, forcing combo refresh for:" << qpart;
+                if (m_netCombo && m_netCombo->isEnabled()) {
+                    setComboBoxSelection(qpart);
+                }
+            }
+        });
+    } else {
+        // Direct selection if combo is ready
+        setComboBoxSelection(qpart);
+    }
 }
 
 void PCBViewerWidget::onNetSearchClicked() {
     if (!m_pcbEmbedder || !m_netCombo) return;
+    
     QString text = m_netCombo->currentText().trimmed();
-    if (text.isEmpty()) { m_pcbEmbedder->clearHighlights(); m_pcbEmbedder->clearSelection(); return; }
-    // Determine if matches component
-    auto comps = m_pcbEmbedder->getComponentNames();
-    bool isComp = std::find(comps.begin(), comps.end(), text.toStdString()) != comps.end();
-    if (isComp) {
-        // Clear any existing net/pin highlights, then highlight & zoom to component
-        m_pcbEmbedder->clearHighlights();
-        m_pcbEmbedder->clearSelection();
-        m_pcbEmbedder->highlightComponent(text.toStdString());
-        m_pcbEmbedder->zoomToComponent(text.toStdString());
-    } else {
-    // Clear any existing component/pin highlight, then highlight & zoom to net
-    // Important: clearHighlights() clears both component and net highlights to avoid stale component glow
-    m_pcbEmbedder->clearHighlights();
-        m_pcbEmbedder->clearSelection();
-        // Note: highlightNet replaces any prior net highlight state internally
-        m_pcbEmbedder->highlightNet(text.toStdString());
-        m_pcbEmbedder->zoomToNet(text.toStdString());
+    if (text.isEmpty()) { 
+        m_pcbEmbedder->clearHighlights(); 
+        m_pcbEmbedder->clearSelection(); 
+        return; 
     }
+    
+    // Disable the search controls temporarily to prevent concurrent operations
+    m_netCombo->setEnabled(false);
+    if (m_netSearchButton) m_netSearchButton->setEnabled(false);
+    
+    // Use async processing to prevent UI freezing during search
+    QTimer::singleShot(0, this, [this, text]() {
+        try {
+            // Check if the text matches a component
+            auto comps = m_pcbEmbedder->getComponentNames();
+            bool isComp = std::find(comps.begin(), comps.end(), text.toStdString()) != comps.end();
+            
+            if (isComp) {
+                // Clear any existing net/pin highlights, then highlight & zoom to component
+                m_pcbEmbedder->clearHighlights();
+                m_pcbEmbedder->clearSelection();
+                m_pcbEmbedder->highlightComponent(text.toStdString());
+                
+                // Deferred zoom to prevent UI blocking
+                QTimer::singleShot(10, this, [this, text]() {
+                    if (m_pcbEmbedder) {
+                        m_pcbEmbedder->zoomToComponent(text.toStdString());
+                    }
+                });
+            } else {
+                // Clear any existing component/pin highlight, then highlight & zoom to net
+                // Important: clearHighlights() clears both component and net highlights to avoid stale component glow
+                m_pcbEmbedder->clearHighlights();
+                m_pcbEmbedder->clearSelection();
+                // Note: highlightNet replaces any prior net highlight state internally
+                m_pcbEmbedder->highlightNet(text.toStdString());
+                
+                // Deferred zoom to prevent UI blocking
+                QTimer::singleShot(10, this, [this, text]() {
+                    if (m_pcbEmbedder) {
+                        m_pcbEmbedder->zoomToNet(text.toStdString());
+                    }
+                });
+            }
+            
+        } catch (const std::exception &e) {
+            qDebug() << "Exception during PCB search:" << e.what();
+        } catch (...) {
+            qDebug() << "Unknown exception during PCB search";
+        }
+        
+        // Re-enable controls after processing
+        QTimer::singleShot(50, this, [this]() {
+            if (m_netCombo) m_netCombo->setEnabled(true);
+            if (m_netSearchButton) m_netSearchButton->setEnabled(true);
+        });
+    });
 }
 
 void PCBViewerWidget::onNetComboActivated(int index) {

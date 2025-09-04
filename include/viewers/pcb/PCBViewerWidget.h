@@ -145,6 +145,12 @@ private:
     // Update management
     bool m_needsUpdate;
     bool m_isUpdating;
+    
+    // Selection management for async combo box population
+    enum class SelectionType { None, Net, Component };
+    QString m_pendingSelection;
+    SelectionType m_selectionType = SelectionType::None;
+    
     // Cross-viewer context menu state
     QString m_linkedPdfFileName; // for menu label
     bool m_crossSearchEnabled { true };
@@ -168,6 +174,7 @@ public:
     void populateNetList();
     void highlightCurrentNet();
     void populateNetAndComponentList();
+    void setComboBoxSelection(const QString &text);  // Helper for reliable combo box selection
 
 private slots:
     void onPinSelectedFromViewer(const std::string &pinName, const std::string &netName);

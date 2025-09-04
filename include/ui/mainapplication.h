@@ -93,6 +93,7 @@ private slots:
     // Dual tab widget slots
     void onTabCloseRequestedByType(int index, DualTabWidget::TabType type);
     void onTabChangedByType(int index, DualTabWidget::TabType type);
+    void performTabSwitch(int index, DualTabWidget::TabType type, QWidget *currentWidget, const QString &tabName);
     void onCrossSearchRequest(const QString &term, bool isNet, bool targetIsOther);
     void onFullUpdateUI();
     // Server-side slots (commented out for local file loading)
@@ -223,6 +224,7 @@ private:
     void setupTreeSearchBar();
     void onTreeSearchTriggered();
     QVector<QString> findMatchingFiles(const QString &term, int maxResults = -1) const;
+    QVector<QString> findMatchingFilesAsync(const QString &term, int maxResults = -1) const;
     bool revealPathInTree(const QString &absPath);
     static void expandToItem(QTreeWidgetItem *item);
     void renderSearchResultsFlat(const QVector<QString> &results, const QString &term);
