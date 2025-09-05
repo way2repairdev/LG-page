@@ -217,8 +217,8 @@ void PDFViewerWidget::setupToolbar()
     m_toolbar = new QToolBar(this);
     m_toolbar->setIconSize(QSize(16, 16));
     m_toolbar->setMovable(false);
-    // Theme-aware blue accent (match tab styling: #1976d2/#4A90E2 family)
-    const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+    // Force light theme - ignore palette darkness detection
+    const bool dark = false;
     const QString tbStyleLight =
     "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:30px;}"
     "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
@@ -353,7 +353,7 @@ void PDFViewerWidget::setupToolbar()
 void PDFViewerWidget::applyToolbarTheme()
 {
     if (!m_toolbar) return;
-    const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+    const bool dark = false; // Force light theme
     const QString tbStyleLight =
     "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:30px;}"
     "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
@@ -1066,7 +1066,7 @@ void PDFViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QStrin
                 "QMenu::item:selected { background: #1a73e8; color:white; }"
                 "QMenu::separator { height:1px; background:#e1e6ed; margin:6px 4px; }" ); } } };
     ThemedMenu menu;
-    bool dark = qApp->palette().color(QPalette::Window).lightness() < 128;
+    bool dark = false; // Force light theme
     menu.apply(dark);
     QAction *actCopy = menu.addAction(QIcon(":/icons/images/icons/copy.svg"), "Copy");
     QAction *actPaste = menu.addAction(QIcon(":/icons/images/icons/paste.svg"), "Paste");

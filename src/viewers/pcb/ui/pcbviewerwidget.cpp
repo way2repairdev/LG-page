@@ -635,8 +635,8 @@ void PCBViewerWidget::setupToolbar()
     m_toolbar = new QToolBar(this);
     m_toolbar->setIconSize(QSize(16, 16));
     m_toolbar->setMovable(false);
-    // Theme-aware red accent (match tab styling: #E53935/#b71c1c family)
-    const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+    // Force light theme - ignore palette darkness detection
+    const bool dark = false;
     // Use opaque backgrounds like PDF so theme switching is obvious visually
     const QString tbStyleLight =
         "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:30px;}"
@@ -777,7 +777,7 @@ void PCBViewerWidget::setupToolbar()
         themeBox->setFixedHeight(26);
         themeBox->setMinimumWidth(180);
         // Style similar to net combo for consistency
-        const bool dark2 = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+        const bool dark2 = false; // Force light theme
         const QString border2 = dark2 ? "#5f6368" : "#ccc";
         const QString bg2 = dark2 ? "#2a2b2d" : "white";
         const QString fg2 = dark2 ? "#e8eaed" : "#111";
@@ -827,9 +827,9 @@ void PCBViewerWidget::setupToolbar()
                 themeBox->addItem(row.name, row.map);
             }
         } else {
-            themeBox->addItem("Default", 0);
+            // Only light theme options when JSON themes are not available
             themeBox->addItem("Light", 1);
-            themeBox->addItem("High Contrast", 2);
+            themeBox->addItem("Default (Light)", 1);
         }
         m_toolbar->addWidget(themeBox);
 
@@ -844,8 +844,8 @@ void PCBViewerWidget::setupToolbar()
                 }
                 themeBox->setCurrentIndex(found >= 0 ? found : 0);
             } else {
-                int idx = 0; auto ct = m_pcbEmbedder->colorTheme();
-                if (ct == ColorTheme::Default) idx = 0; else if (ct == ColorTheme::Light) idx = 1; else idx = 2;
+                // Force Light theme selection - always use index 0 which should be Light theme
+                int idx = 0; // Always use Light theme (first in our updated JSON)
                 themeBox->setCurrentIndex(idx);
             }
         }
@@ -914,8 +914,8 @@ void PCBViewerWidget::setupToolbar()
                 m_pcbEmbedder->applyTheme(spec);
             } else {
                 int preset = data.toInt();
-                ColorTheme theme = ColorTheme::Default;
-                if (preset == 1) theme = ColorTheme::Light; else if (preset == 2) theme = ColorTheme::HighContrast;
+                // Force Light theme - always use preset 1 (Light)
+                ColorTheme theme = ColorTheme::Light;
                 m_pcbEmbedder->setColorTheme(theme);
             }
             // Force a redraw so change is visible immediately
@@ -949,7 +949,7 @@ void PCBViewerWidget::setupLayerBar()
         WritePCBDebugToFile("setupLayerBar called but m_layerBar already exists");
         return;
     }
-    const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+    const bool dark = false; // Force light theme
     m_layerBar = new QWidget(this);
     // Paint this widget fully (no translucency) so its black background is solid
     m_layerBar->setAttribute(Qt::WA_StyledBackground, true);
@@ -1069,7 +1069,7 @@ void PCBViewerWidget::updateLayerBarVisibility()
 void PCBViewerWidget::applyToolbarTheme()
 {
     if (!m_toolbar) return;
-    const bool dark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
+    const bool dark = false; // Force light theme
     const QString tbStyleLight =
         "QToolBar{background:#fafafa;border-bottom:1px solid #d0d0d0;min-height:30px;}"
         "QToolBar QToolButton{border:1px solid transparent;border-radius:6px;padding:4px;margin:2px;}"
@@ -1583,7 +1583,7 @@ void PCBViewerWidget::showCrossContextMenu(const QPoint &globalPos, const QStrin
                 "QMenu { background:rgba(252,252,253,0.97); border:1px solid #d0d7e2; border-radius:8px; padding:6px; font:13px 'Segoe UI'; color:#2d3744; }"
                 "QMenu::item { background:transparent; padding:6px 14px; border-radius:5px; }"
                 "QMenu::item:selected { background: #1a73e8; color:white; }"
-                "QMenu::separator { height:1px; background:#e1e6ed; margin:6px 4px; }" ); } } }; ThemedMenu menu; bool dark = qApp->palette().color(QPalette::Window).lightness() < 128; menu.apply(dark);
+                "QMenu::separator { height:1px; background:#e1e6ed; margin:6px 4px; }" ); } } }; ThemedMenu menu; bool dark = false; menu.apply(dark); // Force light theme
     
     // Get part and net information from both selected pins and highlighted parts
     std::string selPart = m_pcbEmbedder ? m_pcbEmbedder->getSelectedPinPart() : std::string();

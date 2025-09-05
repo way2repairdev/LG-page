@@ -140,7 +140,7 @@ private:
     QPushButton *m_treeSearchButton; // search/next button
     QToolButton *m_treeSearchClearButton; // clear input
     QToolButton *m_homeButton { nullptr }; // Home button in menu bar (top-right)
-    QToolButton *m_themeToggle { nullptr }; // Dark/Light toggle button in menu bar (top-right)
+    // Theme toggle removed - application now uses static light mode only
     QWidget *m_brandContainer { nullptr };   // Left-side brand container
     QLabel *m_brandLabel { nullptr };        // Brand logo label
     QPushButton *m_btnLocal;        // Local button
@@ -171,9 +171,9 @@ private:
     void setupTreeView();
     void setupSourceToggleBar(); // create Local/Server toggle UI
     void setupTabWidget();  // Changed from setupContentArea
-    void applyTreeViewTheme(); // Apply adaptive dark/light stylesheet to tree view
+    void applyTreeViewTheme(); // Apply light theme stylesheet to tree view (dark mode disabled)
     void applyMenuBarMaterialStyle(); // Apply Material-like style to menu bar and right controls
-    void applyAppPalette(bool dark);  // Switch global palette to dark or light
+    void applyAppPalette(bool dark);  // Force light palette (dark parameter ignored)
     void updateUserInfo();
     void toggleMaximizeRestore();
     void doMaximize();

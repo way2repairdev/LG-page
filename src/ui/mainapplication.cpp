@@ -216,6 +216,11 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
 #endif
     setupUI();
     writeTransitionLog("ctor: after setupUI");
+    
+    // Force light theme application at startup
+    applyAppPalette(false); // Always apply light theme
+    writeTransitionLog("ctor: after forced light theme");
+    
     setupMenuBar();
     setupStatusBar();
     updateUserInfo();
@@ -622,15 +627,14 @@ void MainApplication::applyMenuBarMaterialStyle()
 {
     QMenuBar *menuBar = m_customMenuBar ? m_customMenuBar : QMainWindow::menuBar();
     if (!menuBar) return;
-    // Material-inspired palette
-    QColor base = palette().color(QPalette::Window);
-    const bool dark = base.lightness() < 128;
-    const QString colBar      = dark ? "#20262c" : "#ffffff";   // AppBar surface
-    const QString colText     = dark ? "#e2e8ef" : "#1a1a1a";   // On-surface text
-    const QString colOutline  = dark ? "#2c333a" : "#e6e8ee";   // Divider/border
-    const QString colHover    = dark ? "rgba(255,255,255,28)" : "rgba(30,136,229,28)"; // subtle overlay
-    const QString colPressed  = dark ? "rgba(255,255,255,38)" : "rgba(30,136,229,38)"; // pressed overlay
-    const QString colAccent   = dark ? "#64b5f6" : "#1E88E5";   // Primary
+    
+    // Force light theme - ignore palette darkness detection
+    const QString colBar      = "#ffffff";   // AppBar surface
+    const QString colText     = "#1a1a1a";   // On-surface text
+    const QString colOutline  = "#e6e8ee";   // Divider/border
+    const QString colHover    = "rgba(30,136,229,28)"; // subtle overlay
+    const QString colPressed  = "rgba(30,136,229,38)"; // pressed overlay
+    const QString colAccent   = "#1E88E5";   // Primary
 
     QString mbStyle;
     mbStyle += "QMenuBar {"
@@ -661,7 +665,7 @@ void MainApplication::applyMenuBarMaterialStyle()
                "}";
     // Popup menus (Material-ish)
     mbStyle += "QMenu {"
-               "  background: " + (dark ? QString("#1b2025") : QString("#ffffff")) + ";"
+               "  background: #ffffff;"
                "  color: " + colText + ";"
                "  border: 1px solid " + colOutline + ";"
                "  border-radius: 8px;"
@@ -678,7 +682,7 @@ void MainApplication::applyMenuBarMaterialStyle()
                "  margin: 2px;"
                "}"
                "QMenu::item:selected {"
-               "  background: " + (dark ? QString("rgba(255,255,255,18)") : QString("rgba(30,136,229,14)")) + ";"
+               "  background: rgba(30,136,229,14);"
                "  color: " + colText + ";"
                "}";
     menuBar->setStyleSheet(mbStyle);
@@ -704,7 +708,7 @@ void MainApplication::applyMenuBarMaterialStyle()
         );
     };
     styleTool(m_homeButton);
-    styleTool(m_themeToggle);
+    // m_themeToggle removed - static light mode only
 }
 
 void MainApplication::setupMenuBar()
@@ -774,8 +778,8 @@ void MainApplication::setupMenuBar()
     QMenu *helpMenu = menuBar->addMenu("&Help");
     helpMenu->addAction("&About", this, &MainApplication::onAboutClicked);
 
-    // Add right-side container with Home + Theme Toggle
-    if (!m_homeButton || !m_themeToggle) {
+    // Add right-side container with Home button only (Theme Toggle removed)
+    if (!m_homeButton) {
         QWidget *rightContainer = new QWidget(menuBar);
         auto *rightLayout = new QHBoxLayout(rightContainer);
         rightLayout->setContentsMargins(0, 0, 6, 0);
@@ -801,26 +805,7 @@ void MainApplication::setupMenuBar()
             connect(m_homeButton, &QToolButton::clicked, this, &MainApplication::onHomeClicked);
         }
 
-        // Theme toggle (moon = dark, sun = light)
-        if (!m_themeToggle) {
-            m_themeToggle = new QToolButton(rightContainer);
-            m_themeToggle->setCheckable(true);
-            m_themeToggle->setCursor(Qt::PointingHandCursor);
-            m_themeToggle->setAutoRaise(true);
-            m_themeToggle->setToolTip("Toggle Dark/Light");
-            // Initial state based on current palette heuristic
-            const bool isDark = palette().color(QPalette::Window).lightness() < 128;
-            m_themeToggle->setChecked(isDark);
-            QIcon sunIcon(":/icons/images/icons/sun.svg");
-            QIcon moonIcon(":/icons/images/icons/moon.svg");
-            m_themeToggle->setIcon(isDark ? moonIcon : sunIcon);
-            m_themeToggle->setIconSize(QSize(16, 16));
-            connect(m_themeToggle, &QToolButton::toggled, this, &MainApplication::onThemeToggleChanged);
-        }
-
         rightLayout->addWidget(m_homeButton, 0, Qt::AlignVCenter);
-        rightLayout->addSpacing(2);
-        rightLayout->addWidget(m_themeToggle, 0, Qt::AlignVCenter);
         rightContainer->setLayout(rightLayout);
         menuBar->setCornerWidget(rightContainer, Qt::TopRightCorner);
 
@@ -855,50 +840,24 @@ void MainApplication::onHomeClicked()
 
 void MainApplication::onThemeToggleChanged(bool checked)
 {
-    // checked = dark
-    applyAppPalette(checked);
-    // Update toggle icon
-    if (m_themeToggle) {
-        QIcon sunIcon(":/icons/images/icons/sun.svg");
-        QIcon moonIcon(":/icons/images/icons/moon.svg");
-        m_themeToggle->setIcon(checked ? moonIcon : sunIcon);
-    }
-    // Reapply styles
-    applyMenuBarMaterialStyle();
-    applyTreeViewTheme();
-    if (m_tabWidget) {
-        // Sync dark flag so tab bars adopt the palette immediately
-        m_tabWidget->setDarkTheme(checked);
-        m_tabWidget->forceStyleRefresh();
-    // DualTabWidget will repolish its tab bars on palette change via changeEvent
-    }
+    Q_UNUSED(checked)
+    // Function removed - application now uses static light mode only
+    // This function is kept for compatibility but does nothing
 }
 
 void MainApplication::applyAppPalette(bool dark)
 {
-    QPalette pal;
-    if (dark) {
-        pal.setColor(QPalette::Window, QColor(32, 38, 44));
-        pal.setColor(QPalette::WindowText, QColor(226, 232, 239));
-        pal.setColor(QPalette::Base, QColor(27, 32, 37));
-        pal.setColor(QPalette::AlternateBase, QColor(27, 32, 37));
-        pal.setColor(QPalette::ToolTipBase, QColor(45, 53, 61));
-        pal.setColor(QPalette::ToolTipText, QColor(226, 232, 239));
-        pal.setColor(QPalette::Text, QColor(226, 232, 239));
-        pal.setColor(QPalette::Button, QColor(32, 38, 44));
-        pal.setColor(QPalette::ButtonText, QColor(226, 232, 239));
-        pal.setColor(QPalette::BrightText, QColor(255, 0, 0));
-        pal.setColor(QPalette::Highlight, QColor(47, 125, 216));
-        pal.setColor(QPalette::HighlightedText, QColor(255, 255, 255));
-    } else {
-        pal = qApp->style()->standardPalette();
-        // Normalize a touch for consistency
-        pal.setColor(QPalette::Window, QColor(255, 255, 255));
-        pal.setColor(QPalette::Base, QColor(255, 255, 255));
-        pal.setColor(QPalette::AlternateBase, QColor(255, 255, 255));
-        pal.setColor(QPalette::Highlight, QColor(0, 120, 212));
-        pal.setColor(QPalette::HighlightedText, QColor(255, 255, 255));
-    }
+    Q_UNUSED(dark)
+    // Force light theme - ignore dark parameter
+    QPalette pal = qApp->style()->standardPalette();
+    
+    // Always use light theme colors
+    pal.setColor(QPalette::Window, QColor(255, 255, 255));
+    pal.setColor(QPalette::Base, QColor(255, 255, 255));
+    pal.setColor(QPalette::AlternateBase, QColor(255, 255, 255));
+    pal.setColor(QPalette::Highlight, QColor(0, 120, 212));
+    pal.setColor(QPalette::HighlightedText, QColor(255, 255, 255));
+    
     qApp->setPalette(pal);
 }
 
@@ -1103,28 +1062,27 @@ void MainApplication::applyTreeViewTheme()
     if (!m_treeWidget)
         return;
 
-    // Determine light vs dark based on window background lightness
-    QColor base = palette().color(QPalette::Window);
-    bool dark = base.lightness() < 128; // heuristic
+    // Force light theme - ignore palette darkness detection
+    bool dark = false; // Always use light theme
 
     // Clean Design Palette - Pure White Background
-    QString border        = dark ? "#39424c" : "#d7dbe2";           // Softer neutral border
-    QString bg            = dark ? "#20262c" : "#ffffff";           // Pure white background - no alternating colors
-    QString bgAlt         = dark ? "#262d33" : "#ffffff";           // Same as main background for uniform look
-    QString text          = dark ? "#e2e8ef" : "#1a1a1a";           // Deep black for high contrast and readability
-    QString textDisabled  = dark ? "#7a8794" : "#999999";           // Muted gray for disabled text
-    QString placeholder   = dark ? "#8a96a3" : "#8b9197";          // Placeholder text color
-    QString hover         = dark ? "#2d3640" : "#f3f5f7";           // Neutral hover
-    QString selectedBg    = dark ? "#2f7dd8" : "#0078d4";           // Microsoft blue for selections
-    QString selectedBgInactive = dark ? "#30485e" : "#e6f2ff";     // Light blue for inactive selection
+    QString border        = "#d7dbe2";           // Light theme border
+    QString bg            = "#ffffff";           // Pure white background - no alternating colors
+    QString bgAlt         = "#ffffff";           // Same as main background for uniform look
+    QString text          = "#1a1a1a";           // Deep black for high contrast and readability
+    QString textDisabled  = "#999999";           // Muted gray for disabled text
+    QString placeholder   = "#8b9197";          // Placeholder text color
+    QString hover         = "#f3f5f7";           // Neutral hover
+    QString selectedBg    = "#0078d4";           // Microsoft blue for selections
+    QString selectedBgInactive = "#e6f2ff";     // Light blue for inactive selection
     QString selectedText  = "#ffffff";                              // White text on selection
-    QString focusOutline  = dark ? "#4da3ff" : "#0078d4";           // Blue focus outline
-    QString scrollbarGroove = dark ? "#1b2126" : "#f5f5f5";        // Light gray scrollbar track
-    QString scrollbarHandle = dark ? "#3a4753" : "#d0d0d0";        // Medium gray scrollbar handle
-    QString scrollbarHandleHover = dark ? "#4a5a68" : "#b0b0b0";   // Darker gray on hover
-    QString branchClosedIcon = dark ? ":/icons/images/icons/tree_branch_open.svg"   : ":/icons/images/icons/tree_branch_open_light.svg";   // plus symbol (for closed nodes)
-    QString branchOpenIcon   = dark ? ":/icons/images/icons/tree_branch_closed.svg" : ":/icons/images/icons/tree_branch_closed_light.svg"; // minus symbol (for open nodes)
-    QString altRow        = dark ? "#242b31" : "#ffffff";           // Same as main background for uniform appearance
+    QString focusOutline  = "#0078d4";           // Blue focus outline
+    QString scrollbarGroove = "#f5f5f5";        // Light gray scrollbar track
+    QString scrollbarHandle = "#d0d0d0";        // Medium gray scrollbar handle
+    QString scrollbarHandleHover = "#b0b0b0";   // Darker gray on hover
+    QString branchClosedIcon = ":/icons/images/icons/tree_branch_open_light.svg";   // plus symbol (for closed nodes)
+    QString branchOpenIcon   = ":/icons/images/icons/tree_branch_closed_light.svg"; // minus symbol (for open nodes)
+    QString altRow        = "#ffffff";           // Same as main background for uniform appearance
     
     // Build clean stylesheet with smaller fonts and uniform background
     QString style = QString(
@@ -1260,7 +1218,7 @@ void MainApplication::applyTreeViewTheme()
     m_treeWidget->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     m_treeWidget->setFocusPolicy(Qt::StrongFocus);
     
-    qDebug() << "Applied clean TreeView theme - Dark mode:" << dark;
+    qDebug() << "Applied clean TreeView theme - Light mode only (dark theme disabled)";
 
     // Style search bar container and widgets to match theme (light/dark aware)
     if (m_treeSearchBar) {
@@ -1300,8 +1258,8 @@ void MainApplication::applyTreeViewTheme()
         // Primary (contained) button for clear affordance
         QString acc = selectedBg;
         QString accText = selectedText;
-        QString accHover = dark ? "#3a8ae6" : "#1e8fe8";  // hover tint
-        QString accPressed = dark ? "#2567b4" : "#0062b1"; // pressed tint
+        QString accHover = "#1e8fe8";  // hover tint
+        QString accPressed = "#0062b1"; // pressed tint
         m_treeSearchButton->setStyleSheet(QString(
             "QPushButton {"
             "  background: %1;"
@@ -1897,6 +1855,9 @@ void MainApplication::setupTabWidget()
     m_tabWidget = new DualTabWidget();
     m_tabWidget->setTabsClosable(true);
     m_tabWidget->setMovable(true);
+    
+    // Force light theme on tab widget
+    m_tabWidget->setDarkTheme(false);
     
     // Connect dual tab widget signals
     connect(m_tabWidget, &DualTabWidget::tabCloseRequested, 

@@ -1248,8 +1248,10 @@ void DualTabWidget::forceStyleRefresh()
 
 void DualTabWidget::setDarkTheme(bool dark)
 {
-    if (m_darkTheme == dark) return;
-    m_darkTheme = dark;
+    Q_UNUSED(dark)
+    // Force light theme - ignore dark parameter
+    if (m_darkTheme == false) return;
+    m_darkTheme = false; // Always light theme
     this->setProperty("explicitTheme", true);
     applyCurrentThemeStyles();
 }
@@ -1290,14 +1292,9 @@ void DualTabWidget::updateCloseButtonVisibility(TabType type)
 void DualTabWidget::applyCurrentThemeStyles()
 {
     logDebug("applyCurrentThemeStyles: begin");
-    // Base palette-derived hint (optional): if not explicitly set, detect from app palette
-    bool dark = m_darkTheme;
-    if (!this->property("explicitTheme").toBool()) {
-        // Detect if app palette is dark and adopt it as default
-        const bool appDark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
-        dark = m_darkTheme || appDark;
-        m_darkTheme = dark; // lock in
-    }
+    
+    // Force light theme - ignore all dark theme detection
+    m_darkTheme = false; // Ensure internal flag is always false
 
     // When Material theme is disabled, use unified compact bordered style for both PDF and PCB tabs
     if (!m_materialTheme) {
@@ -1335,9 +1332,9 @@ void DualTabWidget::applyCurrentThemeStyles()
             "QTabBar::tab:first { margin-left:2px; } QTabBar::tab:last { margin-right:2px; } QTabBar::tab:focus { outline:none; }"
             ;
 
-        const QString unifiedStyle = dark ? darkTheme : lightTheme;
-        if (m_pdfTabWidget) applyStyleWithTag(m_pdfTabWidget, unifiedStyle, dark ? "unifiedDark" : "unifiedLight");
-        if (m_pcbTabWidget) applyStyleWithTag(m_pcbTabWidget, unifiedStyle, dark ? "unifiedDark" : "unifiedLight");
+        const QString unifiedStyle = lightTheme; // Always use light theme
+        if (m_pdfTabWidget) applyStyleWithTag(m_pdfTabWidget, unifiedStyle, "unifiedLight");
+        if (m_pcbTabWidget) applyStyleWithTag(m_pcbTabWidget, unifiedStyle, "unifiedLight");
     } else {
         // Material Design-inspired unified theme for both PDF and PCB tabs
         const QString baseFamily = "'Segoe UI Variable Text','Segoe UI','Inter',Arial,sans-serif";
@@ -1385,22 +1382,18 @@ void DualTabWidget::applyCurrentThemeStyles()
             "QTabBar::tab:selected { background:" + primaryD + "; color:#FFFFFF; border:none; font-weight:600; }"
             "QTabBar::tab:focus:!selected { border-color:" + hoverBorderD + "; }";
 
-        QString unifiedQss = (commonPane.arg(dark ? surfaceD : surfaceL, dark ? onSurfaceD : onSurfaceL, dark ? borderNeutralD : borderNeutralL)) + (dark ? tabsDark : tabsLight);
-        if (dark) {
-            // Match the tab bar baseline to inactive tab border in dark mode
-            unifiedQss += "QTabBar { border-bottom:0.5px solid #FFFFFF; }";
-        }
-
-        if (m_pdfTabWidget) applyStyleWithTag(m_pdfTabWidget, unifiedQss, dark ? "unifiedMaterialDark" : "unifiedMaterialLight");
-        if (m_pcbTabWidget) applyStyleWithTag(m_pcbTabWidget, unifiedQss, dark ? "unifiedMaterialDark" : "unifiedMaterialLight");
+        QString unifiedQss = (commonPane.arg(surfaceL, onSurfaceL, borderNeutralL)) + tabsLight; // Always use light theme
+        // No dark mode specific styling needed
+        
+        if (m_pdfTabWidget) applyStyleWithTag(m_pdfTabWidget, unifiedQss, "unifiedMaterialLight");
+        if (m_pcbTabWidget) applyStyleWithTag(m_pcbTabWidget, unifiedQss, "unifiedMaterialLight");
     }
 
     // Unified content area styling for both PDF and PCB
     // Remove top border so it touches the tab bar; keep left/right/bottom borders
     const QString contentStyle = QStringLiteral(
         "QStackedWidget { border-top:0; border-left:1px solid %1; border-right:1px solid %1; border-bottom:1px solid %1; border-radius:0; background:%2; }"
-    ).arg(dark ? "#3c4043" : "#e0e0e0",
-          dark ? "#111111" : "#ffffff");
+    ).arg("#e0e0e0", "#ffffff"); // Always use light theme colors
     
     if (m_pdfContentArea) {
         m_pdfContentArea->setStyleSheet(contentStyle);
@@ -1483,11 +1476,9 @@ void DualTabWidget::changeEvent(QEvent *event)
     case QEvent::PaletteChange:
     case QEvent::StyleChange:
     {
-        // Keep internal dark flag aligned with the app palette unless explicitly overridden
-        if (!this->property("explicitTheme").toBool()) {
-            const bool appDark = qApp && qApp->palette().color(QPalette::Window).lightness() < 128;
-            m_darkTheme = appDark;
-        }
+        // Force light theme - ignore app palette darkness detection
+        m_darkTheme = false;
+        
         // Re-apply QSS for both tab widgets
         applyCurrentThemeStyles();
         // Force repolish on tab bars to immediately reflect colors/metrics
