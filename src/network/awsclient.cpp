@@ -161,6 +161,30 @@ std::optional<QString> AwsClient::downloadToFile(const QString& key, const QStri
     return localPath;
 }
 
+std::optional<QByteArray> AwsClient::downloadToMemory(const QString& key) {
+    if (!isReady()) { d->lastError = QStringLiteral("Client not configured"); return std::nullopt; }
+    Aws::S3::Model::GetObjectRequest req;
+    req.WithBucket(d->bucket.toStdString()).WithKey(key.toStdString());
+    auto outcome = d->s3->GetObject(req);
+    if (!outcome.IsSuccess()) {
+        const auto &err = outcome.GetError();
+        d->lastError = QString::fromStdString(err.GetExceptionName()) + ": " + QString::fromStdString(err.GetMessage());
+        return std::nullopt;
+    }
+
+    // Read entire stream into QByteArray
+    auto& body = outcome.GetResultWithOwnership().GetBody();
+    QByteArray data;
+    const size_t chunk = 64 * 1024;
+    std::vector<char> buf(chunk);
+    while (body.good()) {
+        body.read(buf.data(), chunk);
+        std::streamsize got = body.gcount();
+        if (got > 0) data.append(buf.data(), static_cast<int>(got));
+    }
+    return data;
+}
+
 QString AwsClient::cachePathForKey(const QString& key) const {
     const QString base = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
     QString safe = key;
@@ -210,6 +234,12 @@ std::optional<QVector<AwsListEntry>> AwsClient::list(const QString& prefix, int 
 std::optional<QString> AwsClient::downloadToFile(const QString& key, const QString& localPath) {
     Q_UNUSED(key)
     Q_UNUSED(localPath)
+    return std::nullopt;
+}
+
+std::optional<QByteArray> AwsClient::downloadToMemory(const QString& key) {
+    Q_UNUSED(key)
+    d->lastError = "AWS SDK not available - cannot download S3 objects to memory";
     return std::nullopt;
 }
 QString AwsClient::cachePathForKey(const QString& key) const {

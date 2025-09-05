@@ -52,6 +52,15 @@ public:
     bool loadPDF(const std::string& filePath);
 
     /**
+     * Load a PDF from memory buffer (for secure AWS files)
+     * @param data PDF file contents as byte buffer
+     * @param size Size of the buffer
+     * @param displayName Optional display name for the PDF (used in UI)
+     * @return true if the PDF was loaded successfully
+     */
+    bool loadPDFFromMemory(const char* data, size_t size, const std::string& displayName = "");
+
+    /**
      * Update the viewer - call this from Qt's timer or paint event
      * This replaces the main rendering loop from the standalone application
      */

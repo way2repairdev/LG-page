@@ -3,6 +3,7 @@
 
 #include <QString>
 #include <QVector>
+#include <QByteArray>
 #include <optional>
 
 struct AwsListEntry {
@@ -33,6 +34,10 @@ public:
     // Download object (key) to a local file path (creates/overwrites)
     // Returns local path on success
     std::optional<QString> downloadToFile(const QString& key, const QString& localPath);
+
+    // Download object (key) directly to memory buffer (for security)
+    // Returns QByteArray with file contents on success
+    std::optional<QByteArray> downloadToMemory(const QString& key);
 
     // Utility: derive cache path for a key (no IO)
     QString cachePathForKey(const QString& key) const;

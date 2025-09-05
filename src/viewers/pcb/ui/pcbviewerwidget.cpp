@@ -2,6 +2,7 @@
 #include "viewers/pcb/PCBViewerEmbedder.h"
 #include "../rendering/PCBRenderer.h" // for ColorTheme enum values
 #include "ui/LoadingOverlay.h"
+#include "core/memoryfilemanager.h"
 #include <QtConcurrent/QtConcurrent>
 #include <QFutureWatcher>
 #include <QMutex>
@@ -237,6 +238,49 @@ bool PCBViewerWidget::loadPCB(const QString &filePath)
     } else {
         WritePCBDebugToFile("Failed to load PCB file");
         emit errorOccurred("Failed to load PCB file: " + filePath);
+    }
+    
+    return success;
+}
+
+bool PCBViewerWidget::loadPCBFromMemory(const QString& memoryId, const QString& originalKey) {
+    // Get the data from memory manager
+    MemoryFileManager* memMgr = MemoryFileManager::instance();
+    QByteArray data = memMgr->getFileData(memoryId);
+    
+    if (data.isEmpty()) {
+        emit errorOccurred(QString("PCB data not found in memory for ID: %1").arg(memoryId));
+        return false;
+    }
+
+    if (!m_viewerInitialized) {
+        initializePCBViewer();
+    }
+    
+    if (!m_viewerInitialized) {
+        emit errorOccurred("Failed to initialize PCB viewer");
+        return false;
+    }
+
+    WritePCBDebugToFile("Loading PCB from memory: " + memoryId);
+
+    QString displayName = originalKey.isEmpty() ? memoryId : originalKey;
+    bool success = m_pcbEmbedder->loadPCBFromMemory(data.constData(), data.size(), displayName.toStdString());
+    
+    if (success) {
+        m_pcbLoaded = true;
+        m_currentFilePath = memoryId; // Store memory ID as current file path
+        
+        // Start update timer if not already running
+        if (!m_updateTimer->isActive()) {
+            m_updateTimer->start();
+        }
+        
+        WritePCBDebugToFile("PCB file loaded successfully from memory");
+        emit pcbLoaded(displayName);
+    } else {
+        WritePCBDebugToFile("Failed to load PCB file from memory");
+        emit errorOccurred("Failed to load PCB file from memory: " + displayName);
     }
     
     return success;

@@ -189,6 +189,7 @@ private:
     void loadLocalFileContent(const QString &filePath);  // Changed from loadFileContent
     void populateTreeFromDirectory(const QString &dirPath, QTreeWidgetItem *parentItem = nullptr);
     void openFileInTab(const QString &filePath);
+    void openFileFromMemory(const QString &memoryId, const QString &originalKey);
     void openPDFInTab(const QString &filePath);
     void openPCBInTab(const QString &filePath);
     void addWelcomeTab();

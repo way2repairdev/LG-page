@@ -2,6 +2,7 @@
 #include "viewers/pdf/pdfviewerwidget.h"
 #include "viewers/pdf/PDFViewerEmbedder.h"
 #include "ui/LoadingOverlay.h"
+#include "core/memoryfilemanager.h"
 
 #include <QResizeEvent>
 #include <QPaintEvent>
@@ -449,6 +450,40 @@ bool PDFViewerWidget::loadPDF(const QString &filePath)
     emit pageChanged(getCurrentPage(), getPageCount());
     syncToolbarStates();
     updateStatusInfo();
+    return true;
+}
+
+bool PDFViewerWidget::loadPDFFromMemory(const QString& memoryId, const QString& originalKey) {
+    // Get the data from memory manager
+    MemoryFileManager* memMgr = MemoryFileManager::instance();
+    QByteArray data = memMgr->getFileData(memoryId);
+    
+    if (data.isEmpty()) {
+        emit errorOccurred(QString("PDF data not found in memory for ID: %1").arg(memoryId));
+        return false;
+    }
+
+    if (!m_viewerInitialized)
+        initializePDFViewer();
+    if (!m_viewerInitialized)
+        return false;
+
+    QString displayName = originalKey.isEmpty() ? memoryId : originalKey;
+    if (!m_pdfEmbedder->loadPDFFromMemory(data.constData(), data.size(), displayName.toStdString())) {
+        emit errorOccurred(QString("Failed to load PDF from memory: %1").arg(displayName));
+        return false;
+    }
+
+    m_currentFilePath = memoryId; // Store memory ID as current file path
+    m_pdfLoaded = true;
+    emit pdfLoaded(displayName);
+    emit pageChanged(getCurrentPage(), getPageCount());
+    syncToolbarStates();
+    
+    if (m_updateTimer && !m_updateTimer->isActive()) {
+        m_updateTimer->start();
+    }
+    
     return true;
 }
 

@@ -11,6 +11,11 @@
 #include "../core/BRDTypes.h"
 #include "../core/Utils.h"
 
+// Qt includes for temporary file operations
+#include <QStandardPaths>
+#include <QDateTime>
+#include <QFile>
+
 // GLFW includes
 #include <GLFW/glfw3.h>
 #include <GL/glew.h>
@@ -289,6 +294,57 @@ bool PCBViewerEmbedder::loadPCB(const std::string& filePath)
     }
     catch (const std::exception& e) {
         handleError("Exception while loading PCB: " + std::string(e.what()));
+        return false;
+    }
+}
+
+bool PCBViewerEmbedder::loadPCBFromMemory(const char* data, size_t size, const std::string& displayName) {
+    handleStatus("Loading PCB from memory: " + displayName);
+
+    if (m_usingFallback) {
+        handleError("PCB loading not supported in fallback mode");
+        return false;
+    }
+
+    try {
+        // Create a temporary file to store the PCB data
+        // This is necessary because the PCB loaders expect file paths
+        QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+        QString tempFileName = tempDir + QString("/pcb_temp_%1.xzz").arg(QDateTime::currentMSecsSinceEpoch());
+        
+        // Write data to temporary file
+        QFile tempFile(tempFileName);
+        if (!tempFile.open(QIODevice::WriteOnly)) {
+            handleError("Failed to create temporary file for PCB data");
+            return false;
+        }
+        
+        qint64 written = tempFile.write(data, size);
+        tempFile.close();
+        
+        if (written != static_cast<qint64>(size)) {
+            handleError("Failed to write PCB data to temporary file");
+            // Clean up the temp file
+            QFile::remove(tempFileName);
+            return false;
+        }
+
+        // Load PCB using the regular file loading method
+        bool success = loadPCB(tempFileName.toStdString());
+        
+        // Clean up the temporary file
+        QFile::remove(tempFileName);
+        
+        if (success) {
+            // Update the display name to show the original key instead of temp file path
+            m_currentFilePath = displayName.empty() ? "memory://pcb" : displayName;
+            handleStatus("PCB loaded successfully from memory (" + std::to_string(size) + " bytes)");
+        }
+        
+        return success;
+    }
+    catch (const std::exception& e) {
+        handleError("Exception while loading PCB from memory: " + std::string(e.what()));
         return false;
     }
 }

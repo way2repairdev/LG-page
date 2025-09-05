@@ -3,6 +3,7 @@
 #include "ui/dualtabwidget.h"
 #include "viewers/pdf/pdfviewerwidget.h"
 #include "viewers/pcb/PCBViewerWidget.h"
+#include "core/memoryfilemanager.h"
 #include <QApplication>
 #include <QCoreApplication>
 #include <QScreen>
@@ -2581,6 +2582,155 @@ void MainApplication::onTabCloseRequestedByType(int index, DualTabWidget::TabTyp
     }
 }
 
+void MainApplication::openFileFromMemory(const QString &memoryId, const QString &originalKey)
+{
+    // Determine file type from original key
+    QString ext = QFileInfo(originalKey).suffix().toLower();
+    bool isPdf = (ext == "pdf");
+    bool isPcb = (ext == "xzz" || ext == "pcb" || ext == "xzzpcb" || ext == "brd" || ext == "brd2");
+    
+    if (isPdf) {
+        // Check for duplicate PDF tabs using originalKey for consistent comparison
+        auto normalizePath = [](QString p){ QString n = p; n.replace("\\", "/"); return n.toLower(); };
+        const QString targetNorm = normalizePath(originalKey);
+        
+        for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
+            QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PDF_TAB);
+            if (widget) {
+                QString existingPath = widget->property("filePath").toString();
+                QString existingKey = widget->property("originalKey").toString();
+                
+                // Compare both memory ID and original key for comprehensive duplicate detection
+                if (existingPath == memoryId || 
+                    (!existingKey.isEmpty() && normalizePath(existingKey) == targetNorm) ||
+                    (!existingPath.isEmpty() && normalizePath(existingPath) == targetNorm)) {
+                    m_tabWidget->setCurrentIndex(i, DualTabWidget::PDF_TAB);
+                    statusBar()->showMessage("PDF already open (switched)", 4000);
+                    return;
+                }
+            }
+        }
+
+        // Enforce max PDF tab limit (consistent with file loading)
+        const int kMaxPdfTabs = 5;
+        if (m_tabWidget->count(DualTabWidget::PDF_TAB) >= kMaxPdfTabs) {
+            const QString msg = QString("PDF tab limit (%1) reached. Close a tab before opening another.").arg(kMaxPdfTabs);
+            statusBar()->showMessage(msg, 6000);
+            QToolTip::showText(QCursor::pos(), msg, this, QRect(), 2500);
+            QApplication::beep();
+            return;
+        }
+
+        // Create PDF viewer widget
+        PDFViewerWidget *pdfViewer = new PDFViewerWidget();
+        pdfViewer->setProperty("filePath", memoryId);
+        pdfViewer->setProperty("originalKey", originalKey);  // Store for duplicate checking
+
+        // Connect PDF viewer signals
+        connect(pdfViewer, &PDFViewerWidget::pdfLoaded, this, [this, originalKey](const QString &loadedPath) {
+            Q_UNUSED(loadedPath)
+            QFileInfo fileInfo(originalKey);
+            statusBar()->showMessage(QString("PDF loaded from memory: %1").arg(fileInfo.fileName()));
+        });
+
+        connect(pdfViewer, &PDFViewerWidget::errorOccurred, this, [this](const QString &error) {
+            statusBar()->showMessage("PDF Error: " + error);
+            QMessageBox::warning(this, "PDF Error", error);
+        });
+
+        // Add PDF viewer to PDF tab row
+        QString tabName = QFileInfo(originalKey).fileName();  // Use fileName() for consistency with file loading
+        QIcon tabIcon = getFileIcon(originalKey);
+        int tabIndex = m_tabWidget->addTab(pdfViewer, tabIcon, tabName, DualTabWidget::PDF_TAB);
+        if (tabIndex < 0) {
+            pdfViewer->deleteLater();
+            statusBar()->showMessage("Cannot open PDF: tab limit reached.", 5000);
+            return;
+        }
+
+        // Switch to the new tab
+        m_tabWidget->setCurrentIndex(tabIndex, DualTabWidget::PDF_TAB);
+
+        // Load the PDF from memory
+        QTimer::singleShot(100, this, [pdfViewer, memoryId, originalKey]() {
+            pdfViewer->loadPDFFromMemory(memoryId, originalKey);
+        });
+    }
+    else if (isPcb) {
+        // Check for duplicate PCB tabs using originalKey for consistent comparison
+        auto normalizePath = [](QString p){ QString n = p; n.replace("\\", "/"); return n.toLower(); };
+        const QString targetNorm = normalizePath(originalKey);
+        
+        for (int i = 0; i < m_tabWidget->count(DualTabWidget::PCB_TAB); ++i) {
+            QWidget *widget = m_tabWidget->widget(i, DualTabWidget::PCB_TAB);
+            if (widget) {
+                QString existingPath = widget->property("filePath").toString();
+                QString existingKey = widget->property("originalKey").toString();
+                
+                // Compare both memory ID and original key for comprehensive duplicate detection
+                if (existingPath == memoryId || 
+                    (!existingKey.isEmpty() && normalizePath(existingKey) == targetNorm) ||
+                    (!existingPath.isEmpty() && normalizePath(existingPath) == targetNorm)) {
+                    m_tabWidget->setCurrentIndex(i, DualTabWidget::PCB_TAB);
+                    statusBar()->showMessage("PCB already open (switched)", 4000);
+                    return;
+                }
+            }
+        }
+
+        // Enforce max PCB tab limit (consistent with file loading - 5 tabs)
+        const int kMaxPcbTabs = 5;
+        if (m_tabWidget->count(DualTabWidget::PCB_TAB) >= kMaxPcbTabs) {
+            const QString msg = QString("PCB tab limit (%1) reached. Close a tab before opening another.").arg(kMaxPcbTabs);
+            statusBar()->showMessage(msg, 6000);
+            QToolTip::showText(QCursor::pos(), msg, this, QRect(), 2500);
+            QApplication::beep();
+            return;
+        }
+
+        // Create PCB viewer widget
+        PCBViewerWidget *pcbViewer = new PCBViewerWidget(this);
+        pcbViewer->setProperty("filePath", memoryId);
+        pcbViewer->setProperty("originalKey", originalKey);  // Store for duplicate checking
+        
+        // Start with toolbar hidden - it will be shown when tab becomes active (consistent with file loading)
+        pcbViewer->setToolbarVisible(false);
+
+        // Connect PCB viewer signals
+        connect(pcbViewer, &PCBViewerWidget::pcbLoaded, this, [this, originalKey](const QString &loadedPath) {
+            Q_UNUSED(loadedPath)
+            QFileInfo fileInfo(originalKey);
+            statusBar()->showMessage(QString("PCB loaded from memory: %1").arg(fileInfo.fileName()));
+        });
+
+        connect(pcbViewer, &PCBViewerWidget::errorOccurred, this, [this](const QString &error) {
+            statusBar()->showMessage("PCB Error: " + error);
+            QMessageBox::warning(this, "PCB Error", error);
+        });
+
+        // Add PCB viewer to PCB tab row
+        QString tabName = QFileInfo(originalKey).fileName();  // Use fileName() for consistency with file loading
+        QIcon tabIcon = getFileIcon(originalKey);
+        int tabIndex = m_tabWidget->addTab(pcbViewer, tabIcon, tabName, DualTabWidget::PCB_TAB);
+        if (tabIndex < 0) {
+            pcbViewer->deleteLater();
+            statusBar()->showMessage("Cannot open PCB: tab limit reached.", 5000);
+            return;
+        }
+
+        // Switch to the new tab
+        m_tabWidget->setCurrentIndex(tabIndex, DualTabWidget::PCB_TAB);
+
+        // Load the PCB from memory
+        QTimer::singleShot(100, this, [pcbViewer, memoryId, originalKey]() {
+            pcbViewer->loadPCBFromMemory(memoryId, originalKey);
+        });
+    }
+    else {
+        statusBar()->showMessage("Unsupported file type for memory loading: " + originalKey);
+    }
+}
+
 void MainApplication::onTabChangedByType(int index, DualTabWidget::TabType type)
 {
     qDebug() << "=== Tab Changed to Index:" << index << "Type:" << (type == DualTabWidget::PDF_TAB ? "PDF" : "PCB") << "===";
@@ -2776,6 +2926,9 @@ void MainApplication::hideAllViewerToolbars()
     
     qDebug() << "=== Hiding All Viewer Toolbars ===";
     
+    // Get current active indices to avoid hiding active toolbars
+    int currentPCBIndex = m_tabWidget->currentIndex(DualTabWidget::PCB_TAB);
+    
     // Process PDF tabs with error handling
     try {
         for (int i = 0; i < m_tabWidget->count(DualTabWidget::PDF_TAB); ++i) {
@@ -2808,8 +2961,14 @@ void MainApplication::hideAllViewerToolbars()
             }
         }
         
-        // Hide PCB toolbars asynchronously to prevent blocking
+        // Hide PCB toolbars asynchronously to prevent blocking, but skip the currently active one
         for (int i = 0; i < pcbViewers.size(); ++i) {
+            // Skip hiding toolbar for currently active PCB tab
+            if (i == currentPCBIndex) {
+                qDebug() << "Skipping hide for active PCB tab:" << i;
+                continue;
+            }
+            
             PCBViewerWidget* pcbViewer = pcbViewers[i];
             QString tabName = m_tabWidget->tabText(i, DualTabWidget::PCB_TAB);
             
@@ -2834,7 +2993,7 @@ void MainApplication::hideAllViewerToolbars()
         QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
     });
     
-    qDebug() << "=== All Viewer Toolbars Hidden ===";
+    qDebug() << "=== All Viewer Toolbars Hidden (except active) ===";
 }
 
 void MainApplication::debugToolbarStates()
@@ -3081,10 +3240,16 @@ void MainApplication::onTreeItemDoubleClicked(QTreeWidgetItem *item, int column)
             const QString s3Key = item->data(0, Qt::UserRole + 10).toString();
             if (!s3Key.isEmpty()) {
                 statusBar()->showMessage(QString("Downloading from AWS: %1...").arg(itemText));
-                const QString localPath = m_aws.cachePathForKey(s3Key);
-                auto dl = m_aws.downloadToFile(s3Key, localPath);
-                if (dl.has_value()) {
-                    openFileInTab(dl.value());
+                
+                // Download to memory instead of cache file for security
+                auto data = m_aws.downloadToMemory(s3Key);
+                if (data.has_value()) {
+                    // Store file in memory manager
+                    MemoryFileManager* memMgr = MemoryFileManager::instance();
+                    QString memoryId = memMgr->storeFileData(s3Key, data.value());
+                    
+                    // Open file from memory
+                    openFileFromMemory(memoryId, s3Key);
                     return;
                 } else {
                     const QString err = m_aws.lastError();

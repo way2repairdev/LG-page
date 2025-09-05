@@ -478,6 +478,188 @@ bool PDFViewerEmbedder::loadPDF(const std::string& filePath)
     return true;
 }
 
+bool PDFViewerEmbedder::loadPDFFromMemory(const char* data, size_t size, const std::string& displayName) {
+    if (!m_initialized) {
+        std::cerr << "PDFViewerEmbedder: Not initialized" << std::endl;
+        return false;
+    }
+
+    // Check if renderer is properly initialized
+    if (!m_renderer) {
+        std::cerr << "PDFViewerEmbedder: Renderer is null!" << std::endl;
+        return false;
+    }
+
+    // Try to load PDF using existing renderer
+    try {
+        if (!m_renderer->LoadDocumentFromMemory(data, size)) {
+            std::cerr << "PDFViewerEmbedder: Failed to load PDF from memory" << std::endl;
+            std::cerr << "PDFViewerEmbedder: This may be due to missing PDFium library or incompatible PDF format" << std::endl;
+            return false;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "PDFViewerEmbedder: Exception while loading PDF from memory: " << e.what() << std::endl;
+        return false;
+    }
+
+    // If we reach here, PDFium loading succeeded
+    m_usingFallback = false;
+    m_currentFilePath = displayName.empty() ? "memory://unnamed" : displayName;
+    m_pdfLoaded = true;
+
+    // Get page count and initialize structures
+    int pageCount = 0;
+    try {
+        pageCount = m_renderer->GetPageCount();
+        if (pageCount <= 0) {
+            std::cerr << "PDFViewerEmbedder: Invalid page count: " << pageCount << std::endl;
+            return false;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "PDFViewerEmbedder: Exception getting page count: " << e.what() << std::endl;
+        return false;
+    }
+    
+    // Clean up any existing textures
+    cleanupTextures();
+    
+    // Initialize texture and dimension arrays
+    m_textures.resize(pageCount);
+    m_textureWidths.assign(pageCount, 0);
+    m_textureHeights.assign(pageCount, 0);
+    m_pageWidths.resize(pageCount);
+    m_pageHeights.resize(pageCount);
+    m_originalPageWidths.resize(pageCount);
+    m_originalPageHeights.resize(pageCount);
+    // Prepare page bounding boxes storage
+    std::vector<FS_RECTF> pageBBoxes;
+    pageBBoxes.resize(pageCount);
+    
+    // Fill with zeros initially
+    std::fill(m_textures.begin(), m_textures.end(), 0);
+    
+    // Get original page dimensions and page bounding boxes
+    for (int i = 0; i < pageCount; ++i) {
+        try {
+            m_renderer->GetOriginalPageSize(i, m_originalPageWidths[i], m_originalPageHeights[i]);
+            // Also capture the page bounding box (MediaBox ∩ CropBox)
+            FPDF_DOCUMENT document = m_renderer->GetDocument();
+            FPDF_PAGE page = FPDF_LoadPage(document, i);
+            if (page) {
+                FS_RECTF bbox{0,0,0,0};
+                if (FPDF_GetPageBoundingBox(page, &bbox)) {
+                    pageBBoxes[i] = bbox;
+                } else {
+                    // Fallback to full page size at origin
+                    pageBBoxes[i].left = 0.0f;
+                    pageBBoxes[i].top = 0.0f;
+                    pageBBoxes[i].right = (float)m_originalPageWidths[i];
+                    pageBBoxes[i].bottom = (float)m_originalPageHeights[i];
+                }
+                FPDF_ClosePage(page);
+            } else {
+                pageBBoxes[i].left = 0.0f;
+                pageBBoxes[i].top = 0.0f;
+                pageBBoxes[i].right = (float)m_originalPageWidths[i];
+                pageBBoxes[i].bottom = (float)m_originalPageHeights[i];
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "PDFViewerEmbedder: Exception getting page " << i << " dimensions: " << e.what() << std::endl;
+            // Use fallback dimensions
+            m_originalPageWidths[i] = 612.0; // Letter size width
+            m_originalPageHeights[i] = 792.0; // Letter size height
+            pageBBoxes[i].left = 0.0f;
+            pageBBoxes[i].top = 0.0f;
+            pageBBoxes[i].right = 612.0f;
+            pageBBoxes[i].bottom = 792.0f;
+        }
+    }
+
+    // CRITICAL: Initialize scroll state with proper page arrays
+    m_scrollState->pageHeights = &m_pageHeights;
+    m_scrollState->pageWidths = &m_pageWidths;
+    m_scrollState->originalPageWidths = &m_originalPageWidths;
+    m_scrollState->originalPageHeights = &m_originalPageHeights;
+    m_scrollState->pageBBoxes = std::move(pageBBoxes);
+    
+    std::cout << "PDFViewerEmbedder: Initializing memory PDF with " << pageCount << " pages" << std::endl;
+    std::cout << "PDFViewerEmbedder: Original page dimensions: " << m_originalPageWidths[0] << "x" << m_originalPageHeights[0] << std::endl;
+    
+    // Initialize text extraction and search capabilities
+    try {
+        InitializeTextExtraction(*m_scrollState, pageCount);
+        std::cout << "PDFViewerEmbedder: Text extraction initialized" << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "PDFViewerEmbedder: Failed to initialize text extraction: " << e.what() << std::endl;
+        return false;
+    }
+    
+    // Initialize text search capabilities
+    try {
+        InitializeTextSearch(*m_scrollState);
+        std::cout << "PDFViewerEmbedder: Text search initialized" << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "PDFViewerEmbedder: Failed to initialize text search: " << e.what() << std::endl;
+        return false;
+    }
+    
+    // Load text pages for search functionality
+    try {
+        FPDF_DOCUMENT document = m_renderer->GetDocument();
+        
+        for (int i = 0; i < pageCount; ++i) {
+            FPDF_PAGE page = FPDF_LoadPage(document, i);
+            if (page) {
+                LoadTextPage(*m_scrollState, i, page);
+                FPDF_ClosePage(page);
+                std::cout << "PDFViewerEmbedder: Loaded text page " << i << std::endl;
+            } else {
+                std::cerr << "PDFViewerEmbedder: Failed to load page " << i << " for text extraction" << std::endl;
+            }
+        }
+        std::cout << "PDFViewerEmbedder: Text pages loaded for " << pageCount << " pages" << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "PDFViewerEmbedder: Failed to load text pages: " << e.what() << std::endl;
+        return false;
+    }
+
+    // Set base page dimensions from original dimensions
+    for (int i = 0; i < pageCount; ++i) {
+        // Use ACTUAL page dimensions (not window-fitted) for initial display
+        m_pageWidths[i] = static_cast<int>(m_originalPageWidths[i]);
+        m_pageHeights[i] = static_cast<int>(m_originalPageHeights[i]);
+        
+        std::cout << "DEBUG: Storing base dimensions for page " << i << ": " 
+                  << m_pageWidths[i] << " x " << m_pageHeights[i] << " pixels" << std::endl;
+    }
+
+    // Update scroll state to reflect new document
+    UpdateScrollState(*m_scrollState, (float)m_windowHeight, m_pageHeights);
+
+    // Initialize scroll state for the new document
+    if (m_scrollState) {
+        // Set initial zoom level
+        m_scrollState->zoomScale = 1.0f;
+        m_scrollState->horizontalOffset = 0.0f;
+        m_scrollState->scrollOffset = 0.0f;
+        
+        m_scrollState->forceRedraw = true;
+        m_scrollState->zoomChanged = true;
+    }
+
+    // Initialize async rendering
+    m_asyncQueue = std::make_unique<AsyncRenderQueue>(m_renderer.get());
+
+    // Set global pointers for the PDF system to use our embedded data
+    g_scrollState = m_scrollState.get();
+    g_renderer = m_renderer.get();
+    g_pageHeights = &m_pageHeights;
+    g_pageWidths = &m_pageWidths;
+    
+    std::cout << "PDFViewerEmbedder: Successfully loaded PDF from memory (" << size << " bytes) with " << pageCount << " pages" << std::endl;
+    return true;
+}
+
 void PDFViewerEmbedder::update()
 {
     if (!m_initialized || !m_pdfLoaded) return;

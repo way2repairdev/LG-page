@@ -40,6 +40,16 @@ public:
 
     // File operations
     bool loadPCB(const std::string& filePath);
+    
+    /**
+     * Load a PCB from memory buffer (for secure AWS files)
+     * @param data PCB file contents as byte buffer
+     * @param size Size of the buffer
+     * @param displayName Optional display name for the PCB (used in UI)
+     * @return true if the PCB was loaded successfully
+     */
+    bool loadPCBFromMemory(const char* data, size_t size, const std::string& displayName = "");
+    
     void closePCB();
     bool isPCBLoaded() const { return m_pdfLoaded; }
     std::string getCurrentFilePath() const { return m_currentFilePath; }

@@ -18,6 +18,9 @@ public:
     // Load a PDF document
     bool LoadDocument(const std::string& filePath);
 
+    // Load a PDF document from memory buffer
+    bool LoadDocumentFromMemory(const void* data, size_t size);
+
     // Render a specific page
     void RenderPage(int pageIndex, bool highResolution);
 

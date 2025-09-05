@@ -129,6 +129,7 @@ include_directories(
 # Source files - all paths relative to project directory
 set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/main.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/memoryfilemanager.cpp
 )
 
 # UI sources - conditionally include hybrid PDF viewer

@@ -107,6 +107,52 @@ bool PDFRenderer::LoadDocument(const std::string& filePath) {
     }
 }
 
+bool PDFRenderer::LoadDocumentFromMemory(const void* data, size_t size) {
+    std::lock_guard<std::mutex> lock(document_mutex_); // Lock before accessing document_
+    
+    try {
+        document_ = FPDF_LoadMemDocument(data, static_cast<int>(size), nullptr);
+        if (!document_) {
+            unsigned long error = FPDF_GetLastError();
+            std::cerr << "Failed to load PDF document from memory" << std::endl;
+            std::cerr << "PDFium error code: " << error << std::endl;
+            
+            switch (error) {
+                case FPDF_ERR_SUCCESS:
+                    std::cerr << "Error: No error (this shouldn't happen)" << std::endl;
+                    break;
+                case FPDF_ERR_UNKNOWN:
+                    std::cerr << "Error: Unknown error" << std::endl;
+                    break;
+                case FPDF_ERR_FILE:
+                    std::cerr << "Error: File not found or could not be opened" << std::endl;
+                    break;
+                case FPDF_ERR_FORMAT:
+                    std::cerr << "Error: File not in PDF format or corrupted" << std::endl;
+                    break;
+                case FPDF_ERR_PASSWORD:
+                    std::cerr << "Error: Password required" << std::endl;
+                    break;
+                case FPDF_ERR_SECURITY:
+                    std::cerr << "Error: Unsupported security scheme" << std::endl;
+                    break;
+                case FPDF_ERR_PAGE:
+                    std::cerr << "Error: Page not found or content error" << std::endl;
+                    break;
+                default:
+                    std::cerr << "Error: Unknown error code: " << error << std::endl;
+                    break;
+            }
+            return false;
+        }
+        std::cout << "Successfully loaded PDF from memory (" << size << " bytes)" << std::endl;
+        return true;
+    } catch (...) {
+        std::cerr << "Exception occurred while loading PDF from memory" << std::endl;
+        return false;
+    }
+}
+
 FPDF_BITMAP PDFRenderer::RenderPageToBitmap(int pageIndex, int pixelWidth, int pixelHeight) {
     std::lock_guard<std::mutex> lock(document_mutex_); // Lock before accessing document_
     if (!document_) return nullptr;

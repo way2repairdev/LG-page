@@ -44,6 +44,15 @@ public:
      * @return true if loaded successfully
      */
     bool loadPDF(const QString& filePath);
+    
+    /**
+     * Load a PDF from memory buffer (for AWS files)
+     * @param memoryId ID of the file stored in memory
+     * @param originalKey Original AWS key for display purposes
+     * @return true if loaded successfully
+     */
+    bool loadPDFFromMemory(const QString& memoryId, const QString& originalKey = QString());
+    
     // Asynchronous Phase 1 wrapper (non-blocking pre-read + deferred real load)
     void requestLoad(const QString &filePath);
     void cancelLoad();

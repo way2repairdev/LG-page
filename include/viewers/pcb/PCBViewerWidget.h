@@ -35,6 +35,15 @@ public:
 
     // File operations
     bool loadPCB(const QString &filePath);
+    
+    /**
+     * Load a PCB from memory buffer (for AWS files)
+     * @param memoryId ID of the file stored in memory
+     * @param originalKey Original AWS key for display purposes
+     * @return true if loaded successfully
+     */
+    bool loadPCBFromMemory(const QString& memoryId, const QString& originalKey = QString());
+    
     void requestLoad(const QString &filePath); // Phase 1 async wrapper
     void cancelLoad();
     void closePCB();
