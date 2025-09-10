@@ -25,6 +25,10 @@ public:
     void setCredentials(const QString& accessKey, const QString& secretKey, const QString& region, const QString& sessionToken = QString());
     void setBucket(const QString& bucket);
     void setEndpointOverride(const QString& endpoint); // optional (e.g., S3-compatible)
+    
+    // Server-proxied mode (NEW)
+    void setServerMode(bool enabled, const QString& serverUrl = QString(), const QString& authToken = QString());
+    bool isServerMode() const;
 
     bool isReady() const;
 
@@ -50,6 +54,9 @@ public:
 private:
     struct Impl;
     Impl* d{nullptr};
+    
+    // Private helper for server-proxied operations
+    std::optional<QVector<AwsListEntry>> listViaServer(const QString& prefix, int maxKeys);
 };
 
 #endif // AWSCLIENT_H

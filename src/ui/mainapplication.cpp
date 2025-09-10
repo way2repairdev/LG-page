@@ -209,11 +209,16 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
     //, m_baseUrl("http://localhost/api") // WAMP server API endpoint
 {
     writeTransitionLog("ctor: begin");
+    writeTransitionLog("ctor: after member initialization");
     // Optional: make the window frameless so we can control the top area height
+    // Disabled due to setWindowFlag crash - TODO: investigate further
+    /*
 #ifdef Q_OS_WIN
     setWindowFlag(Qt::FramelessWindowHint, true);
     setAttribute(Qt::WA_TranslucentBackground, false);
 #endif
+    */
+    writeTransitionLog("ctor: after window flags");
     setupUI();
     writeTransitionLog("ctor: after setupUI");
     
@@ -1080,8 +1085,6 @@ void MainApplication::applyTreeViewTheme()
     QString scrollbarGroove = "#f5f5f5";        // Light gray scrollbar track
     QString scrollbarHandle = "#d0d0d0";        // Medium gray scrollbar handle
     QString scrollbarHandleHover = "#b0b0b0";   // Darker gray on hover
-    QString branchClosedIcon = ":/icons/images/icons/tree_branch_open_light.svg";   // plus symbol (for closed nodes)
-    QString branchOpenIcon   = ":/icons/images/icons/tree_branch_closed_light.svg"; // minus symbol (for open nodes)
     QString altRow        = "#ffffff";           // Same as main background for uniform appearance
     
     // Build clean stylesheet with smaller fonts and uniform background
@@ -1136,7 +1139,7 @@ void MainApplication::applyTreeViewTheme()
         "  border-radius: 4px;"
         "}"
         "QTreeWidget::item:selected:focus {"
-        "  box-shadow: 0 0 0 1px %11;"                              // Subtle focus outline
+        "  box-shadow: 0 0 0 1px %9;"                               // Subtle focus outline
         "  border-radius: 4px;"
         "}"
         "QTreeWidget::header {"
@@ -1148,42 +1151,51 @@ void MainApplication::applyTreeViewTheme()
         "}"
         // Clean scrollbar styling
         "QScrollBar:vertical {"
-        "  background: %12;"
+        "  background: %10;"
         "  width: 12px;"                                            // Standard width
         "  margin: 0;"
         "  border: none;"
         "  border-radius: 6px;"
         "}"
         "QScrollBar::handle:vertical {"
-        "  background: %13;"
+        "  background: %11;"
         "  min-height: 24px;"                                       // Standard handle size
         "  border-radius: 6px;"
         "  margin: 1px;"                                            // Small margin for visual separation
         "}"
         "QScrollBar::handle:vertical:hover {"
-        "  background: %14;"
+        "  background: %12;"
         "}"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
         "QScrollBar:horizontal {"
-        "  background: %12;"
+        "  background: %10;"
         "  height: 12px;"
         "  margin: 0;"
         "  border: none;"
         "  border-radius: 6px;"
         "}"
         "QScrollBar::handle:horizontal {"
-        "  background: %13;"
+        "  background: %11;"
         "  min-width: 24px;"
         "  border-radius: 6px;"
         "  margin: 1px;"
         "}"
         "QScrollBar::handle:horizontal:hover {"
-        "  background: %14;"
+        "  background: %12;"
         "}"
         "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }"
-        ).arg(border, bg, text, textDisabled, hover, selectedBg, selectedText, selectedBgInactive,
-              branchClosedIcon, branchOpenIcon, focusOutline, scrollbarGroove, scrollbarHandle,
-              scrollbarHandleHover, altRow);
+        ).arg(border)          // %1
+         .arg(bg)              // %2
+         .arg(text)            // %3
+         .arg(textDisabled)    // %4
+         .arg(hover)           // %5
+         .arg(selectedBg)      // %6
+         .arg(selectedText)    // %7
+         .arg(selectedBgInactive) // %8
+         .arg(focusOutline)       // %9
+         .arg(scrollbarGroove)    // %10
+         .arg(scrollbarHandle)    // %11
+         .arg(scrollbarHandleHover); // %12
 
     m_treeWidget->setStyleSheet(style);
     m_treeWidget->setIndentation(20);                               // Standard indentation
@@ -2042,13 +2054,37 @@ void MainApplication::setAwsRootPath(const QString &path)
         refreshCurrentTree();
 }
 
-void MainApplication::configureAwsFromAuth(const AuthAwsCreds& creds)
+void MainApplication::configureAwsFromAuth(const AuthAwsCreds& creds, const QString& authToken)
 {
     if (!creds.accessKeyId.isEmpty() && !creds.secretAccessKey.isEmpty() && !creds.region.isEmpty()) {
+        // Store AWS credentials from login response
+        writeTransitionLog("configureAwsFromAuth: configuring AWS client with server credentials");
+        
+        // For now, use server-proxied mode instead of direct AWS access
+        // This allows the server to handle AWS operations with its own credentials
+        QString serverUrl = QStringLiteral("http://localhost:3000"); // TODO: make configurable
+        
+        m_aws.setServerMode(true, serverUrl, authToken);
+        if (!creds.bucket.isEmpty()) {
+            m_aws.setBucket(creds.bucket);
+        }
+        
+        writeTransitionLog(QString("configureAwsFromAuth: AWS configured in server mode (bucket=%1, tokenPresent=%2)")
+                          .arg(creds.bucket).arg(!authToken.isEmpty()));
+        
+        // Also set direct credentials as fallback (if AWS SDK is available)
         m_aws.setCredentials(creds.accessKeyId, creds.secretAccessKey, creds.region, creds.sessionToken);
-        if (!creds.bucket.isEmpty()) m_aws.setBucket(creds.bucket);
         if (!creds.endpoint.isEmpty()) m_aws.setEndpointOverride(creds.endpoint);
-        // Do not force switch source here; allow user to pick AWS via toggle
+        
+        writeTransitionLog("configureAwsFromAuth: AWS client configured successfully");
+        
+        // Enable AWS button if available
+        if (m_btnAws) {
+            m_btnAws->setEnabled(true);
+            m_btnAws->setToolTip("AWS S3 (Connected via Server)");
+        }
+    } else {
+        writeTransitionLog("configureAwsFromAuth: incomplete AWS credentials received from server");
     }
 }
 
@@ -2100,6 +2136,36 @@ void MainApplication::autoLoadAwsCredentials()
     } else {
         writeTransitionLog("AWS credential auto-load disabled (remember not checked)");
     }
+}
+
+void MainApplication::switchToAwsTreeview()
+{
+    writeTransitionLog("switchToAwsTreeview: programmatically switching to AWS");
+    
+    // Check if AWS is configured and ready
+    if (!m_aws.isReady()) {
+        writeTransitionLog("switchToAwsTreeview: AWS not ready, cannot switch");
+        return;
+    }
+    
+    // Update toggle buttons to reflect AWS selection
+    if (m_btnAws && m_btnServer && m_btnLocal) {
+        m_btnServer->blockSignals(true);
+        m_btnLocal->blockSignals(true);
+        m_btnAws->blockSignals(true);
+        
+        m_btnServer->setChecked(false);
+        m_btnLocal->setChecked(false);
+        m_btnAws->setChecked(true);
+        
+        m_btnServer->blockSignals(false);
+        m_btnLocal->blockSignals(false);
+        m_btnAws->blockSignals(false);
+    }
+    
+    // Switch to AWS tree source and load files
+    setTreeSource(TreeSource::AWS, true);
+    writeTransitionLog("switchToAwsTreeview: successfully switched to AWS treeview");
 }
 
 void MainApplication::setTreeSource(TreeSource src, bool forceReload)

@@ -56,7 +56,7 @@ private:
     void setupDatabaseConnection();
     bool validateInput();
     void performLogin(const QString &username, const QString &password);
-    void configureAwsForMain(MainApplication* app, const AuthAwsCreds& aws);
+    void configureAwsForMain(MainApplication* app, const AuthAwsCreds& aws, const QString& authToken);
     void showConnectionStatus(bool connected);
     void enableLoginControls(bool enabled);
     void launchMainApplication(const QString &username, const UserInfo &userInfo);

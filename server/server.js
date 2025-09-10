@@ -14,6 +14,11 @@ import {
   STSClient,
   AssumeRoleCommand
 } from '@aws-sdk/client-sts';
+import {
+  S3Client,
+  ListObjectsV2Command,
+  GetObjectCommand
+} from '@aws-sdk/client-s3';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 
@@ -472,6 +477,182 @@ app.post('/auth/refresh', authenticateToken, async (req, res) => {
       success: false, 
       message: 'Token refresh failed' 
     });
+  }
+});
+
+// S3 file listing endpoint - allows client to get file lists using server's AWS credentials
+app.post('/api/s3/list', authenticateToken, async (req, res) => {
+  try {
+    const { prefix = '', maxKeys = 1000, delimiter = '/' } = req.body;
+    
+    // Validate inputs
+    if (typeof prefix !== 'string' || typeof maxKeys !== 'number' || typeof delimiter !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request parameters'
+      });
+    }
+    
+    if (maxKeys > 10000 || maxKeys < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'maxKeys must be between 0 and 10000'
+      });
+    }
+
+    // Use server's AWS credentials to list S3 objects
+    const bucket = process.env.AWS_S3_BUCKET;
+    if (!bucket) {
+      return res.status(500).json({
+        success: false,
+        message: 'S3 bucket not configured on server'
+      });
+    }
+
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION || 'us-east-1',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        ...(process.env.AWS_SESSION_TOKEN && { sessionToken: process.env.AWS_SESSION_TOKEN })
+      }
+    });
+
+    const command = new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+      MaxKeys: maxKeys,
+      Delimiter: delimiter
+    });
+
+    const response = await s3Client.send(command);
+    
+    // Transform the response to match the client's expected format
+    const entries = [];
+    
+    // Add folders (CommonPrefixes)
+    if (response.CommonPrefixes) {
+      for (const commonPrefix of response.CommonPrefixes) {
+        const prefix = commonPrefix.Prefix;
+        const name = prefix.endsWith('/') ? 
+          prefix.substring(0, prefix.length - 1).split('/').pop() : 
+          prefix.split('/').pop();
+        
+        entries.push({
+          isDir: true,
+          name: name || prefix,
+          key: prefix,
+          size: 0
+        });
+      }
+    }
+    
+    // Add files (Contents)
+    if (response.Contents) {
+      for (const object of response.Contents) {
+        // Skip directory markers (keys ending with /)
+        if (object.Key.endsWith('/')) continue;
+        
+        const name = object.Key.split('/').pop();
+        entries.push({
+          isDir: false,
+          name: name || object.Key,
+          key: object.Key,
+          size: object.Size || 0
+        });
+      }
+    }
+
+    // Security headers for response
+    res.set({
+      'Cache-Control': 'no-store',
+      'Pragma': 'no-cache'
+    });
+
+    res.json({
+      success: true,
+      entries,
+      isTruncated: response.IsTruncated || false,
+      nextContinuationToken: response.NextContinuationToken,
+      bucket
+    });
+    
+  } catch (e) {
+    console.error('S3 list error:', e);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to list S3 objects'
+    });
+  }
+});
+
+// S3 file download endpoint - allows client to download files using server's AWS credentials
+app.post('/api/s3/download', authenticateToken, async (req, res) => {
+  try {
+    const { key } = req.body;
+    
+    if (!key || typeof key !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'File key is required'
+      });
+    }
+
+    // Use server's AWS credentials to download S3 object
+    const bucket = process.env.AWS_S3_BUCKET;
+    if (!bucket) {
+      return res.status(500).json({
+        success: false,
+        message: 'S3 bucket not configured on server'
+      });
+    }
+
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION || 'us-east-1',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        ...(process.env.AWS_SESSION_TOKEN && { sessionToken: process.env.AWS_SESSION_TOKEN })
+      }
+    });
+
+    const command = new GetObjectCommand({
+      Bucket: bucket,
+      Key: key
+    });
+
+    const response = await s3Client.send(command);
+    
+    if (!response.Body) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found'
+      });
+    }
+
+    // Set appropriate headers for file download
+    if (response.ContentType) {
+      res.set('Content-Type', response.ContentType);
+    }
+    if (response.ContentLength) {
+      res.set('Content-Length', response.ContentLength.toString());
+    }
+    
+    const fileName = key.split('/').pop() || 'download';
+    res.set('Content-Disposition', `attachment; filename="${fileName}"`);
+
+    // Stream the file data to the response
+    const stream = response.Body;
+    stream.pipe(res);
+    
+  } catch (e) {
+    console.error('S3 download error:', e);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to download S3 object'
+      });
+    }
   }
 });const port = Number(process.env.PORT || 3000);
 app.listen(port, () => {

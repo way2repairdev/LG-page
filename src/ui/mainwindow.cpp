@@ -495,7 +495,7 @@ void MainWindow::onAuthLoginFinished(bool success, const AuthResult& result, con
         // Configure AWS for the main app using credentials from server
         if (m_mainApp) {
             writeTransitionLog("Configuring AWS credentials for main application");
-            m_mainApp->configureAwsFromAuth(result.aws);
+            configureAwsForMain(m_mainApp, result.aws, m_auth.authToken());
         }
         return;
     }
@@ -589,10 +589,32 @@ void MainWindow::launchMainApplication(const QString &username, const UserInfo &
     qDebug() << "Main application launched for user:" << username;
 }
 
-void MainWindow::configureAwsForMain(MainApplication* app, const AuthAwsCreds& aws)
+void MainWindow::configureAwsForMain(MainApplication* app, const AuthAwsCreds& aws, const QString& authToken)
 {
-    Q_UNUSED(app)
-    Q_UNUSED(aws)
+    if (!app) {
+        writeTransitionLog("configureAwsForMain: app is null");
+        return;
+    }
+    
+    // Configure AWS credentials from server login response
+    if (!aws.accessKeyId.isEmpty() && !aws.secretAccessKey.isEmpty() && !aws.region.isEmpty()) {
+        writeTransitionLog(QString("configureAwsForMain: setting AWS creds (key=%1..., region=%2, bucket=%3)")
+                          .arg(aws.accessKeyId.left(8)).arg(aws.region).arg(aws.bucket));
+        
+        // Pass both the AWS credentials and auth token to MainApplication
+        app->configureAwsFromAuth(aws, authToken);
+        
+        // If bucket is available, automatically switch to AWS treeview
+        if (!aws.bucket.isEmpty()) {
+            writeTransitionLog("configureAwsForMain: switching to AWS treeview automatically");
+            // Use a timer to ensure the main application UI is fully initialized
+            QTimer::singleShot(500, this, [app]() {
+                app->switchToAwsTreeview();
+            });
+        }
+    } else {
+        writeTransitionLog("configureAwsForMain: incomplete AWS credentials from server");
+    }
 }
 
 void MainWindow::closeLoginWindow()

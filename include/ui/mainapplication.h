@@ -82,7 +82,7 @@ public:
     // Smooth entrance animation when shown after login
     void animateEnter();
     // Configure AWS client from auth server response (optional)
-    void configureAwsFromAuth(const AuthAwsCreds& creds);
+    void configureAwsFromAuth(const AuthAwsCreds& creds, const QString& authToken);
 
 private slots:
     void onTreeItemClicked(QTreeWidgetItem *item, int column);
@@ -110,6 +110,7 @@ public slots:
     void setServerRootPath(const QString &path);
     // Maximize using our custom frameless logic
     void maximizeWindow();
+    void switchToAwsTreeview(); // Switch to AWS treeview programmatically (e.g., after login)
 
 protected:
     void changeEvent(QEvent *event) override; // Re-apply theme on palette changes
