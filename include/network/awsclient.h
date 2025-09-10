@@ -21,7 +21,8 @@ public:
     // Setup from environment variables if present
     // AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_S3_BUCKET
     bool loadFromEnv();
-    void setCredentials(const QString& accessKey, const QString& secretKey, const QString& region);
+    // Optional sessionToken supports temporary credentials (STS)
+    void setCredentials(const QString& accessKey, const QString& secretKey, const QString& region, const QString& sessionToken = QString());
     void setBucket(const QString& bucket);
     void setEndpointOverride(const QString& endpoint); // optional (e.g., S3-compatible)
 

@@ -52,7 +52,7 @@ bool AwsClient::loadFromEnv() {
     return isReady();
 }
 
-void AwsClient::setCredentials(const QString& accessKey, const QString& secretKey, const QString& region) {
+void AwsClient::setCredentials(const QString& accessKey, const QString& secretKey, const QString& region, const QString& sessionToken) {
     d->region = region;
     d->lastError.clear();
     Aws::Client::ClientConfiguration cfg;
@@ -62,7 +62,7 @@ void AwsClient::setCredentials(const QString& accessKey, const QString& secretKe
     cfg.verifySSL = true;
     cfg.connectTimeoutMs = 8000;
     cfg.requestTimeoutMs = 20000;
-    Aws::Auth::AWSCredentials creds(accessKey.toStdString(), secretKey.toStdString());
+    Aws::Auth::AWSCredentials creds(accessKey.toStdString(), secretKey.toStdString(), sessionToken.toStdString());
     try {
         d->s3 = std::make_shared<Aws::S3::S3Client>(creds, cfg, Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never, false);
     } catch (const std::exception &e) {
@@ -216,9 +216,10 @@ bool AwsClient::loadFromEnv() {
     return false;
 }
 
-void AwsClient::setCredentials(const QString& accessKey, const QString& secretKey, const QString& region) {
+void AwsClient::setCredentials(const QString& accessKey, const QString& secretKey, const QString& region, const QString& sessionToken) {
     Q_UNUSED(accessKey)
     Q_UNUSED(secretKey)
+    Q_UNUSED(sessionToken)
     d->region = region;
     d->lastError = "AWS SDK not available - application built without AWS support";
 }

@@ -68,6 +68,15 @@ CMakeLists.txt.user*
 # Python byte code
 *.pyc
 
+# Environment files
+# ----------------
+.env
+.env.*
+.environment
+env.json
+config.json
+secrets.json
+
 # Binaries
 # --------
 *.exe

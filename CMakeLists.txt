@@ -183,12 +183,11 @@ set(PCB_SOURCES
     ${IMGUI_BACKENDS_DIR}/imgui_impl_opengl2.cpp
 )
 
-set(DATABASE_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/database/databasemanager.cpp
-)
+set(DATABASE_SOURCES)
 
 set(NETWORK_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/network/awsclient.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/network/authservice.cpp
 )
 
 # Header files
@@ -241,6 +240,7 @@ set(DATABASE_HEADERS
 
 set(NETWORK_HEADERS
     ${INCLUDE_DIR}/network/awsclient.h
+    ${INCLUDE_DIR}/network/authservice.h
 )
 
 # UI files - using dynamic paths

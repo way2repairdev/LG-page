@@ -52,8 +52,10 @@ MainWindow::MainWindow(QWidget *parent)
     , m_dragging(false)
 {
     ui->setupUi(this);
+    setupStaticLightTheme();
     setupLoginConnections();
-    setupDatabaseConnection();
+    // Disable old MySQL path; we'll use Node.js auth service
+    // setupDatabaseConnection();
     writeTransitionLog("Login window initialized");
     
     // Set window properties for compact dialog
@@ -134,10 +136,10 @@ MainWindow::MainWindow(QWidget *parent)
             s.setValue("login/remember", on);
             if (on) {
                 s.setValue("login/username", ui->usernameLineEdit ? ui->usernameLineEdit->text() : QString());
-                s.setValue("login/password", ui->passwordLineEdit ? ui->passwordLineEdit->text() : QString());
-                writeTransitionLog(QString("remember toggled=1 -> saved user_len=%1 pass_len=%2")
-                                    .arg(ui->usernameLineEdit ? ui->usernameLineEdit->text().length() : 0)
-                                    .arg(ui->passwordLineEdit ? ui->passwordLineEdit->text().length() : 0));
+                // Do NOT store plaintext password
+                s.remove("login/password");
+                writeTransitionLog(QString("remember toggled=1 -> saved user_len=%1 (password not stored)")
+                                    .arg(ui->usernameLineEdit ? ui->usernameLineEdit->text().length() : 0));
             } else {
                 s.remove("login/username");
                 s.remove("login/password");
@@ -150,10 +152,10 @@ MainWindow::MainWindow(QWidget *parent)
             if (!ui->savePasswordCheckBox->isChecked()) return;
             auto s = appSettings();
             s.setValue("login/username", ui->usernameLineEdit ? ui->usernameLineEdit->text() : QString());
-            s.setValue("login/password", ui->passwordLineEdit ? ui->passwordLineEdit->text() : QString());
-            writeTransitionLog(QString("autosave creds user_len=%1 pass_len=%2")
-                                .arg(ui->usernameLineEdit ? ui->usernameLineEdit->text().length() : 0)
-                                .arg(ui->passwordLineEdit ? ui->passwordLineEdit->text().length() : 0));
+            // Do NOT store plaintext password
+            s.remove("login/password");
+            writeTransitionLog(QString("autosave creds user_len=%1 (password not stored)")
+                                .arg(ui->usernameLineEdit ? ui->usernameLineEdit->text().length() : 0));
             s.sync();
         };
         QObject::connect(ui->usernameLineEdit, &QLineEdit::textChanged, this, saveIfRemembered);
@@ -172,6 +174,160 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::setupStaticLightTheme()
+{
+    // Apply a clean, static light theme to the entire application
+    const QString lightTheme = R"(
+        QMainWindow {
+            background-color: #ffffff;
+            color: #333333;
+        }
+        
+        QWidget {
+            background-color: #ffffff;
+            color: #333333;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 9pt;
+        }
+        
+        QPushButton {
+            background-color: #007acc;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-weight: 500;
+            min-height: 20px;
+        }
+        
+        QPushButton:hover {
+            background-color: #005a9e;
+        }
+        
+        QPushButton:pressed {
+            background-color: #004578;
+        }
+        
+        QPushButton:disabled {
+            background-color: #cccccc;
+            color: #666666;
+        }
+        
+        QLineEdit {
+            background-color: #ffffff;
+            border: 2px solid #e1e1e1;
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #333333;
+            selection-background-color: #007acc;
+            selection-color: #ffffff;
+        }
+        
+        QLineEdit:focus {
+            border-color: #007acc;
+            outline: none;
+        }
+        
+        QLineEdit:hover {
+            border-color: #b3b3b3;
+        }
+        
+        QCheckBox {
+            color: #333333;
+            spacing: 8px;
+        }
+        
+        QCheckBox::indicator {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e1e1e1;
+            border-radius: 3px;
+            background-color: #ffffff;
+        }
+        
+        QCheckBox::indicator:hover {
+            border-color: #007acc;
+        }
+        
+        QCheckBox::indicator:checked {
+            background-color: #007acc;
+            border-color: #007acc;
+            image: url(:/icons/images/icons/check.svg);
+        }
+        
+        QLabel {
+            color: #333333;
+            background-color: transparent;
+        }
+        
+        QMessageBox {
+            background-color: #ffffff;
+            color: #333333;
+            border: 1px solid #e1e1e1;
+        }
+        
+        QMessageBox QLabel {
+            color: #333333;
+            background-color: #ffffff;
+        }
+        
+        QMessageBox QPushButton {
+            background-color: #007acc;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            min-width: 80px;
+            padding: 8px 16px;
+            font-weight: 500;
+        }
+        
+        QMessageBox QPushButton:hover {
+            background-color: #005a9e;
+        }
+        
+        QMessageBox QPushButton:pressed {
+            background-color: #004578;
+        }
+        
+        QDialog {
+            background-color: #ffffff;
+            color: #333333;
+            border: 1px solid #e1e1e1;
+        }
+        
+        QDialog QLabel {
+            color: #333333;
+            background-color: #ffffff;
+        }
+        
+        /* Login container specific styling */
+        #loginContainer {
+            background-color: #ffffff;
+            border: 1px solid #e1e1e1;
+            border-radius: 8px;
+        }
+        
+        #closeButton {
+            background-color: transparent;
+            border: none;
+            color: #666666;
+            font-size: 16px;
+            font-weight: bold;
+            padding: 4px;
+            border-radius: 4px;
+        }
+        
+        #closeButton:hover {
+            background-color: #f0f0f0;
+            color: #333333;
+        }
+    )";
+    
+    // Apply the theme to the entire application
+    this->setStyleSheet(lightTheme);
+    qApp->setStyleSheet(lightTheme);
+}
+
 void MainWindow::setupLoginConnections()
 {
     // Connect login button to slot
@@ -186,36 +342,15 @@ void MainWindow::setupLoginConnections()
     
     // Connect close button with animated close
     connect(ui->closeButton, &QPushButton::clicked, this, [this]{ animateClose(); });
+    
+    // Connect AuthService login finished signal (once during initialization)
+    connect(&m_auth, &AuthService::loginFinished, this, &MainWindow::onAuthLoginFinished);
 }
 
 void MainWindow::setupDatabaseConnection()
 {
-    // Connect database manager signals
-    connect(m_dbManager, &DatabaseManager::connectionStatusChanged, 
-            this, &MainWindow::onDatabaseConnectionChanged);
-    connect(m_dbManager, &DatabaseManager::errorOccurred, 
-            this, &MainWindow::onDatabaseError);
-    
-    // Attempt to connect to WAMP MySQL database
-    // Default WAMP settings: localhost, port 3306, user: root, no password
-    bool connected = m_dbManager->connectToDatabase(
-        "localhost",        // hostname
-        "w2r_login",     // database name
-        "root",            // username
-        "",                // password (empty for default WAMP)
-        3306               // port
-    );
-    
-    if (!connected) {
-        QMessageBox::warning(this, "Database Connection", 
-            "Could not connect to MySQL database.\n\n"
-            "Requirements:\n"
-            "1. WAMP server running with MySQL service started\n"
-            "2. Database 'login_system' created\n"
-            "3. MySQL ODBC Driver installed\n"
-            "   Download from: https://dev.mysql.com/downloads/connector/odbc/\n\n"
-            "The application will continue in offline mode.");
-    }
+    // No-op: legacy DB disabled; enable login controls immediately
+    onDatabaseConnectionChanged(true);
 }
 
 void MainWindow::onLoginButtonClicked()
@@ -248,31 +383,69 @@ void MainWindow::onPasswordChanged()
     ui->loginButton->setEnabled(canLogin);
 }
 
+void MainWindow::showStyledMessageBox(QMessageBox::Icon icon, const QString &title, const QString &message)
+{
+    const QString lightMessageBoxStyle = R"(
+        QMessageBox {
+            background-color: #ffffff;
+            color: #333333;
+            border: 1px solid #e1e1e1;
+            border-radius: 8px;
+        }
+        QMessageBox QLabel {
+            color: #333333;
+            background-color: transparent;
+            padding: 10px;
+            font-size: 10pt;
+        }
+        QMessageBox QPushButton {
+            background-color: #007acc;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            min-width: 80px;
+            padding: 8px 16px;
+            font-weight: 500;
+            font-size: 9pt;
+        }
+        QMessageBox QPushButton:hover {
+            background-color: #005a9e;
+        }
+        QMessageBox QPushButton:pressed {
+            background-color: #004578;
+        }
+    )";
+    
+    QMessageBox msgBox(icon, title, message, QMessageBox::Ok, this);
+    msgBox.setStyleSheet(lightMessageBoxStyle);
+    msgBox.exec();
+}
+
 bool MainWindow::validateInput()
 {
     QString username = ui->usernameLineEdit->text().trimmed();
     QString password = ui->passwordLineEdit->text();
     
     if (username.isEmpty()) {
-        QMessageBox::warning(this, "Invalid Input", "Please enter a username.");
+        showStyledMessageBox(QMessageBox::Warning, "Invalid Input", "Please enter a username.");
         ui->usernameLineEdit->setFocus();
         return false;
     }
     
     if (password.isEmpty()) {
-        QMessageBox::warning(this, "Invalid Input", "Please enter a password.");
+        showStyledMessageBox(QMessageBox::Warning, "Invalid Input", "Please enter a password.");
         ui->passwordLineEdit->setFocus();
         return false;
     }
     
     if (username.length() < 3) {
-        QMessageBox::warning(this, "Invalid Input", "Username must be at least 3 characters long.");
+        showStyledMessageBox(QMessageBox::Warning, "Invalid Input", "Username must be at least 3 characters long.");
         ui->usernameLineEdit->setFocus();
         return false;
     }
     
     if (password.length() < 4) {
-        QMessageBox::warning(this, "Invalid Input", "Password must be at least 4 characters long.");
+        showStyledMessageBox(QMessageBox::Warning, "Invalid Input", "Password must be at least 4 characters long.");
         ui->passwordLineEdit->setFocus();
         return false;
     }
@@ -287,84 +460,73 @@ void MainWindow::performLogin(const QString &username, const QString &password)
     enableLoginControls(false);
     ui->loginButton->setText("Authenticating...");
     
-    // Use database authentication if connected
-    if (m_dbManager->isConnected()) {
-        bool authenticated = m_dbManager->authenticateUser(username, password);
-        
-        if (authenticated) {
-            // Get user information
-            UserInfo userInfo = m_dbManager->getUserInfo(username);
-            
-            // Launch main application instead of showing message box
-            // Persist remember choice if requested
-            persistRememberChoice(username, password);
-            launchMainApplication(username, userInfo);
-            
-            qDebug() << "Database login successful for user:" << username;
-            return; // Exit early since we're launching the main app
-            
-        } else {
-            QMessageBox::critical(this, "Login Failed", 
-                "Invalid username or password.\n\n"
-                "Please check your credentials and try again.\n\n"
-                "Note: For testing, you can use:\n"
-                "- admin / password\n"
-                "- user / 1234");
-            
-            ui->passwordLineEdit->clear();
-            ui->usernameLineEdit->setFocus();
-        }
-    } 
-    else {
-        // Fallback to hardcoded credentials if database is not available
-        QMessageBox::warning(this, "Offline Mode", 
-            "Database is not connected. Using offline authentication.");
-        
-        if ((username == "admin" && password == "password") || 
-            (username == "user" && password == "1234")) {
-            
-            // Create offline user info
-            UserInfo offlineUserInfo;
-            offlineUserInfo.username = username;
-            offlineUserInfo.fullName = (username == "admin") ? "Administrator" : "Regular User";
-            offlineUserInfo.email = username + "@localhost.com";
-            offlineUserInfo.isActive = true;
-            
-            // Launch main application in offline mode
-            // Persist remember choice if requested
-            persistRememberChoice(username, password);
-            launchMainApplication(username, offlineUserInfo);
-            return; // Exit early since we're launching the main app
-        } else {
-            QMessageBox::critical(this, "Login Failed", 
-                "Invalid username or password.\n\n"
-                "Offline mode credentials:\n"
-                "- admin / password\n"
-                "- user / 1234");
-            
-            ui->passwordLineEdit->clear();
-            ui->usernameLineEdit->setFocus();
-        }
+    // Store current login attempt for the callback
+    m_currentUsername = username;
+    m_currentPassword = password;
+    
+    // Call Node.js auth service
+    // Read base URL from settings, default to http://localhost:3000 if not set
+    {
+        auto s = appSettings();
+        const QString baseUrl = s.value("api/baseUrl", QStringLiteral("http://localhost:3000")).toString();
+        m_auth.setBaseUrl(baseUrl);
+        writeTransitionLog(QString("AuthService baseUrl='%1'").arg(baseUrl));
     }
     
-    // Re-enable login controls
+    m_auth.login(username, password);
+}
+
+void MainWindow::onAuthLoginFinished(bool success, const AuthResult& result, const QString& error)
+{
+    writeTransitionLog(QString("onAuthLoginFinished: success=%1, error='%2'").arg(success).arg(error));
+    
+    if (success) {
+        writeTransitionLog("Login successful, launching main application");
+        // Persist remember choice if requested (store only username locally; avoid storing password if possible)
+        persistRememberChoice(m_currentUsername, m_currentPassword);
+        // Build UserInfo
+        UserInfo uiInfo; 
+        uiInfo.username = result.user.username.isEmpty() ? m_currentUsername : result.user.username; 
+        uiInfo.fullName = result.user.fullName; 
+        uiInfo.email = result.user.email; 
+        uiInfo.isActive = true;
+        // Launch main app
+        launchMainApplication(m_currentUsername, uiInfo);
+        // Configure AWS for the main app using credentials from server
+        if (m_mainApp) {
+            writeTransitionLog("Configuring AWS credentials for main application");
+            m_mainApp->configureAwsFromAuth(result.aws);
+        }
+        return;
+    }
+    
+    // Show appropriate error dialog based on error type
+    writeTransitionLog(QString("Login failed, showing error dialog: %1").arg(error));
+    QString title = "Login Failed";
+    QString message = error.isEmpty() ? QStringLiteral("Authentication failed") : error;
+    
+    if (error.contains("Free Plan Access Restricted")) {
+        showStyledMessageBox(QMessageBox::Information, "Upgrade Required", message);
+    } else if (error.contains("Account Not Activated")) {
+        showStyledMessageBox(QMessageBox::Warning, "Account Activation Required", message);
+    } else if (error.contains("Premium Plan Expired")) {
+        showStyledMessageBox(QMessageBox::Warning, "Subscription Expired", message);
+    } else {
+        showStyledMessageBox(QMessageBox::Critical, title, message);
+    }
+    
+    ui->passwordLineEdit->clear();
+    ui->usernameLineEdit->setFocus();
     ui->loginButton->setText("Login");
     enableLoginControls(true);
 }
 
 void MainWindow::onDatabaseConnectionChanged(bool connected)
 {
-    showConnectionStatus(connected);
-    enableLoginControls(connected);
-    
-    if (connected) {
-        qDebug() << "Database connected successfully";
-        // Update window title to show connection status
-        setWindowTitle("XinZhiZao - Login System (Connected)");
-    } else {
-        qDebug() << "Database disconnected";
-        setWindowTitle("XinZhiZao - Login System (Offline)");
-    }
+    Q_UNUSED(connected)
+    showConnectionStatus(true);
+    enableLoginControls(true);
+    setWindowTitle("Way2Repair - Login System");
 }
 
 void MainWindow::onDatabaseError(const QString &error)
@@ -389,11 +551,8 @@ void MainWindow::showConnectionStatus(bool connected)
 
 void MainWindow::enableLoginControls(bool enabled)
 {
-    // Enable/disable login controls based on connection status
-    ui->loginButton->setEnabled(enabled && !ui->usernameLineEdit->text().trimmed().isEmpty() && 
-                                          !ui->passwordLineEdit->text().isEmpty());
-    
-    // Always keep input fields enabled for offline mode
+    // Enable/disable login controls
+    ui->loginButton->setEnabled(enabled && !ui->usernameLineEdit->text().trimmed().isEmpty() && !ui->passwordLineEdit->text().isEmpty());
     ui->usernameLineEdit->setEnabled(true);
     ui->passwordLineEdit->setEnabled(true);
 }
@@ -428,6 +587,12 @@ void MainWindow::launchMainApplication(const QString &username, const UserInfo &
     writeTransitionLog("launchMainApplication: login window hidden");
     
     qDebug() << "Main application launched for user:" << username;
+}
+
+void MainWindow::configureAwsForMain(MainApplication* app, const AuthAwsCreds& aws)
+{
+    Q_UNUSED(app)
+    Q_UNUSED(aws)
 }
 
 void MainWindow::closeLoginWindow()
@@ -670,10 +835,9 @@ void MainWindow::loadSavedCredentials()
 
     if (remember) {
         const QString savedUser = s.value("login/username").toString();
-        const QString savedPass = s.value("login/password").toString();
-        writeTransitionLog(QString("loadSavedCredentials remember=1 user='%1' pass_len=%2").arg(savedUser).arg(savedPass.length()));
+    writeTransitionLog(QString("loadSavedCredentials remember=1 user='%1' (password not stored)").arg(savedUser));
         if (ui->usernameLineEdit) { QSignalBlocker b(ui->usernameLineEdit); ui->usernameLineEdit->setText(savedUser); }
-        if (ui->passwordLineEdit) { QSignalBlocker b(ui->passwordLineEdit); ui->passwordLineEdit->setText(savedPass); }
+    if (ui->passwordLineEdit) { QSignalBlocker b(ui->passwordLineEdit); ui->passwordLineEdit->clear(); }
         onUsernameChanged();
         onPasswordChanged();
     } else {
@@ -689,8 +853,9 @@ void MainWindow::persistRememberChoice(const QString &username, const QString &p
     s.setValue("login/remember", remember);
     if (remember) {
         s.setValue("login/username", username);
-        s.setValue("login/password", password);
-    writeTransitionLog(QString("persistRememberChoice saved user='%1' pass_len=%2").arg(username).arg(password.length()));
+    // Do NOT store plaintext password
+    s.remove("login/password");
+    writeTransitionLog(QString("persistRememberChoice saved user='%1' (password not stored)").arg(username));
     } else {
         s.remove("login/username");
         s.remove("login/password");

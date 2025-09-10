@@ -2,61 +2,35 @@
 #define DATABASEMANAGER_H
 
 #include <QObject>
-#include <QtSql/QSqlDatabase>
-#include <QtSql/QSqlQuery>
-#include <QtSql/QSqlError>
-#include <QDebug>
-#include <QCryptographicHash>
+#include <QString>
 
 struct UserInfo {
-    int id;
     QString username;
-    QString email;
     QString fullName;
-    bool isActive;
+    QString email;
+    bool isActive{true};
 };
 
-class DatabaseManager : public QObject
-{
+class DatabaseManager : public QObject {
     Q_OBJECT
-
 public:
-    explicit DatabaseManager(QObject *parent = nullptr);
-    ~DatabaseManager();
+    explicit DatabaseManager(QObject* parent = nullptr) : QObject(parent) {}
+    ~DatabaseManager() override {}
 
-    // Database connection methods
-    bool connectToDatabase(const QString &hostname = "localhost",
-                          const QString &database = "w2r_login",
-                          const QString &username = "root",
-                          const QString &password = "",
-                          int port = 3306);
-    void disconnectFromDatabase();
-    bool isConnected() const;
+    // No-op DB connection; we'll authenticate via AuthService/Node.js
+    bool connectToDatabase(const QString& hostname = QString(), const QString& database = QString(),
+                           const QString& username = QString(), const QString& password = QString(), int port = 0)
+    { Q_UNUSED(hostname) Q_UNUSED(database) Q_UNUSED(username) Q_UNUSED(password) Q_UNUSED(port) emit connectionStatusChanged(false); return false; }
+    void disconnectFromDatabase() {}
+    bool isConnected() const { return false; }
 
-    // User authentication methods
-    bool authenticateUser(const QString &username, const QString &password);
-    UserInfo getUserInfo(const QString &username);
-    
-    // User management methods
-    bool createUser(const QString &username, const QString &password, 
-                   const QString &email, const QString &fullName);
-    bool updateLastLogin(const QString &username);
-    
-    // Database setup methods
-    bool createTables();
-    bool tableExists(const QString &tableName);
-
-private:
-    QSqlDatabase m_database;
-    QString m_connectionName;
-    
-    // Helper methods
-    QString hashPassword(const QString &password) const;
-    bool executeQuery(const QString &queryString, const QVariantList &bindings = QVariantList());
+    // Legacy methods kept for interface compatibility (always return false/empty)
+    bool authenticateUser(const QString& username, const QString& password) { Q_UNUSED(username) Q_UNUSED(password) return false; }
+    UserInfo getUserInfo(const QString& username) { UserInfo u; u.username = username; return u; }
 
 signals:
     void connectionStatusChanged(bool connected);
-    void errorOccurred(const QString &error);
+    void errorOccurred(const QString& message);
 };
 
 #endif // DATABASEMANAGER_H

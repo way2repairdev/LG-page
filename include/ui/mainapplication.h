@@ -36,6 +36,7 @@
 #include <QPointer>
 #include "network/awsclient.h"
 #include "ui/awsconfigdialog.h"
+#include "network/authservice.h"
 class QParallelAnimationGroup;
 class QPropertyAnimation;
 
@@ -80,6 +81,8 @@ public:
     ~MainApplication();
     // Smooth entrance animation when shown after login
     void animateEnter();
+    // Configure AWS client from auth server response (optional)
+    void configureAwsFromAuth(const AuthAwsCreds& creds);
 
 private slots:
     void onTreeItemClicked(QTreeWidgetItem *item, int column);

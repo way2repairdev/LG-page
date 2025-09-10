@@ -2042,6 +2042,16 @@ void MainApplication::setAwsRootPath(const QString &path)
         refreshCurrentTree();
 }
 
+void MainApplication::configureAwsFromAuth(const AuthAwsCreds& creds)
+{
+    if (!creds.accessKeyId.isEmpty() && !creds.secretAccessKey.isEmpty() && !creds.region.isEmpty()) {
+        m_aws.setCredentials(creds.accessKeyId, creds.secretAccessKey, creds.region, creds.sessionToken);
+        if (!creds.bucket.isEmpty()) m_aws.setBucket(creds.bucket);
+        if (!creds.endpoint.isEmpty()) m_aws.setEndpointOverride(creds.endpoint);
+        // Do not force switch source here; allow user to pick AWS via toggle
+    }
+}
+
 void MainApplication::autoLoadAwsCredentials()
 {
     QSettings settings;

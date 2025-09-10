@@ -12,6 +12,7 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include "database/databasemanager.h"
+#include "network/authservice.h"
 #include <QPointer>
 class QParallelAnimationGroup;
 class QPropertyAnimation;
@@ -43,19 +44,30 @@ private slots:
 private:
     Ui::MainWindow *ui;
     DatabaseManager *m_dbManager;
+    AuthService m_auth;
     MainApplication *m_mainApp; // Pointer to main application
     
+    // Store current login attempt for callback
+    QString m_currentUsername;
+    QString m_currentPassword;
+    
+    void setupStaticLightTheme();
     void setupLoginConnections();
     void setupDatabaseConnection();
     bool validateInput();
     void performLogin(const QString &username, const QString &password);
+    void configureAwsForMain(MainApplication* app, const AuthAwsCreds& aws);
     void showConnectionStatus(bool connected);
     void enableLoginControls(bool enabled);
     void launchMainApplication(const QString &username, const UserInfo &userInfo);
     void closeLoginWindow();
+    void onAuthLoginFinished(bool success, const AuthResult& result, const QString& error);
     // Remember me persistence
     void loadSavedCredentials();
     void persistRememberChoice(const QString &username, const QString &password);
+    
+    // Light theme styled message box
+    void showStyledMessageBox(QMessageBox::Icon icon, const QString &title, const QString &message);
     
     // Mouse event handlers for frameless window
 protected:
