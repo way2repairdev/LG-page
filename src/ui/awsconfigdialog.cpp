@@ -15,98 +15,85 @@ AwsConfigDialog::AwsConfigDialog(QWidget* parent)
     setModal(true);
     auto *layout = new QFormLayout(this);
 
+    // Show informational message about server-based configuration
+    auto *infoLabel = new QLabel(
+        "AWS access is now configured automatically through server authentication.\n\n"
+        "Direct AWS credential configuration has been disabled for security.\n"
+        "AWS S3 operations are handled securely through the server.", this);
+    infoLabel->setWordWrap(true);
+    infoLabel->setStyleSheet("QLabel { padding: 10px; background-color: #e6f3ff; border-radius: 5px; }");
+    layout->addRow(infoLabel);
+
+    // Only show bucket field for information (read-only)
+    m_bucketEdit = new QLineEdit(this);
+    m_bucketEdit->setReadOnly(true);
+    m_bucketEdit->setPlaceholderText("Configured via server authentication");
+    layout->addRow(new QLabel("S3 Bucket"), m_bucketEdit);
+
+    // Create other fields as null to prevent crashes, but don't add them to layout
     m_accessKeyEdit = new QLineEdit(this);
     m_secretKeyEdit = new QLineEdit(this);
-    m_regionEdit    = new QLineEdit(this);
-    m_bucketEdit    = new QLineEdit(this);
-    m_endpointEdit  = new QLineEdit(this);
-    m_rememberCheckBox = new QCheckBox("Remember credentials (stored securely)", this);
+    m_regionEdit = new QLineEdit(this);
+    m_endpointEdit = new QLineEdit(this);
+    m_rememberCheckBox = new QCheckBox(this);
+    
+    // Hide the credential fields
+    m_accessKeyEdit->hide();
+    m_secretKeyEdit->hide();
+    m_regionEdit->hide();
+    m_endpointEdit->hide();
+    m_rememberCheckBox->hide();
 
-    // Secret masked
-    m_secretKeyEdit->setEchoMode(QLineEdit::Password);
-
-    layout->addRow(new QLabel("Access Key ID"), m_accessKeyEdit);
-    layout->addRow(new QLabel("Secret Access Key"), m_secretKeyEdit);
-    layout->addRow(new QLabel("Region"), m_regionEdit);
-    layout->addRow(new QLabel("Bucket"), m_bucketEdit);
-    layout->addRow(new QLabel("Endpoint (optional)"), m_endpointEdit);
-    layout->addRow(m_rememberCheckBox);
-
-    m_buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    m_buttons = new QDialogButtonBox(QDialogButtonBox::Ok, this);
     layout->addRow(m_buttons);
     connect(m_buttons, &QDialogButtonBox::accepted, this, &AwsConfigDialog::accept);
-    connect(m_buttons, &QDialogButtonBox::rejected, this, &AwsConfigDialog::reject);
 
-    // Load saved credentials on startup
-    loadSavedCredentials();
-
-    resize(420, 300);
+    resize(420, 200);
 }
 
-QString AwsConfigDialog::accessKeyId() const    { return m_accessKeyEdit->text().trimmed(); }
-QString AwsConfigDialog::secretAccessKey() const{ return m_secretKeyEdit->text().trimmed(); }
-QString AwsConfigDialog::region() const         { return m_regionEdit->text().trimmed(); }
+QString AwsConfigDialog::accessKeyId() const    { return QString(); } // No longer used
+QString AwsConfigDialog::secretAccessKey() const{ return QString(); } // No longer used  
+QString AwsConfigDialog::region() const         { return QString(); } // No longer used
 QString AwsConfigDialog::bucket() const         { return m_bucketEdit->text().trimmed(); }
-QString AwsConfigDialog::endpoint() const       { return m_endpointEdit->text().trimmed(); }
-bool AwsConfigDialog::rememberCredentials() const { return m_rememberCheckBox->isChecked(); }
+QString AwsConfigDialog::endpoint() const       { return QString(); } // No longer used
+bool AwsConfigDialog::rememberCredentials() const { return false; } // No longer used
 
 void AwsConfigDialog::preloadFromEnv() {
-    auto get = [](const char* name){ return QString::fromLocal8Bit(qgetenv(name)); };
-    const QString ak = get("AWS_ACCESS_KEY_ID");
-    const QString sk = get("AWS_SECRET_ACCESS_KEY");
-    const QString rg = get("AWS_REGION");
-    const QString bk = get("AWS_S3_BUCKET");
-    const QString ep = get("AWS_S3_ENDPOINT");
-    if (!ak.isEmpty()) m_accessKeyEdit->setText(ak);
-    if (!sk.isEmpty()) m_secretKeyEdit->setText(sk);
-    if (!rg.isEmpty()) m_regionEdit->setText(rg);
-    if (!bk.isEmpty()) m_bucketEdit->setText(bk);
-    if (!ep.isEmpty()) m_endpointEdit->setText(ep);
+    // Environment variable loading disabled - only server-proxied mode supported
+    // This method is kept for compatibility but does nothing
 }
 
 void AwsConfigDialog::loadSavedCredentials() {
+    // Clear any legacy AWS credentials from previous versions
     QSettings settings(QCoreApplication::organizationName(), QCoreApplication::applicationName());
     
-    // Load saved credentials if available
-    const QString savedAccessKey = settings.value("aws/accessKey", "").toString();
-    const QString savedSecretKey = settings.value("aws/secretKey", "").toString();
-    const QString savedRegion = settings.value("aws/region", "us-east-1").toString();
-    const QString savedBucket = settings.value("aws/bucket", "").toString();
-    const QString savedEndpoint = settings.value("aws/endpoint", "").toString();
-    const bool rememberWasChecked = settings.value("aws/remember", false).toBool();
-    
-    if (!savedAccessKey.isEmpty()) m_accessKeyEdit->setText(savedAccessKey);
-    if (!savedSecretKey.isEmpty()) m_secretKeyEdit->setText(savedSecretKey);
-    if (!savedRegion.isEmpty()) m_regionEdit->setText(savedRegion);
-    if (!savedBucket.isEmpty()) m_bucketEdit->setText(savedBucket);
-    if (!savedEndpoint.isEmpty()) m_endpointEdit->setText(savedEndpoint);
-    
-    m_rememberCheckBox->setChecked(rememberWasChecked);
-    
-    // If we have saved credentials, also try to load from environment (env takes precedence)
-    preloadFromEnv();
-}
-
-void AwsConfigDialog::saveCredentials() const {
-    QSettings settings(QCoreApplication::organizationName(), QCoreApplication::applicationName());
-    
-    if (rememberCredentials()) {
-        // Save credentials
-        settings.setValue("aws/accessKey", accessKeyId());
-        settings.setValue("aws/secretKey", secretAccessKey());
-        settings.setValue("aws/region", region());
-        settings.setValue("aws/bucket", bucket());
-        settings.setValue("aws/endpoint", endpoint());
-        settings.setValue("aws/remember", true);
-    } else {
-        // Clear saved credentials
+    if (settings.contains("aws/accessKey") || settings.contains("aws/secretKey")) {
+        // Clean up old credential storage
         settings.remove("aws/accessKey");
         settings.remove("aws/secretKey");
         settings.remove("aws/region");
-        settings.remove("aws/bucket");
         settings.remove("aws/endpoint");
-        settings.setValue("aws/remember", false);
+        settings.remove("aws/remember");
+        settings.sync();
     }
     
+    // Bucket information might still be shown for informational purposes
+    const QString savedBucket = settings.value("aws/bucket", "").toString();
+    if (!savedBucket.isEmpty()) {
+        m_bucketEdit->setText(savedBucket);
+    }
+}
+
+void AwsConfigDialog::saveCredentials() const {
+    // Direct credential saving disabled - only server-proxied mode supported
+    // This method is kept for compatibility but only clears old credentials
+    QSettings settings(QCoreApplication::organizationName(), QCoreApplication::applicationName());
+    
+    // Clear any remaining direct AWS credentials
+    settings.remove("aws/accessKey");
+    settings.remove("aws/secretKey");
+    settings.remove("aws/region");
+    settings.remove("aws/endpoint");
+    settings.remove("aws/remember");
     settings.sync();
 }

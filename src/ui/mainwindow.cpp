@@ -20,6 +20,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <algorithm>
+#include "core/memoryfilemanager.h"
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -587,24 +588,22 @@ void MainWindow::configureAwsForMain(MainApplication* app, const AuthAwsCreds& a
         return;
     }
     
-    // Configure AWS credentials from server login response
-    if (!aws.accessKeyId.isEmpty() && !aws.secretAccessKey.isEmpty() && !aws.region.isEmpty()) {
-        writeTransitionLog(QString("configureAwsForMain: setting AWS creds (key=%1..., region=%2, bucket=%3)")
-                          .arg(aws.accessKeyId.left(8)).arg(aws.region).arg(aws.bucket));
-        
-        // Pass both the AWS credentials and auth token to MainApplication
+    // Server-proxied model: we only need an auth token and a bucket.
+    // Do NOT require direct AWS credentials (access/secret/region) anymore.
+    if (!authToken.isEmpty() && !aws.bucket.isEmpty()) {
+        writeTransitionLog(QString("configureAwsForMain: configuring AWS via server (bucket=%1)")
+                          .arg(aws.bucket));
+
+        // Pass bucket and token to MainApplication (it configures AwsClient in server mode)
         app->configureAwsFromAuth(aws, authToken);
-        
-        // If bucket is available, automatically switch to AWS treeview
-        if (!aws.bucket.isEmpty()) {
-            writeTransitionLog("configureAwsForMain: switching to AWS treeview automatically");
-            // Use a timer to ensure the main application UI is fully initialized
-            QTimer::singleShot(500, this, [app]() {
-                app->switchToAwsTreeview();
-            });
-        }
+
+        // Automatically switch the treeview to AWS after UI is ready
+        writeTransitionLog("configureAwsForMain: switching to AWS treeview automatically");
+        QTimer::singleShot(500, this, [app]() {
+            app->switchToAwsTreeview();
+        });
     } else {
-        writeTransitionLog("configureAwsForMain: incomplete AWS credentials from server");
+        writeTransitionLog("configureAwsForMain: missing auth token or bucket; staying on Local treeview");
     }
 }
 
@@ -615,6 +614,9 @@ void MainWindow::closeLoginWindow()
         m_mainApp->deleteLater();
         m_mainApp = nullptr;
     }
+
+    // Free any in-memory files from the previous session
+    MemoryFileManager::instance()->clearAll();
     
     // Clear then reload any remembered credentials, and show login window again
     ui->usernameLineEdit->clear();

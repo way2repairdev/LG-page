@@ -18,15 +18,15 @@ public:
     AwsClient();
     ~AwsClient();
 
-    // Setup from environment variables if present
-    // AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_S3_BUCKET
+    // Setup from environment variables - DISABLED (always returns false)
+    // Direct AWS credential loading is no longer supported
     bool loadFromEnv();
-    // Optional sessionToken supports temporary credentials (STS)
+    // Direct credentials - DISABLED (use server-proxied mode only)
     void setCredentials(const QString& accessKey, const QString& secretKey, const QString& region, const QString& sessionToken = QString());
     void setBucket(const QString& bucket);
-    void setEndpointOverride(const QString& endpoint); // optional (e.g., S3-compatible)
+    void setEndpointOverride(const QString& endpoint); // optional (used in server-proxied mode)
     
-    // Server-proxied mode (NEW)
+    // Server-proxied mode (REQUIRED - only supported method)
     void setServerMode(bool enabled, const QString& serverUrl = QString(), const QString& authToken = QString());
     bool isServerMode() const;
 
@@ -57,6 +57,7 @@ private:
     
     // Private helper for server-proxied operations
     std::optional<QVector<AwsListEntry>> listViaServer(const QString& prefix, int maxKeys);
+    std::optional<QByteArray> downloadViaServer(const QString& key);
 };
 
 #endif // AWSCLIENT_H

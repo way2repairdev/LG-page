@@ -267,10 +267,9 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
     
     // Load initial tree: prioritize fast startup by loading Local immediately.
     // We'll probe the server lazily on demand to avoid UI "Not Responding" if network is slow.
-    // For AWS dev mode, try loading credentials from env (optional).
-    m_aws.loadFromEnv();
+    // AWS configuration will be handled through server authentication only.
     
-    // Try to auto-load saved AWS credentials if user has previously chosen to remember them
+    // Clean up any legacy AWS credentials from previous versions
     autoLoadAwsCredentials();
     
     setTreeSource(TreeSource::Local, true);
@@ -1356,20 +1355,22 @@ void MainApplication::setupSourceToggleBar()
     connect(m_btnLocal,  &QPushButton::toggled, this, [this](bool on){ if (on) setTreeSource(TreeSource::Local, true);  });
     connect(m_btnAws,    &QPushButton::toggled, this, [this](bool on){
         if (!on) return;
-        // If already configured, just probe and switch without re-prompting
-        if (m_aws.isReady()) {
-            writeTransitionLog(QString("aws-connect: reselect probe bucket='%1'").arg(m_aws.bucket()));
+        
+        // Check if AWS is configured in server-proxied mode
+        if (m_aws.isServerMode() && m_aws.isReady()) {
+            // AWS is already configured via server authentication, test connection
+            writeTransitionLog(QString("aws-connect: server mode probe bucket='%1'").arg(m_aws.bucket()));
             auto probe = m_aws.list("", 0);
             if (probe.has_value()) {
-                writeTransitionLog("aws-connect: reselect success");
+                writeTransitionLog("aws-connect: server mode success");
                 statusBar()->showMessage(QString("Connected to AWS S3 bucket: %1").arg(m_aws.bucket()), 3000);
                 setTreeSource(TreeSource::AWS, true);
                 return;
             } else {
                 const QString err = m_aws.lastError();
-                writeTransitionLog(QString("aws-connect: reselect failed: %1").arg(err));
+                writeTransitionLog(QString("aws-connect: server mode failed: %1").arg(err));
                 QMessageBox::warning(this, "AWS Connection Failed",
-                                     QString("Could not connect to S3.\n%1").arg(err.isEmpty()?QStringLiteral("Unknown error"):err));
+                                     QString("Could not connect to S3 via server.\n%1\n\nPlease ensure you are logged in to the server.").arg(err.isEmpty()?QStringLiteral("Unknown error"):err));
                 // Revert to Local
                 if (m_btnLocal) {
                     m_btnAws->blockSignals(true);
@@ -1379,40 +1380,25 @@ void MainApplication::setupSourceToggleBar()
                     m_btnAws->blockSignals(false);
                     m_btnLocal->blockSignals(false);
                 }
-                statusBar()->showMessage("AWS not reachable. Showing Local.", 4000);
+                statusBar()->showMessage("AWS server connection failed. Showing Local.", 4000);
                 setTreeSource(TreeSource::Local, true);
                 return;
             }
         }
-        // Prompt for AWS credentials/bucket when not configured
+        
+        // AWS not configured in server mode - show informational dialog
         AwsConfigDialog dlg(this);
         dlg.preloadFromEnv();
         if (dlg.exec() == QDialog::Accepted) {
-            // Save credentials if user chose to remember them
-            if (dlg.rememberCredentials()) {
-                dlg.saveCredentials();
-                writeTransitionLog("aws-dialog: credentials saved for future use");
-            }
+            // The dialog is now informational only - no credentials to save
+            writeTransitionLog("aws-dialog: informational dialog acknowledged");
             
-            // Show what we got from dialog
-            QString ak = dlg.accessKeyId();
-            QString sk = dlg.secretAccessKey();
-            QString rg = dlg.region();
-            QString bk = dlg.bucket();
-            writeTransitionLog(QString("aws-dialog: got accessKey='%1...' region='%2' bucket='%3'")
-                              .arg(ak.left(8)).arg(rg).arg(bk));
-            
-            // Show loading message
-            statusBar()->showMessage("Connecting to AWS S3...", 0);
-            QApplication::processEvents();
-            
-            // Apply credentials
-            if (!ak.isEmpty() && !sk.isEmpty() && !rg.isEmpty()) {
-                writeTransitionLog("aws-dialog: setting credentials");
-                m_aws.setCredentials(ak, sk, rg);
-            } else {
-                writeTransitionLog("aws-dialog: missing credentials");
-                QMessageBox::warning(this, "AWS Setup", "Please enter Access Key, Secret Key, and Region.");
+            // Check if user needs to log in to server first
+            if (!m_aws.isServerMode()) {
+                QMessageBox::information(this, "AWS Configuration", 
+                    "AWS access requires server authentication.\n\n"
+                    "Please log in to the server first to enable AWS S3 access.\n\n"
+                    "AWS credentials are managed securely on the server.");
                 if (m_btnLocal) {
                     m_btnAws->blockSignals(true);
                     m_btnLocal->blockSignals(true);
@@ -1421,17 +1407,16 @@ void MainApplication::setupSourceToggleBar()
                     m_btnAws->blockSignals(false);
                     m_btnLocal->blockSignals(false);
                 }
-                statusBar()->showMessage("AWS setup incomplete. Showing Local.", 5000);
+                statusBar()->showMessage("AWS requires server login. Showing Local.", 5000);
                 setTreeSource(TreeSource::Local, true);
                 return;
             }
             
-            if (!bk.isEmpty()) {
-                writeTransitionLog(QString("aws-dialog: setting bucket='%1'").arg(bk));
-                m_aws.setBucket(bk);
-            } else {
-                writeTransitionLog("aws-dialog: missing bucket");
-                QMessageBox::warning(this, "AWS Setup", "Please enter a bucket name.");
+            // User is authenticated but AWS might not be ready yet
+            if (!m_aws.isReady()) {
+                QMessageBox::information(this, "AWS Configuration", 
+                    "AWS configuration is not yet available from the server.\n\n"
+                    "Please ensure your server account has AWS access configured.");
                 if (m_btnLocal) {
                     m_btnAws->blockSignals(true);
                     m_btnLocal->blockSignals(true);
@@ -1440,87 +1425,16 @@ void MainApplication::setupSourceToggleBar()
                     m_btnAws->blockSignals(false);
                     m_btnLocal->blockSignals(false);
                 }
-                statusBar()->showMessage("AWS setup incomplete. Showing Local.", 5000);
+                statusBar()->showMessage("AWS not available. Showing Local.", 5000);
                 setTreeSource(TreeSource::Local, true);
                 return;
             }
             
-            // Check if client is ready
-            bool isReady = m_aws.isReady();
-            writeTransitionLog(QString("aws-dialog: client isReady=%1").arg(isReady ? "true" : "false"));
-            
-            if (!isReady) {
-                writeTransitionLog("aws-dialog: AWS SDK not available or client setup failed");
-#ifdef HAVE_AWS_SDK
-                QMessageBox::critical(this, "AWS Setup Failed", 
-                                     "AWS SDK is available but client setup failed.\n\nPlease check your credentials and try again.");
-#else
-                QMessageBox::critical(this, "AWS Not Available", 
-                                     "AWS SDK is not available in this build.\n\nThe application was built without AWS SDK support.\n\nTo use AWS features, rebuild with AWS SDK libraries.");
-#endif
-                if (m_btnLocal) {
-                    m_btnAws->blockSignals(true);
-                    m_btnLocal->blockSignals(true);
-                    m_btnAws->setChecked(false);
-                    m_btnLocal->setChecked(true);
-                    m_btnAws->blockSignals(false);
-                    m_btnLocal->blockSignals(false);
-                }
-                statusBar()->showMessage("AWS not available. Showing Local.", 8000);
-                setTreeSource(TreeSource::Local, true);
-                return;
-            }
-            
-            // Validate connection quickly by listing root with 0 keys; only proceed on success
-            bool connected = false;
-            if (isReady) {
-                writeTransitionLog(QString("aws-connect: probing bucket='%1'").arg(m_aws.bucket()));
-                statusBar()->showMessage(QString("Testing connection to bucket '%1'...").arg(m_aws.bucket()), 0);
-                QApplication::processEvents();
-                
-                auto probe = m_aws.list("", 0);
-                connected = probe.has_value();
-                writeTransitionLog(QString("aws-connect: probe result=%1").arg(connected ? "success" : "failed"));
-                
-                if (!connected) {
-                    const QString err = m_aws.lastError();
-                    writeTransitionLog(QString("aws-connect: error: %1").arg(err));
-                    QMessageBox::critical(this, "AWS Connection Failed",
-                                         QString("Could not connect to S3 bucket '%1'.\n\nError: %2\n\nPlease check your credentials and bucket name.")
-                                         .arg(bk).arg(err.isEmpty()?QStringLiteral("Unknown error"):err));
-                } else {
-                    writeTransitionLog("aws-connect: connection successful");
-                }
-            } else {
-                writeTransitionLog("aws-connect: client not ready after setup");
-            }
-            
-            if (!connected) {
-                // revert and bail
-                writeTransitionLog("aws-connect: reverting to Local due to connection failure");
-                if (m_btnLocal) {
-                    m_btnAws->blockSignals(true);
-                    m_btnLocal->blockSignals(true);
-                    m_btnAws->setChecked(false);
-                    m_btnLocal->setChecked(true);
-                    m_btnAws->blockSignals(false);
-                    m_btnLocal->blockSignals(false);
-                }
-                const QString err = m_aws.lastError();
-                statusBar()->showMessage(err.isEmpty()?QStringLiteral("AWS connection failed. Showing Local.")
-                                                   : QString("AWS failed: %1").arg(err), 8000);
-                setTreeSource(TreeSource::Local, true);
-                return;
-            }
-            writeTransitionLog(QString("aws-connect: success, switching to AWS mode for bucket='%1'").arg(m_aws.bucket()));
-            statusBar()->showMessage(QString("✓ Connected to AWS S3 bucket: %1").arg(m_aws.bucket()), 4000);
-            ToastNotifier::show(this, QString("AWS connected: %1").arg(m_aws.bucket()));
+            // AWS should be ready, try to switch
+            setTreeSource(TreeSource::AWS, true);
         } else {
             writeTransitionLog("aws-dialog: user canceled");
-        }
-        // If user canceled, keep previous selection
-        if (!m_aws.isReady()) {
-            // revert to previous checked (prefer Local)
+            // If user canceled, revert to previous selection
             if (m_btnLocal) {
                 m_btnAws->blockSignals(true);
                 m_btnLocal->blockSignals(true);
@@ -1533,7 +1447,6 @@ void MainApplication::setupSourceToggleBar()
             setTreeSource(TreeSource::Local, true);
             return;
         }
-        setTreeSource(TreeSource::AWS,   true);
     });
 }
 
@@ -2056,25 +1969,18 @@ void MainApplication::setAwsRootPath(const QString &path)
 
 void MainApplication::configureAwsFromAuth(const AuthAwsCreds& creds, const QString& authToken)
 {
-    if (!creds.accessKeyId.isEmpty() && !creds.secretAccessKey.isEmpty() && !creds.region.isEmpty()) {
-        // Store AWS credentials from login response
-        writeTransitionLog("configureAwsFromAuth: configuring AWS client with server credentials");
+    if (!authToken.isEmpty() && !creds.bucket.isEmpty()) {
+        // Configure AWS client in server-proxied mode only
+        // The server handles AWS operations with its own credentials
+        writeTransitionLog("configureAwsFromAuth: configuring AWS client in server mode");
         
-        // For now, use server-proxied mode instead of direct AWS access
-        // This allows the server to handle AWS operations with its own credentials
-        QString serverUrl = QStringLiteral("http://localhost:3000"); // TODO: make configurable
+        QString serverUrl = QStringLiteral("https://uoklh0m767.execute-api.us-east-1.amazonaws.com/dev");
         
         m_aws.setServerMode(true, serverUrl, authToken);
-        if (!creds.bucket.isEmpty()) {
-            m_aws.setBucket(creds.bucket);
-        }
+        m_aws.setBucket(creds.bucket);
         
         writeTransitionLog(QString("configureAwsFromAuth: AWS configured in server mode (bucket=%1, tokenPresent=%2)")
                           .arg(creds.bucket).arg(!authToken.isEmpty()));
-        
-        // Also set direct credentials as fallback (if AWS SDK is available)
-        m_aws.setCredentials(creds.accessKeyId, creds.secretAccessKey, creds.region, creds.sessionToken);
-        if (!creds.endpoint.isEmpty()) m_aws.setEndpointOverride(creds.endpoint);
         
         writeTransitionLog("configureAwsFromAuth: AWS client configured successfully");
         
@@ -2084,57 +1990,25 @@ void MainApplication::configureAwsFromAuth(const AuthAwsCreds& creds, const QStr
             m_btnAws->setToolTip("AWS S3 (Connected via Server)");
         }
     } else {
-        writeTransitionLog("configureAwsFromAuth: incomplete AWS credentials received from server");
+        writeTransitionLog("configureAwsFromAuth: missing auth token or bucket from server");
     }
 }
 
 void MainApplication::autoLoadAwsCredentials()
 {
-    QSettings settings;
-    bool rememberCredentials = settings.value("aws/remember", false).toBool();
+    // Direct AWS credential loading disabled - only server-proxied mode is supported
+    // AWS configuration will be handled through server authentication
+    writeTransitionLog("autoLoadAwsCredentials: Direct AWS credentials disabled, using server-proxied mode only");
     
-    if (rememberCredentials) {
-        QString accessKeyId = settings.value("aws/accessKey").toString();
-        QString secretAccessKey = settings.value("aws/secretKey").toString();
-        QString region = settings.value("aws/region").toString();
-        QString bucket = settings.value("aws/bucket").toString();
-        
-        if (!accessKeyId.isEmpty() && !secretAccessKey.isEmpty() && !region.isEmpty()) {
-            writeTransitionLog("Auto-loading saved AWS credentials from settings");
-            
-            // Configure the AWS client with saved credentials
-            m_aws.setCredentials(accessKeyId, secretAccessKey, region);
-            
-            // Set bucket if available
-            if (!bucket.isEmpty()) {
-                m_aws.setBucket(bucket);
-            }
-            
-            // Verify connection silently
-            if (m_aws.isReady()) {
-                writeTransitionLog("Auto-loaded AWS credentials are valid and ready");
-                
-                // Enable AWS button if it exists
-                if (m_btnAws) {
-                    m_btnAws->setEnabled(true);
-                    m_btnAws->setToolTip("AWS S3 (Connected)");
-                }
-            } else {
-                writeTransitionLog("Auto-loaded AWS credentials failed validation: " + m_aws.lastError());
-                
-                // Clear invalid saved credentials
-                settings.remove("aws/accessKey");
-                settings.remove("aws/secretKey");
-                settings.remove("aws/region");
-                settings.remove("aws/bucket");
-                settings.remove("aws/remember");
-                writeTransitionLog("Cleared invalid saved AWS credentials");
-            }
-        } else {
-            writeTransitionLog("Incomplete saved AWS credentials found, skipping auto-load");
-        }
-    } else {
-        writeTransitionLog("AWS credential auto-load disabled (remember not checked)");
+    // Clear any existing saved direct AWS credentials from previous versions
+    QSettings settings;
+    if (settings.contains("aws/accessKey") || settings.contains("aws/secretKey")) {
+        settings.remove("aws/accessKey");
+        settings.remove("aws/secretKey");
+        settings.remove("aws/region");
+        settings.remove("aws/bucket");
+        settings.remove("aws/remember");
+        writeTransitionLog("autoLoadAwsCredentials: Cleared legacy direct AWS credentials");
     }
 }
 
@@ -2603,6 +2477,10 @@ void MainApplication::onTabCloseRequestedByType(int index, DualTabWidget::TabTyp
         QWidget *tabWidget = m_tabWidget->widget(index, type);
         if (tabWidget) {
             QString filePath = tabWidget->property("filePath").toString();
+            // If this tab was backed by an in-memory file, free it now
+            if (filePath.startsWith("memory://")) {
+                MemoryFileManager::instance()->removeFile(filePath);
+            }
             
             // Remove the tab
             m_tabWidget->removeTab(index, type);
