@@ -41,7 +41,7 @@ QString AuthService::baseUrl() const {
 void AuthService::login(const QString& username, const QString& password)
 {
     // Defensive: ensure base URL provided
-    const QString root = m_baseUrl.isEmpty() ? QStringLiteral("http://localhost:3000") : m_baseUrl;
+    const QString root = m_baseUrl.isEmpty() ? QStringLiteral("https://uoklh0m767.execute-api.us-east-1.amazonaws.com/dev") : m_baseUrl;
     const QUrl url(root + "/auth/login");
     QNetworkRequest req(url);
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
@@ -98,8 +98,8 @@ void AuthService::login(const QString& username, const QString& password)
                     if (!expiresAtStr.isEmpty()) {
                         result.expiresAt = QDateTime::fromString(expiresAtStr, Qt::ISODate);
                     } else {
-                        // Fallback: assume 2 hour expiry if not provided
-                        result.expiresAt = QDateTime::currentDateTime().addSecs(2 * 60 * 60);
+                        // Fallback: assume 1 hour expiry if not provided (matches Lambda default)
+                        result.expiresAt = QDateTime::currentDateTime().addSecs(1 * 60 * 60);
                     }
                     
                     // user
@@ -277,7 +277,7 @@ void AuthService::checkTokenExpiry() {
 }
 
 void AuthService::validateToken(const QString& token) {
-    const QString root = m_baseUrl.isEmpty() ? QStringLiteral("http://localhost:3000") : m_baseUrl;
+    const QString root = m_baseUrl.isEmpty() ? QStringLiteral("https://uoklh0m767.execute-api.us-east-1.amazonaws.com/dev") : m_baseUrl;
     const QUrl url(root + "/auth/validate");
     QNetworkRequest req = createSecureRequest(url, token);
     
@@ -308,7 +308,7 @@ void AuthService::validateToken(const QString& token) {
 }
 
 void AuthService::refreshToken(const QString& token) {
-    const QString root = m_baseUrl.isEmpty() ? QStringLiteral("http://localhost:3000") : m_baseUrl;
+    const QString root = m_baseUrl.isEmpty() ? QStringLiteral("https://uoklh0m767.execute-api.us-east-1.amazonaws.com/dev") : m_baseUrl;
     const QUrl url(root + "/auth/refresh");
     QNetworkRequest req = createSecureRequest(url, token);
     

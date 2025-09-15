@@ -41,7 +41,7 @@ public:
     explicit AuthService(QObject* parent = nullptr);
     ~AuthService() override;
 
-    void setBaseUrl(const QString& baseUrl); // e.g. http://localhost:3000
+    void setBaseUrl(const QString& baseUrl); // e.g. https://your-api-gateway-url.amazonaws.com/dev
     QString baseUrl() const;
 
     // Authentication methods

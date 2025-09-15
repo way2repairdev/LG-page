@@ -426,6 +426,7 @@ bool MainWindow::validateInput()
     QString username = ui->usernameLineEdit->text().trimmed();
     QString password = ui->passwordLineEdit->text();
     
+    // Only check for empty fields - let the server handle validation
     if (username.isEmpty()) {
         showStyledMessageBox(QMessageBox::Warning, "Invalid Input", "Please enter a username.");
         ui->usernameLineEdit->setFocus();
@@ -438,18 +439,8 @@ bool MainWindow::validateInput()
         return false;
     }
     
-    if (username.length() < 3) {
-        showStyledMessageBox(QMessageBox::Warning, "Invalid Input", "Username must be at least 3 characters long.");
-        ui->usernameLineEdit->setFocus();
-        return false;
-    }
-    
-    if (password.length() < 4) {
-        showStyledMessageBox(QMessageBox::Warning, "Invalid Input", "Password must be at least 4 characters long.");
-        ui->passwordLineEdit->setFocus();
-        return false;
-    }
-    
+    // Remove length restrictions - let Lambda function handle validation
+    // This allows the request to reach the server for proper validation
     return true;
 }
 
@@ -465,10 +456,10 @@ void MainWindow::performLogin(const QString &username, const QString &password)
     m_currentPassword = password;
     
     // Call Node.js auth service
-    // Read base URL from settings, default to http://localhost:3000 if not set
+    // Read base URL from settings, default to AWS API Gateway endpoint if not set
     {
         auto s = appSettings();
-        const QString baseUrl = s.value("api/baseUrl", QStringLiteral("http://localhost:3000")).toString();
+        const QString baseUrl = s.value("api/baseUrl", QStringLiteral("https://uoklh0m767.execute-api.us-east-1.amazonaws.com/dev")).toString();
         m_auth.setBaseUrl(baseUrl);
         writeTransitionLog(QString("AuthService baseUrl='%1'").arg(baseUrl));
     }
