@@ -51,6 +51,10 @@ public:
     // Last error message from a failed AWS operation (if any)
     QString lastError() const;
 
+    // Cancel any in-flight AWS operation (list/download) immediately.
+    // Safe to call from UI thread; aborts active network replies used by server-proxied mode.
+    void cancelCurrentOperation();
+
 private:
     struct Impl;
     Impl* d{nullptr};

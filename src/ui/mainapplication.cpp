@@ -38,6 +38,8 @@
 #include <QStyle>
 #include <QPropertyAnimation>
 #include <QParallelAnimationGroup>
+#include <QGraphicsOpacityEffect>
+#include <QPointer>
 #include <functional>
 #include <memory>
 #ifdef Q_OS_WIN
@@ -195,6 +197,21 @@ static void checkDirAvailableAsync(QObject *ctx, const QString &path, int timeou
 
     thread->start();
 }
+// Scoped updates blocker to prevent intermediate repaints/flicker while we mutate tabs
+class ScopedUpdatesOff {
+public:
+    explicit ScopedUpdatesOff(QWidget* w)
+        : m_w(w), m_prevEnabled(w ? w->updatesEnabled() : true) {
+        if (m_w) m_w->setUpdatesEnabled(false);
+    }
+    ~ScopedUpdatesOff() {
+        if (m_w) m_w->setUpdatesEnabled(m_prevEnabled);
+    }
+    Q_DISABLE_COPY(ScopedUpdatesOff)
+private:
+    QWidget* m_w;
+    bool m_prevEnabled;
+};
 }
 
 MainApplication::MainApplication(const UserSession &userSession, QWidget *parent)
@@ -285,39 +302,41 @@ void MainApplication::animateEnter()
     // Stop any existing enter animation
     if (m_enterAnim) { m_enterAnim->stop(); m_enterAnim->deleteLater(); m_enterAnim = nullptr; }
 
-    // Prepare a subtle fade + scale from 98.5% to 100%
-    setWindowOpacity(0.0);
-    QRect endG = geometry();
-    QRect startG = endG;
-    startG.setWidth(int(endG.width() * 0.985));
-    startG.setHeight(int(endG.height() * 0.985));
-    startG.moveCenter(endG.center());
-    setGeometry(startG);
+    // Avoid animating the top-level window (windowOpacity/geometry) which can flicker on Windows.
+    // Instead, fade-in only the central content area using a graphics effect.
+    if (!m_centralWidget) {
+        writeTransitionLog("animateEnter: no central widget; skipping animation");
+        return;
+    }
 
-    auto *fade = new QPropertyAnimation(this, "windowOpacity", this);
-    fade->setDuration(200);
+    QGraphicsOpacityEffect *fx = new QGraphicsOpacityEffect(m_centralWidget);
+    fx->setOpacity(0.0);
+    m_centralWidget->setGraphicsEffect(fx);
+
+    auto *fade = new QPropertyAnimation(fx, "opacity", this);
+    fade->setDuration(180);
     fade->setStartValue(0.0);
     fade->setEndValue(1.0);
     fade->setEasingCurve(QEasingCurve::OutCubic);
 
-    auto *scale = new QPropertyAnimation(this, "geometry", this);
-    scale->setDuration(200);
-    scale->setStartValue(startG);
-    scale->setEndValue(endG);
-    scale->setEasingCurve(QEasingCurve::OutCubic);
-
-    m_enterAnim = new QParallelAnimationGroup(this);
-    m_enterAnim->addAnimation(fade);
-    m_enterAnim->addAnimation(scale);
-    connect(m_enterAnim, &QParallelAnimationGroup::finished, this, [this]{
-        // Ensure final state
-        setWindowOpacity(1.0);
-        m_enterAnim->deleteLater();
+    auto *group = new QParallelAnimationGroup(this);
+    group->addAnimation(fade);
+    m_enterAnim = group;
+    QPointer<QGraphicsOpacityEffect> fxGuard(fx);
+    QPointer<QParallelAnimationGroup> grpGuard(group);
+    connect(group, &QParallelAnimationGroup::finished, this, [this, fxGuard, grpGuard]() {
+        // Remove the effect only if it's still installed on the central widget
+        if (m_centralWidget) {
+            if (fxGuard && m_centralWidget->graphicsEffect() == fxGuard) {
+                m_centralWidget->setGraphicsEffect(nullptr); // QWidget owns and will delete the effect
+            }
+        }
+        if (grpGuard) grpGuard->deleteLater();
         m_enterAnim = nullptr;
         writeTransitionLog("animateEnter: finished");
     });
-    writeTransitionLog("animateEnter: start");
-    m_enterAnim->start(QAbstractAnimation::DeleteWhenStopped);
+    writeTransitionLog("animateEnter: start (content fade)");
+    group->start();
 }
 
 MainApplication::~MainApplication()
@@ -417,7 +436,8 @@ void MainApplication::setupUI()
 
     // Custom title bar (tall, with big icon) + keep a standard menu bar below it
     setupTitleBar();
-    if (m_titleBar) rootLayout->addWidget(m_titleBar);
+    if (m_titleBar)
+        rootLayout->addWidget(m_titleBar);
 
     // Create a dedicated menu bar we control, do not use the QMainWindow native one
     m_customMenuBar = new QMenuBar(root);
@@ -472,8 +492,10 @@ void MainApplication::setupUI()
         m_globalLoadingOverlay = new LoadingOverlay(m_centralWidget);
         m_globalLoadingOverlay->hideOverlay();
         connect(m_globalLoadingOverlay, &LoadingOverlay::cancelRequested, this, [this]() {
-            // Currently used for AWS multi-download queue cancel
+            // Immediately abort any in-flight AWS request and stop the queue
             m_cancelAwsQueue = true;
+            m_aws.cancelCurrentOperation();
+            hideGlobalLoading();
             statusBar()->showMessage("Cancelling pending operations…", 2000);
         });
     }
@@ -1102,6 +1124,9 @@ void MainApplication::setupTreeView()
         m_treeLoadingOverlay = new LoadingOverlay(m_treePanel);
         connect(m_treeLoadingOverlay, &LoadingOverlay::cancelRequested, this, [this]() {
             m_cancelAwsQueue = true;
+            m_aws.cancelCurrentOperation();
+            hideGlobalLoading();
+            if (m_treeLoadingOverlay) m_treeLoadingOverlay->hideOverlay();
             statusBar()->showMessage("Cancelling pending downloads…", 2000);
         });
     }
@@ -2101,6 +2126,10 @@ void MainApplication::openPDFInTab(const QString &filePath)
     
     // Create PDF viewer widget
     PDFViewerWidget *pdfViewer = new PDFViewerWidget();
+    // Reduce flicker: avoid background clears and paint opaquely
+    pdfViewer->setAttribute(Qt::WA_OpaquePaintEvent, true);
+    pdfViewer->setAttribute(Qt::WA_NoSystemBackground, true);
+    pdfViewer->setAutoFillBackground(false);
     pdfViewer->setProperty("filePath", filePath);
     
     // No toolbar to hide - PDF viewer is now toolbar-free
@@ -2130,16 +2159,20 @@ void MainApplication::openPDFInTab(const QString &filePath)
     // Add PDF viewer to PDF tab row (will fail with -1 if limit race condition)
     QString tabName = fileInfo.fileName();
     QIcon tabIcon = getFileIcon(filePath);
-    int tabIndex = m_tabWidget->addTab(pdfViewer, tabIcon, tabName, DualTabWidget::PDF_TAB);
+    int tabIndex = -1;
+    {
+        // Only block updates on the tab widget; keep the rest of the UI responsive
+        ScopedUpdatesOff blockTabs(m_tabWidget);
+        tabIndex = m_tabWidget->addTab(pdfViewer, tabIcon, tabName, DualTabWidget::PDF_TAB);
+        if (tabIndex >= 0) m_tabWidget->setCurrentIndex(tabIndex, DualTabWidget::PDF_TAB);
+    }
         if (tabIndex < 0) {
             // Safety: dual tab widget rejected addition (limit). Clean up and exit.
             pdfViewer->deleteLater();
             showNoticeDialog("Tab limit reached. Close a tab to open more.", QStringLiteral("PDF Tabs"));
             return;
         }
-    
-    // Switch to the new tab
-    m_tabWidget->setCurrentIndex(tabIndex, DualTabWidget::PDF_TAB);
+
     
     // Load the PDF after the widget is properly initialized
     QTimer::singleShot(100, this, [this, pdfViewer, filePath, tabIndex, fileInfo]() {
@@ -2212,6 +2245,10 @@ void MainApplication::openPCBInTab(const QString &filePath)
     
     // Create PCB viewer widget
     PCBViewerWidget *pcbViewer = new PCBViewerWidget();
+    // Reduce flicker: avoid background clears and paint opaquely
+    pcbViewer->setAttribute(Qt::WA_OpaquePaintEvent, true);
+    pcbViewer->setAttribute(Qt::WA_NoSystemBackground, true);
+    pcbViewer->setAutoFillBackground(false);
     pcbViewer->setProperty("filePath", filePath);
     
     // Start with toolbar hidden - it will be shown when tab becomes active
@@ -2234,10 +2271,18 @@ void MainApplication::openPCBInTab(const QString &filePath)
     // Add PCB viewer to PCB tab row
     QString tabName = fileInfo.fileName();
     QIcon tabIcon = getFileIcon(filePath);
-    int tabIndex = m_tabWidget->addTab(pcbViewer, tabIcon, tabName, DualTabWidget::PCB_TAB);
-    
-    // Switch to the new tab
-    m_tabWidget->setCurrentIndex(tabIndex, DualTabWidget::PCB_TAB);
+    int tabIndex = -1;
+    {
+        // Only block updates on the tab widget; keep the rest of the UI responsive
+        ScopedUpdatesOff blockTabs(m_tabWidget);
+        tabIndex = m_tabWidget->addTab(pcbViewer, tabIcon, tabName, DualTabWidget::PCB_TAB);
+        if (tabIndex >= 0) m_tabWidget->setCurrentIndex(tabIndex, DualTabWidget::PCB_TAB);
+    }
+    if (tabIndex < 0) {
+        pcbViewer->deleteLater();
+        showNoticeDialog("Tab limit reached. Close a tab to open more.", QStringLiteral("PCB Tabs"));
+        return;
+    }
     
     // Load the PCB after the widget is properly initialized
     QTimer::singleShot(100, this, [this, pcbViewer, filePath, tabIndex, fileInfo]() {
@@ -2466,24 +2511,10 @@ void MainApplication::onTabChangedByType(int index, DualTabWidget::TabType type)
 
 void MainApplication::performTabSwitch(int index, DualTabWidget::TabType type, QWidget *currentWidget, const QString &tabName)
 {
-    // Disable UI during switch to prevent user interactions that could cause issues
-    setEnabled(false);
+    // Avoid disabling updates on large containers to prevent perceived UI freezes.
+    // We rely on minimal, targeted updates in child widgets instead.
     
     try {
-        // Light isolation: manage PDF viewers without blocking
-        for (int t = 0; t < m_tabWidget->count(DualTabWidget::PDF_TAB); ++t) {
-            if (QWidget *w = m_tabWidget->widget(t, DualTabWidget::PDF_TAB)) {
-                if (auto pdf = qobject_cast<PDFViewerWidget*>(w)) {
-                    // Defer hide/show operations to prevent OpenGL context issues
-                    if (!(type == DualTabWidget::PDF_TAB && t == index)) {
-                        QTimer::singleShot(10, pdf, [pdf]() { pdf->hide(); });
-                    } else {
-                        pdf->show();
-                    }
-                }
-            }
-        }
-        
         // Hide toolbars asynchronously to prevent blocking
         QTimer::singleShot(5, this, [this]() { hideAllViewerToolbars(); });
         
@@ -2527,19 +2558,16 @@ void MainApplication::performTabSwitch(int index, DualTabWidget::TabType type, Q
         
         // Final setup with delay to ensure all operations complete
         QTimer::singleShot(50, this, [this, currentWidget]() {
-            currentWidget->setFocus();
-            currentWidget->activateWindow();
+            currentWidget->setFocus(Qt::OtherFocusReason);
+            // Avoid activateWindow(); it can cause whole-window flicker
             refreshViewerLinkNames();
-            setEnabled(true);  // Re-enable UI
             qDebug() << "=== Tab Change Complete ===";
         });
         
     } catch (const std::exception &e) {
         qDebug() << "Exception during tab switch:" << e.what();
-        setEnabled(true);  // Ensure UI is re-enabled even on error
     } catch (...) {
         qDebug() << "Unknown exception during tab switch";
-        setEnabled(true);  // Ensure UI is re-enabled even on error
     }
 }    int MainApplication::linkedPcbForPdf(int pdfIndex) const {
             for (const auto &l : m_tabLinks) {
@@ -2975,17 +3003,17 @@ void MainApplication::onTreeItemDoubleClicked(QTreeWidgetItem *item, int column)
 // --- AWS multi-selection queue & overlay helpers ---
 void MainApplication::showTreeLoading(const QString &message, bool cancellable)
 {
-    Q_UNUSED(cancellable);
     // Professional, localized overlay inside the tree panel
     if (m_treeLoadingOverlay && m_treePanel) {
         m_treeLoadingOverlay->setParent(m_treePanel);
         m_treeLoadingOverlay->resize(m_treePanel->size());
         m_treeLoadingOverlay->move(QPoint(0, 0));
         m_treeLoadingOverlay->raise();
+        m_treeLoadingOverlay->setCancellable(cancellable);
         m_treeLoadingOverlay->showOverlay(message);
     } else {
         // Fallback to global overlay if tree overlay not available
-        showGlobalLoading(message, true);
+        showGlobalLoading(message, cancellable);
     }
 }
 
@@ -2999,13 +3027,14 @@ void MainApplication::hideTreeLoading()
 
 void MainApplication::showGlobalLoading(const QString &message, bool cancellable)
 {
-    Q_UNUSED(cancellable);
     if (m_globalLoadingOverlay) {
+        m_globalLoadingOverlay->setCancellable(cancellable);
         m_globalLoadingOverlay->showOverlay(message);
         m_globalLoadingOverlay->raise();
         m_globalLoadingOverlay->resize(m_centralWidget->size());
     } else if (m_treeLoadingOverlay) {
         // Fallback if global overlay not available
+        m_treeLoadingOverlay->setCancellable(cancellable);
         m_treeLoadingOverlay->showOverlay(message);
     }
 }
@@ -3042,6 +3071,8 @@ void MainApplication::startAwsDownloadQueue(const QStringList &keys)
     showGlobalLoading(QString("Downloading %1 file%2 from AWS…")
                         .arg(m_awsQueue.size())
                         .arg(m_awsQueue.size()>1?"s":""), true);
+    // Initialize queue progress to 0%
+    if (m_globalLoadingOverlay) m_globalLoadingOverlay->setProgressPercent(0);
     processNextAwsDownload();
 }
 
@@ -3093,13 +3124,21 @@ void MainApplication::processNextAwsDownload()
     const int cur = m_awsQueueIndex + 1;
     const int total = m_awsQueue.size();
     showGlobalLoading(QString("Downloading %1 of %2…\n%3").arg(cur).arg(total).arg(QFileInfo(key).fileName()), true);
+    // Update overall percent based on file count progress
+    if (m_globalLoadingOverlay && total > 0) {
+        const int percent = int(std::lround((cur - 1) * 100.0 / total));
+        m_globalLoadingOverlay->setProgressPercent(percent);
+    }
 
     // Synchronous call per existing API; if later made async, adapt with callbacks
     auto data = m_aws.downloadToMemory(key);
     if (!data.has_value()) {
-        const QString err = m_aws.lastError();
-        showTreeIssue(this, "AWS download failed", err.isEmpty()?key:err);
-        // Continue to next file even if one fails
+        // If user cancelled, suppress noisy error UI and end gracefully via next tick
+        if (!m_cancelAwsQueue) {
+            const QString err = m_aws.lastError();
+            showTreeIssue(this, "AWS download failed", err.isEmpty()?key:err);
+        }
+        // Continue (or exit) on next iteration
         ++m_awsQueueIndex;
         QTimer::singleShot(0, this, [this]() { processNextAwsDownload(); });
         return;
@@ -3112,6 +3151,11 @@ void MainApplication::processNextAwsDownload()
 
     // Advance and continue with a tiny delay to keep UI responsive
     ++m_awsQueueIndex;
+    // After each file completes, bump the progress to current percent
+    if (m_globalLoadingOverlay && total > 0) {
+        const int percentDone = int(std::lround((m_awsQueueIndex) * 100.0 / total));
+        m_globalLoadingOverlay->setProgressPercent(percentDone);
+    }
     QTimer::singleShot(0, this, [this]() { processNextAwsDownload(); });
 }
 
@@ -3319,21 +3363,10 @@ void MainApplication::onAboutClicked()
         "<p>Inquiry System for Intelligent Terminal Equipment Maintenance</p>"
         "<p>Professional equipment maintenance management solution with local file management.</p>"
         "<br>"
-        "<p><b>New Features:</b></p>"
-        "<ul>"
-        "<li>Local file browser with tab interface</li>"
-        "<li>Multiple file viewing support</li>"
-        "<li>Drag and drop tab reordering</li>"
-        "<li>Syntax highlighting for code files</li>"
-        "<li>Real-time file tree refresh</li>"
-        "</ul>"
-        "<br>"
         "<p><b>How to use:</b></p>"
         "<p>• Use the tree view on the left to navigate local files<br>"
-        "• Click on files to open them in tabs<br>"
         "• Close tabs using the X button<br>"
         "• Use toolbar buttons to refresh and manage the tree view</p>"
-        "<br>"
         "<p>© 2025 Way2Repair Systems. All rights reserved.</p>"
     );
 }

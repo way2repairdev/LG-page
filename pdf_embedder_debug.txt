@@ -1,0 +1,3 @@
+ZOOM DEBUG: ZoomOut called - Current zoom: 0.35
+ZOOM DEBUG: ZoomOut completed - New zoom: 0.35 (delta: 1)
+Page 0 pixel dimensions after zoom: 295.05 x 208.6 pixels

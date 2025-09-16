@@ -13,6 +13,7 @@
 #include <QXmlStreamReader>
 #include <QSet>
 #include <memory>
+#include <QPointer>
 
 #ifdef HAVE_AWS_SDK
 // AWS SDK
@@ -38,6 +39,10 @@ struct AwsClient::Impl {
     QString serverUrl;
     QString authToken;
     std::unique_ptr<QNetworkAccessManager> networkManager;
+    // Track in-flight requests for cancellation
+    QPointer<QNetworkReply> currentAuthReply;
+    QPointer<QNetworkReply> currentListReply;
+    QPointer<QNetworkReply> currentDownloadReply;
 
     Impl() {
         options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Fatal;
@@ -170,6 +175,7 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
     const QByteArray authPayload = QJsonDocument(authBody).toJson(QJsonDocument::Compact);
     
     QNetworkReply* authReply = d->networkManager->post(authRequest, authPayload);
+    d->currentAuthReply = authReply;
     
     // Synchronous wait for auth response
     QEventLoop authLoop;
@@ -179,6 +185,7 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
     if (authReply->error() != QNetworkReply::NoError) {
         d->lastError = QString("Server auth request failed: %1").arg(authReply->errorString());
         authReply->deleteLater();
+        d->currentAuthReply = nullptr;
         return std::nullopt;
     }
     
@@ -208,6 +215,7 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
     // Step 3: Use the pre-signed URL to list S3 objects
     QNetworkRequest listRequest{QUrl(presignedUrl)};
     QNetworkReply* listReply = d->networkManager->get(listRequest);
+    d->currentListReply = listReply;
     
     // Synchronous wait for list response
     QEventLoop listLoop;
@@ -217,11 +225,13 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
     if (listReply->error() != QNetworkReply::NoError) {
         d->lastError = QString("S3 list request failed: %1").arg(listReply->errorString());
         listReply->deleteLater();
+        d->currentListReply = nullptr;
         return std::nullopt;
     }
     
     const QByteArray listData = listReply->readAll();
     listReply->deleteLater();
+    d->currentListReply = nullptr;
     
     // Step 4: Parse S3 XML response robustly using QXmlStreamReader
     QVector<AwsListEntry> out;
@@ -317,6 +327,7 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
     
     QNetworkReply* reply = d->networkManager->post(request, payload);
+    d->currentAuthReply = reply;
     
     // Synchronous wait for response
     QEventLoop loop;
@@ -326,8 +337,10 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     if (reply->error() != QNetworkReply::NoError) {
         d->lastError = QString("Server download request failed: %1").arg(reply->errorString());
         reply->deleteLater();
+        d->currentAuthReply = nullptr;
         return std::nullopt;
     }
+    d->currentAuthReply = nullptr;
     
     const QByteArray data = reply->readAll();
     reply->deleteLater();
@@ -355,6 +368,7 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     // Download the file using the pre-signed URL
     QNetworkRequest downloadRequest{QUrl(presignedUrl)};
     QNetworkReply* downloadReply = d->networkManager->get(downloadRequest);
+    d->currentDownloadReply = downloadReply;
     
     // Synchronous wait for download
     QEventLoop downloadLoop;
@@ -364,8 +378,10 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     if (downloadReply->error() != QNetworkReply::NoError) {
         d->lastError = QString("File download failed: %1").arg(downloadReply->errorString());
         downloadReply->deleteLater();
+        d->currentDownloadReply = nullptr;
         return std::nullopt;
     }
+    d->currentDownloadReply = nullptr;
     
     const QByteArray fileData = downloadReply->readAll();
     downloadReply->deleteLater();
@@ -386,6 +402,10 @@ struct AwsClient::Impl {
     QString serverUrl;
     QString authToken;
     std::unique_ptr<QNetworkAccessManager> networkManager;
+    // Track in-flight requests for cancellation
+    QPointer<QNetworkReply> currentAuthReply;
+    QPointer<QNetworkReply> currentListReply;
+    QPointer<QNetworkReply> currentDownloadReply;
     
     Impl() {
         networkManager = std::make_unique<QNetworkAccessManager>();
@@ -508,6 +528,7 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
     const QByteArray authPayload = QJsonDocument(authBody).toJson(QJsonDocument::Compact);
     
     QNetworkReply* authReply = d->networkManager->post(authRequest, authPayload);
+    d->currentAuthReply = authReply;
     
     // Synchronous wait for auth response
     QEventLoop authLoop;
@@ -517,11 +538,13 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
     if (authReply->error() != QNetworkReply::NoError) {
         d->lastError = QString("Server auth request failed: %1").arg(authReply->errorString());
         authReply->deleteLater();
+        d->currentAuthReply = nullptr;
         return std::nullopt;
     }
     
     const QByteArray authData = authReply->readAll();
     authReply->deleteLater();
+    d->currentAuthReply = nullptr;
     
     QJsonParseError pe;
     const QJsonDocument authDoc = QJsonDocument::fromJson(authData, &pe);
@@ -546,6 +569,7 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
     // Step 3: Use the pre-signed URL to list S3 objects
     QNetworkRequest listRequest{QUrl(presignedUrl)};
     QNetworkReply* listReply = d->networkManager->get(listRequest);
+    d->currentListReply = listReply;
     
     // Synchronous wait for list response
     QEventLoop listLoop;
@@ -555,11 +579,13 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
     if (listReply->error() != QNetworkReply::NoError) {
         d->lastError = QString("S3 list request failed: %1").arg(listReply->errorString());
         listReply->deleteLater();
+        d->currentListReply = nullptr;
         return std::nullopt;
     }
     
     const QByteArray listData = listReply->readAll();
     listReply->deleteLater();
+    d->currentListReply = nullptr;
     
     // Step 4: Parse S3 XML response robustly using QXmlStreamReader
     QVector<AwsListEntry> out;
@@ -655,6 +681,7 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
     
     QNetworkReply* reply = d->networkManager->post(request, payload);
+    d->currentAuthReply = reply;
     
     // Synchronous wait for response
     QEventLoop loop;
@@ -664,11 +691,13 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     if (reply->error() != QNetworkReply::NoError) {
         d->lastError = QString("Server download request failed: %1").arg(reply->errorString());
         reply->deleteLater();
+        d->currentAuthReply = nullptr;
         return std::nullopt;
     }
     
     const QByteArray data = reply->readAll();
     reply->deleteLater();
+    d->currentAuthReply = nullptr;
     
     QJsonParseError pe;
     const QJsonDocument doc = QJsonDocument::fromJson(data, &pe);
@@ -693,6 +722,7 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     // Download the file using the pre-signed URL
     QNetworkRequest downloadRequest{QUrl(presignedUrl)};
     QNetworkReply* downloadReply = d->networkManager->get(downloadRequest);
+    d->currentDownloadReply = downloadReply;
     
     // Synchronous wait for download
     QEventLoop downloadLoop;
@@ -702,13 +732,34 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     if (downloadReply->error() != QNetworkReply::NoError) {
         d->lastError = QString("File download failed: %1").arg(downloadReply->errorString());
         downloadReply->deleteLater();
+        d->currentDownloadReply = nullptr;
         return std::nullopt;
     }
     
     const QByteArray fileData = downloadReply->readAll();
     downloadReply->deleteLater();
+    d->currentDownloadReply = nullptr;
     
     return fileData;
 }
 
 #endif
+
+// Unified cancellation method (available in both build configurations)
+void AwsClient::cancelCurrentOperation() {
+    // Abort any in-flight replies tracked in Impl (only meaningful in server-proxied mode)
+    if (d && d->networkManager) {
+    // These QPointers are only present when compiled with our headers; guard by dynamic checks
+    // Use lambda to safely abort if non-null
+    auto abortReply = [](QPointer<QNetworkReply>& r){ if (r) r->abort(); };
+#ifdef HAVE_AWS_SDK
+    abortReply(d->currentAuthReply);
+    abortReply(d->currentListReply);
+    abortReply(d->currentDownloadReply);
+#else
+    abortReply(d->currentAuthReply);
+    abortReply(d->currentListReply);
+    abortReply(d->currentDownloadReply);
+#endif
+    }
+}
