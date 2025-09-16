@@ -600,7 +600,7 @@ void MainWindow::configureAwsForMain(MainApplication* app, const AuthAwsCreds& a
         writeTransitionLog("configureAwsForMain: switching to AWS treeview");
         QTimer::singleShot(200, this, [app]() { app->switchToAwsTreeview(); });
     } else {
-        writeTransitionLog("configureAwsForMain: missing auth token or bucket; staying on Local treeview");
+        writeTransitionLog("configureAwsForMain: missing auth token or bucket; waiting for AWS configuration (no switch)");
     }
 }
 

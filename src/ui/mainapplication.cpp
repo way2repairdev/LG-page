@@ -265,9 +265,8 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
         }
     }
     
-    // Load initial tree: prioritize fast startup by loading Local immediately.
-    // We'll probe the server lazily on demand to avoid UI "Not Responding" if network is slow.
-    // AWS configuration will be handled through server authentication only.
+    // AWS-only mode: do not load any tree until AWS credentials arrive from login
+    // (prevents flashing not-configured states at startup).
     
     // Clean up any legacy AWS credentials from previous versions
     autoLoadAwsCredentials();
@@ -1041,6 +1040,24 @@ void MainApplication::setupTreeView()
     m_sourceToggleBar = nullptr;
     m_treeSearchBar->setLayout(searchLayout);
 
+    // Inline thin progress bar shown under the search row during searches
+    if (!m_treeSearchProgress) {
+        m_treeSearchProgress = new QProgressBar(m_treePanel);
+        m_treeSearchProgress->setTextVisible(false);
+        m_treeSearchProgress->setFormat("");
+        m_treeSearchProgress->setMinimum(0);
+        m_treeSearchProgress->setMaximum(1);
+        m_treeSearchProgress->setValue(0);
+        m_treeSearchProgress->setFixedHeight(3);
+        m_treeSearchProgress->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+        // Clean thin-line style
+        m_treeSearchProgress->setStyleSheet(
+            "QProgressBar { border: none; background: transparent; margin-left: 6px; margin-right: 6px; }"
+            "QProgressBar::chunk { background-color: #0078d4; border-radius: 2px; }"
+        );
+        m_treeSearchProgress->setVisible(false);
+    }
+
     // Tree widget
     m_treeWidget = new SmoothTreeWidget(m_treePanel);
     m_treeWidget->setHeaderLabel("Treeview");
@@ -1074,6 +1091,9 @@ void MainApplication::setupTreeView()
     connect(m_treeSearchEdit, &QLineEdit::returnPressed, this, &MainApplication::onTreeSearchTriggered);
 
     panelLayout->addWidget(m_treeSearchBar);
+    // Place thin progress line right below the search bar
+    if (m_treeSearchProgress)
+        panelLayout->addWidget(m_treeSearchProgress);
     panelLayout->addWidget(m_treeWidget, 1);
     m_treePanel->setLayout(panelLayout);
 
@@ -1086,7 +1106,7 @@ void MainApplication::setupTreeView()
         });
     }
     
-    // Tree will be populated via local file loading in constructor
+    // Tree will be populated after AWS configuration; no local/server population in AWS-only mode
 }
 
 void MainApplication::applyTreeViewTheme()
@@ -1352,8 +1372,9 @@ void MainApplication::onTreeSearchTriggered()
         return;
     }
 
-    // Show searching status immediately
+    // Show searching status immediately with a thin inline progress line
     statusBar()->showMessage("Searching...");
+    showInlineSearchProgress();
     
     // Disable search controls to prevent multiple concurrent searches
     if (m_treeSearchEdit) m_treeSearchEdit->setEnabled(false);
@@ -1375,10 +1396,12 @@ void MainApplication::onTreeSearchTriggered()
                 if (m_treeSearchButton) m_treeSearchButton->setEnabled(true);
 
                 if (m_searchResultPaths.isEmpty()) {
+                    hideInlineSearchProgress();
                     // If we were in a search-only view, restore the tree
                     if (m_isSearchView) {
                         m_isSearchView = false;
-                        QTimer::singleShot(5, this, [this]() { loadLocalFiles(); });
+                        // In AWS-only mode, just refresh the current (AWS) tree
+                        QTimer::singleShot(5, this, [this]() { refreshCurrentTree(); });
                     }
                     // Hide Search Results section if present
                     if (m_searchResultsRoot) {
@@ -1387,25 +1410,40 @@ void MainApplication::onTreeSearchTriggered()
                         m_searchResultsRoot->setExpanded(false);
                     }
                     statusBar()->showMessage("No files found");
+                    // Clear the search field and refocus when showing the not-found message
+                    if (m_treeSearchEdit) {
+                        m_treeSearchEdit->clear();
+                        m_treeSearchEdit->setFocus(Qt::OtherFocusReason);
+                    }
+                    // Reset last term so next search recomputes immediately
+                    m_lastSearchTerm.clear();
+                    showNoticeDialog(QString("No files found for ‘%1’.\nTry a different name.").arg(term), QStringLiteral("Search"));
                     return;
                 }
 
                 // Show results asynchronously to prevent UI freezing
                 QTimer::singleShot(5, this, [this, term]() {
                     renderSearchResultsFlat(m_searchResultPaths, term);
+                    hideInlineSearchProgress();
                     statusBar()->showMessage(QString("%1 match(es)").arg(m_searchResultPaths.size()));
+                    // If search was trimmed for performance, surface that gently
+                    if (m_lastSearchTrimmed) {
+                        showTreeIssue(this, "Search trimmed for performance", "Showing a partial list to keep the app responsive");
+                    }
                 });
                 
             } catch (const std::exception &e) {
                 // Re-enable controls on error
                 if (m_treeSearchEdit) m_treeSearchEdit->setEnabled(true);
                 if (m_treeSearchButton) m_treeSearchButton->setEnabled(true);
+                hideInlineSearchProgress();
                 statusBar()->showMessage(QString("Search error: %1").arg(e.what()));
                 qDebug() << "Search error:" << e.what();
             } catch (...) {
                 // Re-enable controls on error
                 if (m_treeSearchEdit) m_treeSearchEdit->setEnabled(true);
                 if (m_treeSearchButton) m_treeSearchButton->setEnabled(true);
+                hideInlineSearchProgress();
                 statusBar()->showMessage("Unknown search error occurred");
                 qDebug() << "Unknown search error occurred";
             }
@@ -1416,6 +1454,7 @@ void MainApplication::onTreeSearchTriggered()
     // Re-enable controls immediately for unchanged search term
     if (m_treeSearchEdit) m_treeSearchEdit->setEnabled(true);
     if (m_treeSearchButton) m_treeSearchButton->setEnabled(true);
+    hideInlineSearchProgress();
 
     // Term unchanged -> do not navigate; just reaffirm results count
     if (m_searchResultPaths.isEmpty()) {
@@ -1425,35 +1464,43 @@ void MainApplication::onTreeSearchTriggered()
     }
 }
 
-// Replace the tree with a flat list of search results
+// Replace the tree with a flat list of search results (AWS-only)
+// 'results' contains S3 keys (not local paths)
 void MainApplication::renderSearchResultsFlat(const QVector<QString> &results, const QString &term)
 {
     try {
         Q_UNUSED(term);
         m_isSearchView = true;
         m_treeWidget->clear();
-        // Header label remains "Treeview" for consistency
+        // Header label remains "Treeview" (represents AWS bucket content)
 
         // Create a simple flat list: one top-level item per result (with a safe display cap)
         constexpr int kMaxShow = 5000; // avoid excessive UI nodes
         int shown = 0;
-        QDir root(currentRootPath());
-        for (const QString &path : results) {
+        for (const QString &key : results) {
             if (shown >= kMaxShow) break;
-            QFileInfo fi(path);
-            QString relDir = root.relativeFilePath(fi.absolutePath());
-            QString display = QString("%1 — %2").arg(fi.fileName(), relDir);
+            // Derive name and parent path from key
+            const QString normKey = QString(key).replace('\\', '/');
+            const int lastSlash = normKey.lastIndexOf('/');
+            const QString fileName = (lastSlash >= 0) ? normKey.mid(lastSlash + 1) : normKey;
+            const QString parentPath = (lastSlash > 0) ? normKey.left(lastSlash) : QString();
+            const QString baseName = QFileInfo(fileName).completeBaseName();
+            const QString display = parentPath.isEmpty()
+                ? fileName
+                : QString("%1 — %2").arg(fileName, parentPath);
+
             QTreeWidgetItem *it = new QTreeWidgetItem(m_treeWidget);
             it->setText(0, display);
-            it->setData(0, Qt::UserRole, fi.absoluteFilePath());
-            it->setIcon(0, getFileIcon(fi.absoluteFilePath()));
+            // Store AWS key (used by double-click AWS queue)
+            it->setData(0, Qt::UserRole + 10, normKey);
+            // Do NOT set Qt::UserRole (local path) in AWS-only mode
+            it->setIcon(0, getFileIcon(fileName));
             it->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
-            // Tooltip should only show the file name without extension
-            it->setToolTip(0, fi.baseName());
+            it->setToolTip(0, baseName);
             ++shown;
         }
 
-        // Sort alphabetically for predictability and apply compact premium look
+        // Sort alphabetically for predictability and apply compact look
         m_treeWidget->sortItems(0, Qt::AscendingOrder);
         m_treeWidget->setAlternatingRowColors(true);
         m_treeWidget->setStyleSheet(m_treeWidget->styleSheet() + QString(
@@ -1472,85 +1519,90 @@ void MainApplication::renderSearchResultsFlat(const QVector<QString> &results, c
     }
 }
 
-QVector<QString> MainApplication::findMatchingFiles(const QString &term, int maxResults) const
+// AWS-only search: traverse S3 prefixes and collect matching file keys
+QVector<QString> MainApplication::findMatchingFiles(const QString &term, int maxResults)
 {
     QVector<QString> results;
-    QString rootPath = currentRootPath();
-    if (rootPath.isEmpty()) return results;
-    QDir root(rootPath);
-    if (!root.exists()) return results;
-
-    // Breadth-first traversal using a queue to be responsive for large trees
-    QList<QString> dirs; dirs << root.absolutePath();
+    if (!m_aws.isReady()) return results;
     const Qt::CaseSensitivity cs = Qt::CaseInsensitive;
     const bool noCap = (maxResults < 0);
-    while (!dirs.isEmpty() && (noCap || results.size() < maxResults)) {
-        const QString d = dirs.takeFirst();
-        QDir dir(d);
-    QFileInfoList entries = dir.entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot | QDir::NoSymLinks,
-                          QDir::DirsFirst | QDir::Name);
-        for (const QFileInfo &fi : entries) {
-            if (fi.isDir()) {
-                dirs << fi.absoluteFilePath();
-            } else {
-                if (fi.fileName().contains(term, cs)) {
-                    results.push_back(fi.absoluteFilePath());
-                    if (!noCap && results.size() >= maxResults) break;
-                }
+    m_lastSearchTrimmed = false;
+    const qint64 tStart = QDateTime::currentMSecsSinceEpoch();
+    const qint64 timeBudgetMs = 2000; // ~2s budget to keep UI responsive
+
+    // Breadth-first over prefixes (folders)
+    QStringList queue; queue << QString(); // root prefix
+    QSet<QString> visited;
+    int visitedPrefixes = 0;
+    const int maxPrefixes = 120;   // tighter safety cap
+    int processedItems = 0;
+    const int pumpEvery = 200;
+
+    while (!queue.isEmpty() && (noCap || results.size() < maxResults)) {
+        const QString prefix = queue.takeFirst();
+        if (visited.contains(prefix)) continue;
+        visited.insert(prefix);
+        if (++visitedPrefixes > maxPrefixes) { m_lastSearchTrimmed = true; break; }
+
+        // Time budget
+        if ((QDateTime::currentMSecsSinceEpoch() - tStart) > timeBudgetMs) { m_lastSearchTrimmed = true; break; }
+
+        auto listed = m_aws.list(prefix, 1000);
+        if (!listed.has_value()) {
+            // Skip on error; continue with other prefixes
+            continue;
+        }
+
+        for (const auto &e : listed.value()) {
+            ++processedItems;
+            if ((processedItems % pumpEvery) == 0) {
+                QApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 5);
+            }
+
+            if (e.isDir) {
+                // Continue traversal into this "folder" (prefix ends with '/')
+                if (!visited.contains(e.key)) queue << e.key;
+                continue;
+            }
+
+            if (e.name.contains(term, cs)) {
+                results.push_back(e.key);
+                if (!noCap && results.size() >= maxResults) break;
             }
         }
     }
     return results;
 }
 
-QVector<QString> MainApplication::findMatchingFilesAsync(const QString &term, int maxResults) const
+// AWS-only async-ish search (same as above with occasional event pumping)
+QVector<QString> MainApplication::findMatchingFilesAsync(const QString &term, int maxResults)
 {
-    QVector<QString> results;
-    QString rootPath = currentRootPath();
-    if (rootPath.isEmpty()) return results;
-    QDir root(rootPath);
-    if (!root.exists()) return results;
+    // Reuse the AWS search; it already pumps events periodically
+    return findMatchingFiles(term, maxResults);
+}
 
-    // Enhanced async search with progress updates and UI responsiveness
-    QList<QString> dirs; dirs << root.absolutePath();
-    const Qt::CaseSensitivity cs = Qt::CaseInsensitive;
-    const bool noCap = (maxResults < 0);
-    int processedCount = 0;
-    const int progressInterval = 100; // Process events every 100 files
-    
-    while (!dirs.isEmpty() && (noCap || results.size() < maxResults)) {
-        const QString d = dirs.takeFirst();
-        QDir dir(d);
-        
-        QFileInfoList entries = dir.entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot | QDir::NoSymLinks,
-                              QDir::DirsFirst | QDir::Name);
-        
-        for (const QFileInfo &fi : entries) {
-            ++processedCount;
-            
-            // Process events periodically to keep UI responsive
-            if (processedCount % progressInterval == 0) {
-                QApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 5);
-            }
-            
-            if (fi.isDir()) {
-                dirs << fi.absoluteFilePath();
-            } else {
-                if (fi.fileName().contains(term, cs)) {
-                    results.push_back(fi.absoluteFilePath());
-                    if (!noCap && results.size() >= maxResults) break;
-                }
-            }
-            
-            // Safety limit to prevent extremely long searches
-            if (processedCount > 50000) {
-                qDebug() << "Search stopped at 50000 files for performance";
-                break;
-            }
-        }
+// Show a thin, inline indeterminate progress just below the search input
+void MainApplication::showInlineSearchProgress(const QString &msg)
+{
+    if (m_treeSearchProgress) {
+        // Switch to pulsing mode by cycling the chunk across [0..1]
+        m_treeSearchProgress->setMinimum(0);
+        m_treeSearchProgress->setMaximum(0); // Qt indeterminate mode
+        m_treeSearchProgress->setVisible(true);
+        // Optional status text already handled via statusBar(); msg reserved for future
+        Q_UNUSED(msg);
     }
-    
-    return results;
+}
+
+void MainApplication::hideInlineSearchProgress()
+{
+    if (m_treeSearchProgress) {
+        m_treeSearchProgress->setVisible(false);
+        // Reset to determinate baseline
+        m_treeSearchProgress->setMinimum(0);
+        m_treeSearchProgress->setMaximum(1);
+        m_treeSearchProgress->setValue(0);
+    }
 }
 
 // Expand parent folders and select the file item if present (lazy-load children as needed)
@@ -2924,13 +2976,25 @@ void MainApplication::onTreeItemDoubleClicked(QTreeWidgetItem *item, int column)
 void MainApplication::showTreeLoading(const QString &message, bool cancellable)
 {
     Q_UNUSED(cancellable);
-    // Prefer global overlay for a consistent, app-wide loading UX
-    showGlobalLoading(message, true);
+    // Professional, localized overlay inside the tree panel
+    if (m_treeLoadingOverlay && m_treePanel) {
+        m_treeLoadingOverlay->setParent(m_treePanel);
+        m_treeLoadingOverlay->resize(m_treePanel->size());
+        m_treeLoadingOverlay->move(QPoint(0, 0));
+        m_treeLoadingOverlay->raise();
+        m_treeLoadingOverlay->showOverlay(message);
+    } else {
+        // Fallback to global overlay if tree overlay not available
+        showGlobalLoading(message, true);
+    }
 }
 
 void MainApplication::hideTreeLoading()
 {
-    hideGlobalLoading();
+    if (m_treeLoadingOverlay && m_treeLoadingOverlay->isVisible()) {
+        m_treeLoadingOverlay->hideOverlay();
+    }
+    // Do not hide global overlay here; keep scopes separate
 }
 
 void MainApplication::showGlobalLoading(const QString &message, bool cancellable)
@@ -2975,7 +3039,7 @@ void MainApplication::startAwsDownloadQueue(const QStringList &keys)
     m_cancelAwsQueue = false;
     m_awsQueue = keys;
     m_awsQueueIndex = 0;
-    showTreeLoading(QString("Downloading %1 file%2 from AWS…")
+    showGlobalLoading(QString("Downloading %1 file%2 from AWS…")
                         .arg(m_awsQueue.size())
                         .arg(m_awsQueue.size()>1?"s":""), true);
     processNextAwsDownload();
@@ -2992,7 +3056,7 @@ void MainApplication::processNextAwsDownload()
         const bool isPdf = (ext == QLatin1String("pdf"));
         const bool isPcb = (ext == QLatin1String("xzz") || ext == QLatin1String("pcb") || ext == QLatin1String("xzzpcb") || ext == QLatin1String("brd") || ext == QLatin1String("brd2"));
         if (isPdf && m_tabWidget->count(DualTabWidget::PDF_TAB) >= kMaxPdfTabs) {
-            hideTreeLoading();
+            hideGlobalLoading();
             m_treeBusy = false;
             m_cancelAwsQueue = true;
             showNoticeDialog(QString("Tab limit (%1) reached. Close a tab to open more.").arg(kMaxPdfTabs), QStringLiteral("PDF Tabs"));
@@ -3001,7 +3065,7 @@ void MainApplication::processNextAwsDownload()
             return;
         }
         if (isPcb && m_tabWidget->count(DualTabWidget::PCB_TAB) >= kMaxPcbTabs) {
-            hideTreeLoading();
+            hideGlobalLoading();
             m_treeBusy = false;
             m_cancelAwsQueue = true;
             showNoticeDialog(QString("Tab limit (%1) reached. Close a tab to open more.").arg(kMaxPcbTabs), QStringLiteral("PCB Tabs"));
@@ -3012,14 +3076,14 @@ void MainApplication::processNextAwsDownload()
     }
 
     if (m_cancelAwsQueue) {
-        hideTreeLoading();
+    hideGlobalLoading();
         m_treeBusy = false;
         m_awsQueue.clear();
         statusBar()->showMessage("Download cancelled", 2000);
         return;
     }
     if (m_awsQueueIndex >= m_awsQueue.size()) {
-        hideTreeLoading();
+    hideGlobalLoading();
         m_treeBusy = false;
         statusBar()->showMessage("All downloads complete", 2500);
         return;
@@ -3028,7 +3092,7 @@ void MainApplication::processNextAwsDownload()
     const QString key = m_awsQueue.at(m_awsQueueIndex);
     const int cur = m_awsQueueIndex + 1;
     const int total = m_awsQueue.size();
-    showTreeLoading(QString("Downloading %1 of %2…\n%3").arg(cur).arg(total).arg(QFileInfo(key).fileName()), true);
+    showGlobalLoading(QString("Downloading %1 of %2…\n%3").arg(cur).arg(total).arg(QFileInfo(key).fileName()), true);
 
     // Synchronous call per existing API; if later made async, adapt with callbacks
     auto data = m_aws.downloadToMemory(key);

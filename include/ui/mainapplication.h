@@ -35,6 +35,7 @@
 #include <QWindow>
 #include <QPointer>
 #include <QStringList>
+#include <QProgressBar>
 #include <optional>
 #include "network/awsclient.h"
 #include "ui/awsconfigdialog.h"
@@ -143,7 +144,8 @@ private:
     QSplitter *m_splitter;
     QWidget *m_treePanel;           // container for search bar + tree
     QWidget *m_treeSearchBar;       // search bar container (for theming)
-    QWidget *m_sourceToggleBar { nullptr };     // Local/Server/AWS toggle bar (AWS-only mode: unused)
+    QProgressBar *m_treeSearchProgress { nullptr }; // thin, inline search progress under input
+    QWidget *m_sourceToggleBar { nullptr };     // Source toggle bar (AWS-only mode: unused)
     QTreeWidget *m_treeWidget;
     QLineEdit *m_treeSearchEdit;    // search input
     QPushButton *m_treeSearchButton; // search/next button
@@ -171,6 +173,7 @@ private:
     int m_searchResultIndex { -1 };
     QTreeWidgetItem *m_searchResultsRoot { nullptr }; // top-level node for search results
     bool m_isSearchView { false }; // when true, tree shows only search results (flat)
+    bool m_lastSearchTrimmed { false }; // if true, last search was trimmed for responsiveness
     
     void setupUI();
     void setupTitleBar();
@@ -178,7 +181,7 @@ private:
     void setupStatusBar();
     void setupKeyboardShortcuts();
     void setupTreeView();
-    void setupSourceToggleBar(); // create Local/Server toggle UI
+    void setupSourceToggleBar(); // (no-op in AWS-only mode)
     void setupTabWidget();  // Changed from setupContentArea
     void applyTreeViewTheme(); // Apply light theme stylesheet to tree view (dark mode disabled)
     void applyMenuBarMaterialStyle(); // Apply Material-like style to menu bar and right controls
@@ -190,9 +193,9 @@ private:
     void setTreeSource(TreeSource src, bool forceReload=false);
     void refreshCurrentTree();
     QString currentRootPath() const;
-    void loadLocalFiles();  // Changed from loadFileList
-    void loadServerFiles(); // Mirror of local loader using m_serverRootPath
-    void loadAwsFiles();    // Mirror of local loader using m_awsRootPath
+    void loadLocalFiles();  // Legacy local loader (unused in AWS-only mode)
+    void loadServerFiles(); // Legacy server UNC loader (unused in AWS-only mode)
+    void loadAwsFiles();    // AWS S3 listing via server-proxied client
     void setAwsRootPath(const QString &path);
     void autoLoadAwsCredentials(); // Auto-load saved AWS credentials if remember is enabled
     void loadLocalFileContent(const QString &filePath);  // Changed from loadFileContent
@@ -233,8 +236,10 @@ private:
     // Tree search UI and logic
     void setupTreeSearchBar();
     void onTreeSearchTriggered();
-    QVector<QString> findMatchingFiles(const QString &term, int maxResults = -1) const;
-    QVector<QString> findMatchingFilesAsync(const QString &term, int maxResults = -1) const;
+    void showInlineSearchProgress(const QString &msg = QString());
+    void hideInlineSearchProgress();
+    QVector<QString> findMatchingFiles(const QString &term, int maxResults = -1);
+    QVector<QString> findMatchingFilesAsync(const QString &term, int maxResults = -1);
     bool revealPathInTree(const QString &absPath);
     static void expandToItem(QTreeWidgetItem *item);
     void renderSearchResultsFlat(const QVector<QString> &results, const QString &term);
