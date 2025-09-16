@@ -54,6 +54,7 @@ public:
     void setIndeterminate(){ m_progress->setRange(0,0); }
     void setDeterminate(int value, int maximum){ if (maximum<=0){ setIndeterminate(); return;} if(m_progress->maximum()!=maximum)m_progress->setRange(0,maximum); m_progress->setValue(value);}    
     void resizeToParent(){ if(parentWidget()) setGeometry(parentWidget()->rect()); }
+    void setCancellable(bool on){ if (m_cancel) m_cancel->setVisible(on); }
 
 signals:
     void cancelRequested();

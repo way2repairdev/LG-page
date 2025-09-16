@@ -547,6 +547,8 @@ void PDFViewerWidget::cancelLoad()
 
 void PDFViewerWidget::initializePDFViewer()
 {
+    // Prevent concurrent initialization across multiple widgets. Ensure the flag
+    // is ALWAYS cleared even on early returns (RAII-style guard below).
     static bool globalInitInProgress = false;
     if (m_viewerInitialized)
         return;
@@ -554,14 +556,18 @@ void PDFViewerWidget::initializePDFViewer()
         QTimer::singleShot(50, this, [this]() { if (!m_viewerInitialized) initializePDFViewer(); });
         return;
     }
-    if (!m_viewerContainer)
+    if (!m_viewerContainer) {
+        qWarning() << "PDFViewerWidget: initializePDFViewer() aborted - no viewer container";
         return;
+    }
     if (m_viewerContainer->width() <= 0 || m_viewerContainer->height() <= 0) {
+        // Defer until we have a valid size
         QTimer::singleShot(50, this, [this]() { initializePDFViewer(); });
         return;
     }
 
     globalInitInProgress = true;
+    struct FlagReset { bool &f; ~FlagReset(){ f = false; } } _{ globalInitInProgress };
 #ifdef _WIN32
     HWND hwnd = reinterpret_cast<HWND>(m_viewerContainer->winId());
 #else
@@ -569,9 +575,20 @@ void PDFViewerWidget::initializePDFViewer()
 #endif
     int w = m_viewerContainer->width();
     int h = m_viewerContainer->height();
-    if (w <= 0 || h <= 0) { globalInitInProgress = false; return; }
-    if (!m_pdfEmbedder->initialize(hwnd, w, h)) {
+    if (w <= 0 || h <= 0) {
+        qWarning() << "PDFViewerWidget: initializePDFViewer() invalid size (" << w << "x" << h << ") - deferring";
+        QTimer::singleShot(50, this, [this]() { initializePDFViewer(); });
+        return;
+    }
+    if (!m_pdfEmbedder || !m_pdfEmbedder->initialize(hwnd, w, h)) {
+        qWarning() << "PDFViewerWidget: initializePDFViewer() - embedder init failed (hwnd, w, h) ="
+                   << (void*)hwnd << w << h;
         emit errorOccurred("Failed to initialize PDF viewer");
+        // Do NOT leave the guard set; it will be cleared by FlagReset dtor.
+        // Optionally, retry once after a brief delay in case of transient GL context issues.
+        QTimer::singleShot(120, this, [this]() {
+            if (!m_viewerInitialized) initializePDFViewer();
+        });
         return;
     }
 
@@ -586,8 +603,7 @@ void PDFViewerWidget::initializePDFViewer()
     });
 
     m_viewerInitialized = true;
-    m_updateTimer->start();
-    globalInitInProgress = false;
+    if (m_updateTimer && !m_updateTimer->isActive()) m_updateTimer->start();
 }
 
 bool PDFViewerWidget::isPDFLoaded() const

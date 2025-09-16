@@ -34,9 +34,13 @@
 #include <QWidgetAction>
 #include <QWindow>
 #include <QPointer>
+#include <QStringList>
+#include <optional>
 #include "network/awsclient.h"
 #include "ui/awsconfigdialog.h"
 #include "network/authservice.h"
+// Reuse the lightweight overlay used by PDF viewer
+#include "ui/LoadingOverlay.h"
 class QParallelAnimationGroup;
 class QPropertyAnimation;
 
@@ -118,6 +122,7 @@ protected:
     bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
 #endif
     void closeEvent(QCloseEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
     UserSession m_userSession;
@@ -241,6 +246,23 @@ private:
     // Custom maximize/restore state (for frameless window reliability on Windows)
     bool m_customMaximized { false };
     QRect m_savedNormalGeometry;
+
+    // Tree/AWS loading UX and queueing
+    QPointer<LoadingOverlay> m_treeLoadingOverlay; // overlay on tree panel during downloads/listing
+    QPointer<LoadingOverlay> m_globalLoadingOverlay; // full-app overlay (main content area)
+    bool m_treeBusy { false };                     // prevents re-entrancy
+    bool m_cancelAwsQueue { false };               // stop after current item
+    QStringList m_awsQueue;                        // pending S3 keys to download/open
+    int m_awsQueueIndex { 0 };                     // current index in queue
+    void startAwsDownloadQueue(const QStringList &keys);
+    void processNextAwsDownload();
+    void showTreeLoading(const QString &message, bool cancellable = true);
+    void hideTreeLoading();
+    void showGlobalLoading(const QString &message, bool cancellable = true);
+    void hideGlobalLoading();
+
+    // Simple notice dialog (non-loading) shown for user-facing messages like tab limits
+    void showNoticeDialog(const QString &message, const QString &title = QStringLiteral("Notice"));
     
     // Server-side methods (commented out for local file loading)
     //void loadFileList();

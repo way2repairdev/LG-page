@@ -468,6 +468,17 @@ void MainApplication::setupUI()
     mainLayout->addWidget(m_splitter);
     rootLayout->addWidget(m_centralWidget, 1);
     setCentralWidget(root);
+
+    // Create a global loading overlay over the main content area (matches old/global UX)
+    if (!m_globalLoadingOverlay) {
+        m_globalLoadingOverlay = new LoadingOverlay(m_centralWidget);
+        m_globalLoadingOverlay->hideOverlay();
+        connect(m_globalLoadingOverlay, &LoadingOverlay::cancelRequested, this, [this]() {
+            // Currently used for AWS multi-download queue cancel
+            m_cancelAwsQueue = true;
+            statusBar()->showMessage("Cancelling pending operations…", 2000);
+        });
+    }
 }
 
 void MainApplication::setupTitleBar()
@@ -489,6 +500,17 @@ void MainApplication::closeEvent(QCloseEvent *event)
     }
     event->ignore();
     animateClose();
+}
+
+void MainApplication::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    // Keep global overlay covering the content area when window resizes
+    if (m_globalLoadingOverlay && m_centralWidget) {
+        m_globalLoadingOverlay->resize(m_centralWidget->size());
+        m_globalLoadingOverlay->move(m_centralWidget->pos());
+        m_globalLoadingOverlay->raise();
+    }
 }
 
 namespace {
@@ -1057,6 +1079,15 @@ void MainApplication::setupTreeView()
     panelLayout->addWidget(m_treeSearchBar);
     panelLayout->addWidget(m_treeWidget, 1);
     m_treePanel->setLayout(panelLayout);
+
+    // Prepare loading overlay for tree operations (listing/downloads)
+    if (!m_treeLoadingOverlay) {
+        m_treeLoadingOverlay = new LoadingOverlay(m_treePanel);
+        connect(m_treeLoadingOverlay, &LoadingOverlay::cancelRequested, this, [this]() {
+            m_cancelAwsQueue = true;
+            statusBar()->showMessage("Cancelling pending downloads…", 2000);
+        });
+    }
     
     // Tree will be populated via local file loading in constructor
 }
@@ -1791,8 +1822,8 @@ void MainApplication::setupTabWidget()
             this, &MainApplication::onTabChangedByType);
     // Non-blocking notification when user hits tab limit (avoid modal dialog that interrupts rendering)
     connect(m_tabWidget, &DualTabWidget::tabLimitReached, this, [this](DualTabWidget::TabType type, int maxTabs){
-        QString kind = (type == DualTabWidget::PDF_TAB) ? "PDF" : "PCB";
-        statusBar()->showMessage(QString("%1 tab limit (%2) reached. Close a tab before opening another.").arg(kind).arg(maxTabs), 5000);
+        const QString kind = (type == DualTabWidget::PDF_TAB) ? "PDF" : "PCB";
+        showNoticeDialog(QString("Tab limit (%1) reached. Close a tab to open more.").arg(maxTabs), kind + QStringLiteral(" Tabs"));
     });
 }
 
@@ -2270,10 +2301,8 @@ void MainApplication::openPDFInTab(const QString &filePath)
     // Enforce max PDF tab limit ONLY for new tabs
     const int kMaxPdfTabs = 5;
     if (m_tabWidget->count(DualTabWidget::PDF_TAB) >= kMaxPdfTabs) {
-        const QString msg = QString("PDF tab limit (%1) reached. Close a tab before opening another.").arg(kMaxPdfTabs);
-        statusBar()->showMessage(msg, 6000);
-        QToolTip::showText(QCursor::pos(), msg, this, QRect(), 2500);
-        QApplication::beep();
+        const QString msg = QString("Tab limit (%1) reached. Close a tab to open more.").arg(kMaxPdfTabs);
+        showNoticeDialog(msg, QStringLiteral("PDF Tabs"));
         return;
     }
 
@@ -2322,12 +2351,12 @@ void MainApplication::openPDFInTab(const QString &filePath)
     QString tabName = fileInfo.fileName();
     QIcon tabIcon = getFileIcon(filePath);
     int tabIndex = m_tabWidget->addTab(pdfViewer, tabIcon, tabName, DualTabWidget::PDF_TAB);
-    if (tabIndex < 0) {
-        // Safety: dual tab widget rejected addition (limit). Clean up and exit.
-        pdfViewer->deleteLater();
-        statusBar()->showMessage("Cannot open PDF: tab limit reached.", 5000);
-        return;
-    }
+        if (tabIndex < 0) {
+            // Safety: dual tab widget rejected addition (limit). Clean up and exit.
+            pdfViewer->deleteLater();
+            showNoticeDialog("Tab limit reached. Close a tab to open more.", QStringLiteral("PDF Tabs"));
+            return;
+        }
     
     // Switch to the new tab
     m_tabWidget->setCurrentIndex(tabIndex, DualTabWidget::PDF_TAB);
@@ -2386,10 +2415,8 @@ void MainApplication::openPCBInTab(const QString &filePath)
     // Limit only for new tabs
     const int kMaxPcbTabs = 5;
     if (m_tabWidget->count(DualTabWidget::PCB_TAB) >= kMaxPcbTabs) {
-        const QString msg = QString("PCB tab limit (%1) reached. Close a tab before opening another.").arg(kMaxPcbTabs);
-        statusBar()->showMessage(msg, 6000);
-        QToolTip::showText(QCursor::pos(), msg, this, QRect(), 2500);
-        QApplication::beep();
+        const QString msg = QString("Tab limit (%1) reached. Close a tab to open more.").arg(kMaxPcbTabs);
+        showNoticeDialog(msg, QStringLiteral("PCB Tabs"));
         return;
     }
 
@@ -2529,10 +2556,8 @@ void MainApplication::openFileFromMemory(const QString &memoryId, const QString 
         // Enforce max PDF tab limit (consistent with file loading)
         const int kMaxPdfTabs = 5;
         if (m_tabWidget->count(DualTabWidget::PDF_TAB) >= kMaxPdfTabs) {
-            const QString msg = QString("PDF tab limit (%1) reached. Close a tab before opening another.").arg(kMaxPdfTabs);
-            statusBar()->showMessage(msg, 6000);
-            QToolTip::showText(QCursor::pos(), msg, this, QRect(), 2500);
-            QApplication::beep();
+            const QString msg = QString("Tab limit (%1) reached. Close a tab to open more.").arg(kMaxPdfTabs);
+            showNoticeDialog(msg, QStringLiteral("PDF Tabs"));
             return;
         }
 
@@ -2556,12 +2581,8 @@ void MainApplication::openFileFromMemory(const QString &memoryId, const QString 
         // Add PDF viewer to PDF tab row
         QString tabName = QFileInfo(originalKey).fileName();  // Use fileName() for consistency with file loading
         QIcon tabIcon = getFileIcon(originalKey);
-        int tabIndex = m_tabWidget->addTab(pdfViewer, tabIcon, tabName, DualTabWidget::PDF_TAB);
-        if (tabIndex < 0) {
-            pdfViewer->deleteLater();
-            statusBar()->showMessage("Cannot open PDF: tab limit reached.", 5000);
-            return;
-        }
+    int tabIndex = m_tabWidget->addTab(pdfViewer, tabIcon, tabName, DualTabWidget::PDF_TAB);
+    if (tabIndex < 0) { pdfViewer->deleteLater(); showNoticeDialog("Tab limit reached. Close a tab to open more.", QStringLiteral("PDF Tabs")); return; }
 
         // Switch to the new tab
         m_tabWidget->setCurrentIndex(tabIndex, DualTabWidget::PDF_TAB);
@@ -2595,13 +2616,7 @@ void MainApplication::openFileFromMemory(const QString &memoryId, const QString 
 
         // Enforce max PCB tab limit (consistent with file loading - 5 tabs)
         const int kMaxPcbTabs = 5;
-        if (m_tabWidget->count(DualTabWidget::PCB_TAB) >= kMaxPcbTabs) {
-            const QString msg = QString("PCB tab limit (%1) reached. Close a tab before opening another.").arg(kMaxPcbTabs);
-            statusBar()->showMessage(msg, 6000);
-            QToolTip::showText(QCursor::pos(), msg, this, QRect(), 2500);
-            QApplication::beep();
-            return;
-        }
+    if (m_tabWidget->count(DualTabWidget::PCB_TAB) >= kMaxPcbTabs) { showNoticeDialog(QString("Tab limit (%1) reached. Close a tab to open more.").arg(kMaxPcbTabs), QStringLiteral("PCB Tabs")); return; }
 
         // Create PCB viewer widget
         PCBViewerWidget *pcbViewer = new PCBViewerWidget(this);
@@ -2626,12 +2641,8 @@ void MainApplication::openFileFromMemory(const QString &memoryId, const QString 
         // Add PCB viewer to PCB tab row
         QString tabName = QFileInfo(originalKey).fileName();  // Use fileName() for consistency with file loading
         QIcon tabIcon = getFileIcon(originalKey);
-        int tabIndex = m_tabWidget->addTab(pcbViewer, tabIcon, tabName, DualTabWidget::PCB_TAB);
-        if (tabIndex < 0) {
-            pcbViewer->deleteLater();
-            statusBar()->showMessage("Cannot open PCB: tab limit reached.", 5000);
-            return;
-        }
+    int tabIndex = m_tabWidget->addTab(pcbViewer, tabIcon, tabName, DualTabWidget::PCB_TAB);
+    if (tabIndex < 0) { pcbViewer->deleteLater(); showNoticeDialog("Tab limit reached. Close a tab to open more.", QStringLiteral("PCB Tabs")); return; }
 
         // Switch to the new tab
         m_tabWidget->setCurrentIndex(tabIndex, DualTabWidget::PCB_TAB);
@@ -3152,25 +3163,21 @@ void MainApplication::onTreeItemDoubleClicked(QTreeWidgetItem *item, int column)
         QString itemText = item->text(0);
         // Local/Server files store path in UserRole; AWS files store key in UserRole+10
         if (m_treeSource == TreeSource::AWS) {
-            const QString s3Key = item->data(0, Qt::UserRole + 10).toString();
-            if (!s3Key.isEmpty()) {
-                statusBar()->showMessage(QString("Downloading from AWS: %1...").arg(itemText));
-                
-                // Download to memory instead of cache file for security
-                auto data = m_aws.downloadToMemory(s3Key);
-                if (data.has_value()) {
-                    // Store file in memory manager
-                    MemoryFileManager* memMgr = MemoryFileManager::instance();
-                    QString memoryId = memMgr->storeFileData(s3Key, data.value());
-                    
-                    // Open file from memory
-                    openFileFromMemory(memoryId, s3Key);
-                    return;
-                } else {
-                    const QString err = m_aws.lastError();
-                    showTreeIssue(this, "AWS download failed", err.isEmpty()?s3Key:err);
-                    return;
-                }
+            // Support multi-selection: queue all selected file keys; process sequentially
+            QList<QTreeWidgetItem*> selected = m_treeWidget->selectedItems();
+            QStringList keys;
+            for (QTreeWidgetItem* it : selected) {
+                QString key = it->data(0, Qt::UserRole + 10).toString();
+                if (!key.isEmpty()) keys << key;
+            }
+            // If no multi-select, fallback to the clicked item key
+            if (keys.isEmpty()) {
+                const QString s3Key = item->data(0, Qt::UserRole + 10).toString();
+                if (!s3Key.isEmpty()) keys << s3Key;
+            }
+            if (!keys.isEmpty()) {
+                startAwsDownloadQueue(keys);
+                return;
             }
             // If it's a folder, just toggle
             item->setExpanded(!item->isExpanded());
@@ -3191,6 +3198,137 @@ void MainApplication::onTreeItemDoubleClicked(QTreeWidgetItem *item, int column)
     } catch (...) {
         showTreeIssue(this, "Open item error");
     }
+}
+
+// --- AWS multi-selection queue & overlay helpers ---
+void MainApplication::showTreeLoading(const QString &message, bool cancellable)
+{
+    Q_UNUSED(cancellable);
+    // Prefer global overlay for a consistent, app-wide loading UX
+    showGlobalLoading(message, true);
+}
+
+void MainApplication::hideTreeLoading()
+{
+    hideGlobalLoading();
+}
+
+void MainApplication::showGlobalLoading(const QString &message, bool cancellable)
+{
+    Q_UNUSED(cancellable);
+    if (m_globalLoadingOverlay) {
+        m_globalLoadingOverlay->showOverlay(message);
+        m_globalLoadingOverlay->raise();
+        m_globalLoadingOverlay->resize(m_centralWidget->size());
+    } else if (m_treeLoadingOverlay) {
+        // Fallback if global overlay not available
+        m_treeLoadingOverlay->showOverlay(message);
+    }
+}
+
+void MainApplication::hideGlobalLoading()
+{
+    if (m_globalLoadingOverlay && m_globalLoadingOverlay->isVisible()) {
+        m_globalLoadingOverlay->hideOverlay();
+    }
+    if (m_treeLoadingOverlay && m_treeLoadingOverlay->isVisible()) {
+        // Ensure any legacy/tree overlay is also hidden
+        m_treeLoadingOverlay->hideOverlay();
+    }
+}
+
+void MainApplication::showNoticeDialog(const QString &message, const QString &title)
+{
+    QMessageBox::information(this, title, message);
+}
+
+// showNoticeOverlay removed; using modal dialog notices instead
+
+void MainApplication::startAwsDownloadQueue(const QStringList &keys)
+{
+    if (m_treeBusy) {
+        // If already busy, append new keys and keep going
+        m_awsQueue << keys;
+        return;
+    }
+    m_treeBusy = true;
+    m_cancelAwsQueue = false;
+    m_awsQueue = keys;
+    m_awsQueueIndex = 0;
+    showTreeLoading(QString("Downloading %1 file%2 from AWS…")
+                        .arg(m_awsQueue.size())
+                        .arg(m_awsQueue.size()>1?"s":""), true);
+    processNextAwsDownload();
+}
+
+void MainApplication::processNextAwsDownload()
+{
+    // Enforce tab limits by TYPE for the next item only. Do not block PDF when only PCB is full, and vice versa.
+    const int kMaxPdfTabs = 5;
+    const int kMaxPcbTabs = 5;
+    if (m_tabWidget && m_awsQueueIndex < m_awsQueue.size()) {
+        const QString nextKey = m_awsQueue.at(m_awsQueueIndex);
+        const QString ext = QFileInfo(nextKey).suffix().toLower();
+        const bool isPdf = (ext == QLatin1String("pdf"));
+        const bool isPcb = (ext == QLatin1String("xzz") || ext == QLatin1String("pcb") || ext == QLatin1String("xzzpcb") || ext == QLatin1String("brd") || ext == QLatin1String("brd2"));
+        if (isPdf && m_tabWidget->count(DualTabWidget::PDF_TAB) >= kMaxPdfTabs) {
+            hideTreeLoading();
+            m_treeBusy = false;
+            m_cancelAwsQueue = true;
+            showNoticeDialog(QString("Tab limit (%1) reached. Close a tab to open more.").arg(kMaxPdfTabs), QStringLiteral("PDF Tabs"));
+            m_awsQueue.clear();
+            statusBar()->showMessage("Stopped AWS downloads due to PDF tab limit", 3000);
+            return;
+        }
+        if (isPcb && m_tabWidget->count(DualTabWidget::PCB_TAB) >= kMaxPcbTabs) {
+            hideTreeLoading();
+            m_treeBusy = false;
+            m_cancelAwsQueue = true;
+            showNoticeDialog(QString("Tab limit (%1) reached. Close a tab to open more.").arg(kMaxPcbTabs), QStringLiteral("PCB Tabs"));
+            m_awsQueue.clear();
+            statusBar()->showMessage("Stopped AWS downloads due to PCB tab limit", 3000);
+            return;
+        }
+    }
+
+    if (m_cancelAwsQueue) {
+        hideTreeLoading();
+        m_treeBusy = false;
+        m_awsQueue.clear();
+        statusBar()->showMessage("Download cancelled", 2000);
+        return;
+    }
+    if (m_awsQueueIndex >= m_awsQueue.size()) {
+        hideTreeLoading();
+        m_treeBusy = false;
+        statusBar()->showMessage("All downloads complete", 2500);
+        return;
+    }
+
+    const QString key = m_awsQueue.at(m_awsQueueIndex);
+    const int cur = m_awsQueueIndex + 1;
+    const int total = m_awsQueue.size();
+    showTreeLoading(QString("Downloading %1 of %2…\n%3").arg(cur).arg(total).arg(QFileInfo(key).fileName()), true);
+
+    // Synchronous call per existing API; if later made async, adapt with callbacks
+    auto data = m_aws.downloadToMemory(key);
+    if (!data.has_value()) {
+        const QString err = m_aws.lastError();
+        showTreeIssue(this, "AWS download failed", err.isEmpty()?key:err);
+        // Continue to next file even if one fails
+        ++m_awsQueueIndex;
+        QTimer::singleShot(0, this, [this]() { processNextAwsDownload(); });
+        return;
+    }
+
+    // Store and open
+    MemoryFileManager* memMgr = MemoryFileManager::instance();
+    QString memoryId = memMgr->storeFileData(key, data.value());
+    openFileFromMemory(memoryId, key);
+
+    // Advance and continue with a tiny delay to keep UI responsive
+    ++m_awsQueueIndex;
+    QTimer::singleShot(0, this, [this]() { processNextAwsDownload(); });
 }
 
 void MainApplication::onTreeItemExpanded(QTreeWidgetItem *item)
