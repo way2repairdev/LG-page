@@ -307,41 +307,79 @@ bool PCBViewerEmbedder::loadPCBFromMemory(const char* data, size_t size, const s
     }
 
     try {
-        // Create a temporary file to store the PCB data
-        // This is necessary because the PCB loaders expect file paths
-        QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
-        QString tempFileName = tempDir + QString("/pcb_temp_%1.xzz").arg(QDateTime::currentMSecsSinceEpoch());
-        
-        // Write data to temporary file
-        QFile tempFile(tempFileName);
-        if (!tempFile.open(QIODevice::WriteOnly)) {
-            handleError("Failed to create temporary file for PCB data");
-            return false;
+        // Build a buffer view from the provided bytes
+        std::vector<char> buffer;
+        buffer.reserve(size);
+        buffer.insert(buffer.end(), data, data + size);
+
+        // Determine file type. Prefer XZZPCB (current supported path)
+        std::unique_ptr<BRDFileBase> pcbFile;
+
+        // Try XZZPCB first
+        {
+            XZZPCBFile probe;
+            if (probe.VerifyFormat(buffer)) {
+                auto xzz = std::make_unique<XZZPCBFile>();
+                if (!xzz->Load(buffer, displayName)) {
+                    handleError("Failed to parse XZZPCB data from memory");
+                    return false;
+                }
+                pcbFile = std::move(xzz);
+            }
         }
-        
-        qint64 written = tempFile.write(data, size);
-        tempFile.close();
-        
-        if (written != static_cast<qint64>(size)) {
-            handleError("Failed to write PCB data to temporary file");
-            // Clean up the temp file
-            QFile::remove(tempFileName);
+
+        // If not XZZPCB, optionally try BRD/BRD2 (parsers support memory buffers)
+        if (!pcbFile) {
+            BRDFile brdProbe;
+            if (brdProbe.VerifyFormat(buffer)) {
+                auto brd = std::make_unique<BRDFile>();
+                if (!brd->Load(buffer, displayName)) {
+                    handleError("Failed to parse BRD data from memory");
+                    return false;
+                }
+                pcbFile = std::move(brd);
+            }
+        }
+
+        if (!pcbFile) {
+            BRD2File brd2Probe;
+            if (brd2Probe.VerifyFormat(buffer)) {
+                auto brd2 = std::make_unique<BRD2File>();
+                if (!brd2->Load(buffer, displayName)) {
+                    handleError("Failed to parse BRD2 data from memory");
+                    return false;
+                }
+                pcbFile = std::move(brd2);
+            }
+        }
+
+        if (!pcbFile) {
+            handleError("Unrecognized PCB format in memory buffer");
             return false;
         }
 
-        // Load PCB using the regular file loading method
-        bool success = loadPCB(tempFileName.toStdString());
-        
-        // Clean up the temporary file
-        QFile::remove(tempFileName);
-        
-        if (success) {
-            // Update the display name to show the original key instead of temp file path
-            m_currentFilePath = displayName.empty() ? "memory://pcb" : displayName;
-            handleStatus("PCB loaded successfully from memory (" + std::to_string(size) + " bytes)");
+        // Create appropriate renderer (generic renderer handles all formats)
+        if (!m_renderer) {
+            m_renderer = createRenderer("");
         }
-        
-        return success;
+
+        // Re-initialize renderer if already initialized
+        if (m_initialized && !initializeRenderer()) {
+            handleError("Failed to initialize renderer");
+            return false;
+        }
+
+        // Hook parsed data into renderer
+        m_pcbData = std::shared_ptr<BRDFileBase>(pcbFile.release());
+        if (m_renderer) {
+            m_renderer->SetPCBData(m_pcbData);
+            m_renderer->ZoomToFit(m_windowWidth, m_windowHeight);
+        }
+
+        m_currentFilePath = displayName.empty() ? std::string("memory://pcb") : displayName;
+        m_pdfLoaded = true;
+        handleStatus("PCB loaded successfully from memory (" + std::to_string(size) + " bytes)");
+        return true;
     }
     catch (const std::exception& e) {
         handleError("Exception while loading PCB from memory: " + std::string(e.what()));
