@@ -596,12 +596,9 @@ void MainWindow::configureAwsForMain(MainApplication* app, const AuthAwsCreds& a
 
         // Pass bucket and token to MainApplication (it configures AwsClient in server mode)
         app->configureAwsFromAuth(aws, authToken);
-
-        // Automatically switch the treeview to AWS after UI is ready
-        writeTransitionLog("configureAwsForMain: switching to AWS treeview automatically");
-        QTimer::singleShot(500, this, [app]() {
-            app->switchToAwsTreeview();
-        });
+        // Switch to AWS after UI is ready (single call)
+        writeTransitionLog("configureAwsForMain: switching to AWS treeview");
+        QTimer::singleShot(200, this, [app]() { app->switchToAwsTreeview(); });
     } else {
         writeTransitionLog("configureAwsForMain: missing auth token or bucket; staying on Local treeview");
     }

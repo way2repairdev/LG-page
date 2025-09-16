@@ -271,9 +271,8 @@ MainApplication::MainApplication(const UserSession &userSession, QWidget *parent
     
     // Clean up any legacy AWS credentials from previous versions
     autoLoadAwsCredentials();
-    
-    setTreeSource(TreeSource::Local, true);
-    writeTransitionLog("ctor: after loadLocalFiles");
+    // AWS-only mode: defer loading the AWS tree until credentials are provided by the login flow.
+    writeTransitionLog("ctor: AWS tree load deferred until credentials are ready");
     
     // Add welcome tab
     addWelcomeTab();
@@ -1038,10 +1037,8 @@ void MainApplication::setupTreeView()
     searchLayout->addWidget(m_treeSearchEdit, 1);
     // No explicit clear button inserted; QLineEdit shows its own clear icon
     searchLayout->addWidget(m_treeSearchButton, 0);
-    // Add the source toggle bar to the right of the search controls
-    setupSourceToggleBar();
-    searchLayout->addSpacing(6);
-    searchLayout->addWidget(m_sourceToggleBar, 0, Qt::AlignVCenter);
+    // AWS-only mode: no Local/Server/AWS toggle bar
+    m_sourceToggleBar = nullptr;
     m_treeSearchBar->setLayout(searchLayout);
 
     // Tree widget
@@ -1321,8 +1318,8 @@ void MainApplication::applyTreeViewTheme()
         m_treeSearchClearButton->setStyleSheet("QToolButton { border: none; background: transparent; } QToolButton:hover { background: transparent; }");
     }
 
-    // Re-style Server/Local/AWS toggle buttons to reflect theme changes
-    if ((m_btnServer && m_btnLocal) || m_btnAws) {
+    // AWS-only: no source toggle buttons
+    if (false) {
         auto styleToggleBtn = [&](QPushButton *b){
             b->setStyleSheet(QString(
                 "QPushButton { padding: 6px 12px; border: 1px solid %1; background: %2; color: %3; border-radius: 8px; }"
@@ -1338,147 +1335,9 @@ void MainApplication::applyTreeViewTheme()
 
 void MainApplication::setupSourceToggleBar()
 {
+    // AWS-only mode: no toggle bar
     m_sourceToggleBar = new QWidget(m_treePanel);
-    auto *hl = new QHBoxLayout(m_sourceToggleBar);
-    hl->setContentsMargins(6, 6, 6, 0);
-    hl->setSpacing(6);
-
-    m_btnServer = new QPushButton("Server", m_sourceToggleBar);
-    m_btnLocal  = new QPushButton("Local", m_sourceToggleBar);
-    m_btnAws    = new QPushButton("AWS", m_sourceToggleBar);
-    m_btnServer->setCheckable(true);
-    m_btnLocal->setCheckable(true);
-    m_btnAws->setCheckable(true);
-    m_sourceGroup = new QButtonGroup(this);
-    m_sourceGroup->setExclusive(true);
-    m_sourceGroup->addButton(m_btnServer, 1);
-    m_sourceGroup->addButton(m_btnLocal, 2);
-    m_sourceGroup->addButton(m_btnAws,   3);
-
-    // Default visual selection: Server (constructor will set actual source)
-    m_btnServer->setChecked(true);
-
-    auto applyBtnStyle = [this](QPushButton *b){
-        const QColor base = palette().color(QPalette::Window);
-        bool dark = base.lightness() < 128;
-        QString border = dark ? "#39424c" : "#d7dbe2";
-        QString bg = dark ? "#20262c" : "#ffffff";
-        QString text = dark ? "#e2e8ef" : "#1a1a1a";
-        QString hover = dark ? "#2d3640" : "#f3f5f7";
-        QString active = dark ? "#2f7dd8" : "#0078d4";
-        QString activeText = "#ffffff";
-        b->setStyleSheet(QString(
-            "QPushButton { padding: 6px 12px; border: 1px solid %1; background: %2; color: %3; border-radius: 8px; }"
-            "QPushButton:hover { background: %4; }"
-            "QPushButton:checked { background: %5; color: %6; border-color: %5; }"
-        ).arg(border, bg, text, hover, active, activeText));
-    };
-    applyBtnStyle(m_btnServer);
-    applyBtnStyle(m_btnLocal);
-    applyBtnStyle(m_btnAws);
-
-    hl->addWidget(m_btnServer, 0);
-    hl->addWidget(m_btnLocal, 0);
-    hl->addWidget(m_btnAws, 0);
-    hl->addStretch(1);
-
-    connect(m_btnServer, &QPushButton::toggled, this, [this](bool on){ if (on) setTreeSource(TreeSource::Server, true); });
-    connect(m_btnLocal,  &QPushButton::toggled, this, [this](bool on){ if (on) setTreeSource(TreeSource::Local, true);  });
-    connect(m_btnAws,    &QPushButton::toggled, this, [this](bool on){
-        if (!on) return;
-        
-        // Check if AWS is configured in server-proxied mode
-        if (m_aws.isServerMode() && m_aws.isReady()) {
-            // AWS is already configured via server authentication, test connection
-            writeTransitionLog(QString("aws-connect: server mode probe bucket='%1'").arg(m_aws.bucket()));
-            auto probe = m_aws.list("", 0);
-            if (probe.has_value()) {
-                writeTransitionLog("aws-connect: server mode success");
-                statusBar()->showMessage(QString("Connected to AWS S3 bucket: %1").arg(m_aws.bucket()), 3000);
-                setTreeSource(TreeSource::AWS, true);
-                return;
-            } else {
-                const QString err = m_aws.lastError();
-                writeTransitionLog(QString("aws-connect: server mode failed: %1").arg(err));
-                QMessageBox::warning(this, "AWS Connection Failed",
-                                     QString("Could not connect to S3 via server.\n%1\n\nPlease ensure you are logged in to the server.").arg(err.isEmpty()?QStringLiteral("Unknown error"):err));
-                // Revert to Local
-                if (m_btnLocal) {
-                    m_btnAws->blockSignals(true);
-                    m_btnLocal->blockSignals(true);
-                    m_btnAws->setChecked(false);
-                    m_btnLocal->setChecked(true);
-                    m_btnAws->blockSignals(false);
-                    m_btnLocal->blockSignals(false);
-                }
-                statusBar()->showMessage("AWS server connection failed. Showing Local.", 4000);
-                setTreeSource(TreeSource::Local, true);
-                return;
-            }
-        }
-        
-        // AWS not configured in server mode - show informational dialog
-        AwsConfigDialog dlg(this);
-        dlg.preloadFromEnv();
-        if (dlg.exec() == QDialog::Accepted) {
-            // The dialog is now informational only - no credentials to save
-            writeTransitionLog("aws-dialog: informational dialog acknowledged");
-            
-            // Check if user needs to log in to server first
-            if (!m_aws.isServerMode()) {
-                QMessageBox::information(this, "AWS Configuration", 
-                    "AWS access requires server authentication.\n\n"
-                    "Please log in to the server first to enable AWS S3 access.\n\n"
-                    "AWS credentials are managed securely on the server.");
-                if (m_btnLocal) {
-                    m_btnAws->blockSignals(true);
-                    m_btnLocal->blockSignals(true);
-                    m_btnAws->setChecked(false);
-                    m_btnLocal->setChecked(true);
-                    m_btnAws->blockSignals(false);
-                    m_btnLocal->blockSignals(false);
-                }
-                statusBar()->showMessage("AWS requires server login. Showing Local.", 5000);
-                setTreeSource(TreeSource::Local, true);
-                return;
-            }
-            
-            // User is authenticated but AWS might not be ready yet
-            if (!m_aws.isReady()) {
-                QMessageBox::information(this, "AWS Configuration", 
-                    "AWS configuration is not yet available from the server.\n\n"
-                    "Please ensure your server account has AWS access configured.");
-                if (m_btnLocal) {
-                    m_btnAws->blockSignals(true);
-                    m_btnLocal->blockSignals(true);
-                    m_btnAws->setChecked(false);
-                    m_btnLocal->setChecked(true);
-                    m_btnAws->blockSignals(false);
-                    m_btnLocal->blockSignals(false);
-                }
-                statusBar()->showMessage("AWS not available. Showing Local.", 5000);
-                setTreeSource(TreeSource::Local, true);
-                return;
-            }
-            
-            // AWS should be ready, try to switch
-            setTreeSource(TreeSource::AWS, true);
-        } else {
-            writeTransitionLog("aws-dialog: user canceled");
-            // If user canceled, revert to previous selection
-            if (m_btnLocal) {
-                m_btnAws->blockSignals(true);
-                m_btnLocal->blockSignals(true);
-                m_btnAws->setChecked(false);
-                m_btnLocal->setChecked(true);
-                m_btnAws->blockSignals(false);
-                m_btnLocal->blockSignals(false);
-            }
-            statusBar()->showMessage("AWS not configured. Showing Local.", 5000);
-            setTreeSource(TreeSource::Local, true);
-            return;
-        }
-    });
+    m_sourceToggleBar->setVisible(false);
 }
 
 // Create and style the search widgets (called within setupTreeView)
@@ -1918,9 +1777,7 @@ void MainApplication::loadAwsFiles()
 
         if (!m_aws.isReady()) {
             showTreeIssue(this, "AWS unavailable", "Credentials/bucket not set");
-            statusBar()->showMessage("AWS not configured. Showing Local.");
-            setTreeSource(TreeSource::Local, false);
-            loadLocalFiles();
+            statusBar()->showMessage("AWS not configured.");
             return;
         }
 
@@ -1928,9 +1785,7 @@ void MainApplication::loadAwsFiles()
         if (!list.has_value()) {
             const QString err = m_aws.lastError();
             showTreeIssue(this, "AWS list error", err.isEmpty()?QStringLiteral("Unable to list root"):err);
-            statusBar()->showMessage("AWS list failed. Showing Local.");
-            setTreeSource(TreeSource::Local, false);
-            loadLocalFiles();
+            statusBar()->showMessage("AWS list failed.");
             return;
         }
 
@@ -1975,12 +1830,8 @@ void MainApplication::loadAwsFiles()
         statusBar()->showMessage(QString("Loaded AWS bucket: %1").arg(m_aws.bucket()));
     } catch (const std::exception &e) {
         showTreeIssue(this, "AWS load error", e.what());
-        setTreeSource(TreeSource::Local, false);
-        loadLocalFiles();
     } catch (...) {
         showTreeIssue(this, "Unknown AWS load error");
-        setTreeSource(TreeSource::Local, false);
-        loadLocalFiles();
     }
 }
 
@@ -2015,11 +1866,7 @@ void MainApplication::configureAwsFromAuth(const AuthAwsCreds& creds, const QStr
         
         writeTransitionLog("configureAwsFromAuth: AWS client configured successfully");
         
-        // Enable AWS button if available
-        if (m_btnAws) {
-            m_btnAws->setEnabled(true);
-            m_btnAws->setToolTip("AWS S3 (Connected via Server)");
-        }
+        // AWS-only: no toggle buttons to update
     } else {
         writeTransitionLog("configureAwsFromAuth: missing auth token or bucket from server");
     }
@@ -2053,20 +1900,7 @@ void MainApplication::switchToAwsTreeview()
         return;
     }
     
-    // Update toggle buttons to reflect AWS selection
-    if (m_btnAws && m_btnServer && m_btnLocal) {
-        m_btnServer->blockSignals(true);
-        m_btnLocal->blockSignals(true);
-        m_btnAws->blockSignals(true);
-        
-        m_btnServer->setChecked(false);
-        m_btnLocal->setChecked(false);
-        m_btnAws->setChecked(true);
-        
-        m_btnServer->blockSignals(false);
-        m_btnLocal->blockSignals(false);
-        m_btnAws->blockSignals(false);
-    }
+    // AWS-only: no toggle buttons
     
     // Switch to AWS tree source and load files
     setTreeSource(TreeSource::AWS, true);
@@ -2075,130 +1909,24 @@ void MainApplication::switchToAwsTreeview()
 
 void MainApplication::setTreeSource(TreeSource src, bool forceReload)
 {
-    if (!forceReload && m_treeSource == src) return;
-
-    // If switching to Local, do it immediately (fast, non-blocking)
-    if (src == TreeSource::Local) {
-        m_treeSource = TreeSource::Local;
-        loadLocalFiles();
-    if (m_btnServer && m_btnLocal) {
-            m_btnServer->blockSignals(true);
-            m_btnLocal->blockSignals(true);
-            m_btnServer->setChecked(false);
-            m_btnLocal->setChecked(true);
-            m_btnServer->blockSignals(false);
-            m_btnLocal->blockSignals(false);
-        }
-    if (m_btnAws) m_btnAws->setChecked(false);
-    if (m_btnServer) m_btnServer->setEnabled(true);
-    if (m_btnLocal)  m_btnLocal->setEnabled(true);
-    if (m_btnAws)    m_btnAws->setEnabled(true);
-        return;
-    }
-
-    // For Server, check availability asynchronously with a short timeout to avoid UI stalls
-    if (src == TreeSource::Server) {
-        const QString path = m_serverRootPath;
-        // If no path configured, keep Local and inform the user
-        if (path.trimmed().isEmpty()) {
-            m_treeSource = TreeSource::Local;
-            showTreeIssue(this, "Server unavailable", "Path not set");
-            statusBar()->showMessage("Server not configured. Showing Local.");
-            loadLocalFiles();
-            return;
-        }
-
-        // Show a brief non-blocking hint and prevent rapid toggles until resolved
-        statusBar()->showMessage("Checking server...");
-        if (m_btnServer && m_btnLocal) {
-            m_btnServer->setEnabled(false);
-            m_btnLocal->setEnabled(false);
-        }
-
-        // Capture 'this' safely; MainApplication owns ctx for timer & cleanup
-        checkDirAvailableAsync(this, path, /*timeoutMs*/ 800, [this, path](bool ok){
-            // If user toggled back to Local while checking, honor current choice
-            // If user already switched back to Local, honor it
-            if (m_btnLocal && m_btnLocal->isChecked()) {
-                m_treeSource = TreeSource::Local;
-                loadLocalFiles();
-                if (m_btnServer && m_btnLocal) {
-                    m_btnServer->setEnabled(true);
-                    m_btnLocal->setEnabled(true);
-                }
-                return;
-            }
-
-            if (ok) {
-                m_treeSource = TreeSource::Server;
-                loadServerFiles();
-                if (m_btnServer && m_btnLocal) {
-                    m_btnServer->blockSignals(true);
-                    m_btnLocal->blockSignals(true);
-                    m_btnServer->setChecked(true);
-                    m_btnLocal->setChecked(false);
-                    m_btnServer->blockSignals(false);
-                    m_btnLocal->blockSignals(false);
-                    m_btnServer->setEnabled(true);
-                    m_btnLocal->setEnabled(true);
-                    if (m_btnAws) m_btnAws->setEnabled(true);
-                }
-            } else {
-                m_treeSource = TreeSource::Local;
-                showTreeIssue(this, "Server unavailable", path);
-                statusBar()->showMessage("Server unavailable. Showing Local.");
-                loadLocalFiles();
-                if (m_btnServer && m_btnLocal) {
-                    m_btnServer->blockSignals(true);
-                    m_btnLocal->blockSignals(true);
-                    m_btnServer->setChecked(false);
-                    m_btnLocal->setChecked(true);
-                    m_btnServer->blockSignals(false);
-                    m_btnLocal->blockSignals(false);
-                    m_btnServer->setEnabled(true);
-                    m_btnLocal->setEnabled(true);
-                    if (m_btnAws) m_btnAws->setEnabled(true);
-                }
-            }
-        });
-        return;
-    }
-
-    // For AWS, require credentials/bucket and then load directly
-    if (src == TreeSource::AWS) {
-        if (!m_aws.isReady()) {
-            m_treeSource = TreeSource::Local;
-            showTreeIssue(this, "AWS unavailable", "Not configured");
-            statusBar()->showMessage("AWS not configured. Showing Local.");
-            loadLocalFiles();
-            return;
-        }
+    Q_UNUSED(src)
+    // AWS-only: always load AWS when requested to refresh tree
+    if (!forceReload && m_treeSource == TreeSource::AWS) return;
+    if (!m_aws.isReady()) {
+        // In AWS-only mode, if not ready, keep the tree empty with a neutral message
         m_treeSource = TreeSource::AWS;
-        loadAwsFiles();
-        if (m_btnServer && m_btnLocal) {
-            m_btnServer->blockSignals(true);
-            m_btnLocal->blockSignals(true);
-            if (m_btnAws) m_btnAws->blockSignals(true);
-            if (m_btnServer) m_btnServer->setChecked(false);
-            if (m_btnLocal)  m_btnLocal->setChecked(false);
-            if (m_btnAws)    m_btnAws->setChecked(true);
-            if (m_btnAws) m_btnAws->blockSignals(false);
-            m_btnServer->blockSignals(false);
-            m_btnLocal->blockSignals(false);
-            m_btnServer->setEnabled(true);
-            m_btnLocal->setEnabled(true);
-        }
-        if (m_btnAws) m_btnAws->setEnabled(true);
+        if (m_treeWidget) m_treeWidget->clear();
+        statusBar()->showMessage("Waiting for AWS configuration…");
         return;
     }
+    m_treeSource = TreeSource::AWS;
+    loadAwsFiles();
 }
 
 QString MainApplication::currentRootPath() const
 {
-    if (m_treeSource == TreeSource::AWS && !m_awsRootPath.isEmpty())
-        return m_awsRootPath;
-    if (m_treeSource == TreeSource::Server && !m_serverRootPath.isEmpty())
-        return m_serverRootPath;
+    // In AWS-only mode, return AWS root if set, otherwise local root used for search helpers
+    if (!m_awsRootPath.isEmpty()) return m_awsRootPath;
     return m_rootFolderPath;
 }
 
@@ -3161,8 +2889,8 @@ void MainApplication::onTreeItemDoubleClicked(QTreeWidgetItem *item, int column)
         Q_UNUSED(column)
         if (!item) return;
         QString itemText = item->text(0);
-        // Local/Server files store path in UserRole; AWS files store key in UserRole+10
-        if (m_treeSource == TreeSource::AWS) {
+        // AWS-only: files store key in UserRole+10
+        if (true) {
             // Support multi-selection: queue all selected file keys; process sequentially
             QList<QTreeWidgetItem*> selected = m_treeWidget->selectedItems();
             QStringList keys;
@@ -3184,15 +2912,7 @@ void MainApplication::onTreeItemDoubleClicked(QTreeWidgetItem *item, int column)
             statusBar()->showMessage(QString("Toggled folder: %1").arg(itemText));
             return;
         }
-
-        QString filePath = item->data(0, Qt::UserRole).toString();
-        if (!filePath.isEmpty()) {
-            statusBar()->showMessage(QString("Opening file: %1...").arg(itemText));
-            openFileInTab(filePath);
-        } else {
-            item->setExpanded(!item->isExpanded());
-            statusBar()->showMessage(QString("Toggled folder: %1").arg(itemText));
-        }
+        // Unreachable in AWS-only mode
     } catch (const std::exception &e) {
         showTreeIssue(this, "Open item error", e.what());
     } catch (...) {
@@ -3343,7 +3063,7 @@ void MainApplication::onTreeItemExpanded(QTreeWidgetItem *item)
                 // This is a dummy item, remove it and load actual contents
                 delete child;
                 // Load the actual folder contents
-                if (m_treeSource == TreeSource::AWS) {
+                if (true) { // AWS-only mode
                     const QString prefix = item->data(0, Qt::UserRole + 11).toString();
                     if (!prefix.isEmpty()) {
                         statusBar()->showMessage(QString("Listing: %1...").arg(item->text(0)));
@@ -3379,14 +3099,7 @@ void MainApplication::onTreeItemExpanded(QTreeWidgetItem *item)
                         }
                         statusBar()->showMessage(QString("Loaded: %1").arg(item->text(0)));
                     }
-                } else {
-                    QString folderPath = item->data(0, Qt::UserRole + 1).toString();
-                    if (!folderPath.isEmpty()) {
-                        statusBar()->showMessage(QString("Loading folder: %1...").arg(item->text(0)));
-                        populateTreeFromDirectory(folderPath, item);
-                        statusBar()->showMessage(QString("Loaded folder: %1").arg(item->text(0)));
-                    }
-                }
+                } else { /* no local/server branch in AWS-only mode */ }
             }
         }
     } catch (const std::exception &e) {

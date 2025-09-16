@@ -132,7 +132,7 @@ private:
     QString m_awsRootPath;     // AWS-mounted/local sync folder path (optional)
     AwsClient m_aws;           // Simple S3 client (dev mode with access keys)
     enum class TreeSource { Server, Local, AWS };
-    TreeSource m_treeSource { TreeSource::Server }; // default to Server
+    TreeSource m_treeSource { TreeSource::AWS }; // default to AWS (AWS-only mode)
     
     // Server-side members (commented out for local file loading)
     //QNetworkAccessManager *m_networkManager;
@@ -143,7 +143,7 @@ private:
     QSplitter *m_splitter;
     QWidget *m_treePanel;           // container for search bar + tree
     QWidget *m_treeSearchBar;       // search bar container (for theming)
-    QWidget *m_sourceToggleBar;     // Local/Server/AWS toggle bar
+    QWidget *m_sourceToggleBar { nullptr };     // Local/Server/AWS toggle bar (AWS-only mode: unused)
     QTreeWidget *m_treeWidget;
     QLineEdit *m_treeSearchEdit;    // search input
     QPushButton *m_treeSearchButton; // search/next button
@@ -152,10 +152,10 @@ private:
     // Theme toggle removed - application now uses static light mode only
     QWidget *m_brandContainer { nullptr };   // Left-side brand container
     QLabel *m_brandLabel { nullptr };        // Brand logo label
-    QPushButton *m_btnLocal;        // Local button
-    QPushButton *m_btnServer;       // Server button
-    QPushButton *m_btnAws;          // AWS button
-    QButtonGroup *m_sourceGroup;    // Exclusive selection
+    QPushButton *m_btnLocal { nullptr };        // Local button (unused)
+    QPushButton *m_btnServer { nullptr };       // Server button (unused)
+    QPushButton *m_btnAws { nullptr };          // AWS button (unused)
+    QButtonGroup *m_sourceGroup { nullptr };    // Exclusive selection (unused)
     DualTabWidget *m_tabWidget;  // Changed from QTabWidget to DualTabWidget
     QStatusBar *m_statusBar;
     TitleBarWidget *m_titleBar { nullptr }; // Custom, tall title bar
