@@ -19,6 +19,10 @@
 #include <dbghelp.h>
 #endif
 
+#ifdef HAVE_AWS_SDK
+#include <aws/core/Aws.h>
+#endif
+
 namespace {
 QString logFilePath() {
     // Keep same file as other logs
@@ -147,6 +151,10 @@ public:
 
 int main(int argc, char *argv[])
 {
+#ifdef HAVE_AWS_SDK
+    Aws::SDKOptions awsOptions;
+    Aws::InitAPI(awsOptions);
+#endif
     SafeApplication app(argc, argv);
 
     // Install global diagnostics
@@ -188,6 +196,25 @@ int main(int argc, char *argv[])
         MainWindow window;
         window.show();
         appendLog("login", "login window shown");
+        
+#ifdef _WIN32
+        // Best-effort screen capture protection on Windows
+        HWND hwnd = reinterpret_cast<HWND>(window.winId());
+        if (hwnd) {
+            // WDA_EXCLUDEFROMCAPTURE = 0x00000011 (Windows 10 version 2004+)
+            // This helps prevent screen recording/capture tools from capturing this window
+            BOOL result = SetWindowDisplayAffinity(hwnd, 0x00000011);
+            if (result) {
+                appendLog("security", "SetWindowDisplayAffinity enabled - screen capture protection active");
+            } else {
+                DWORD err = GetLastError();
+                appendLog("security", QString("SetWindowDisplayAffinity failed (err=%1) - screen capture protection unavailable").arg(err));
+            }
+        } else {
+            appendLog("security", "SetWindowDisplayAffinity skipped - no valid HWND");
+        }
+#endif
+        
         rc = app.exec();
     } catch (const std::exception &e) {
         appendLog("crash", QString("uncaught exception: %1").arg(e.what()));
@@ -198,6 +225,9 @@ int main(int argc, char *argv[])
         QMessageBox::critical(nullptr, "Unexpected Error", "An unknown error occurred.");
         rc = 2;
     }
+#ifdef HAVE_AWS_SDK
+    Aws::ShutdownAPI(awsOptions);
+#endif
     appendLog("app", QString("shutdown rc=%1").arg(rc));
     return rc;
 }

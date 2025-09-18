@@ -249,8 +249,16 @@ bool PCBViewerWidget::loadPCBFromMemory(const QString& memoryId, const QString& 
     QByteArray data = memMgr->getFileData(memoryId);
     
     if (data.isEmpty()) {
+        qWarning() << "PCBViewerWidget: memory data empty for" << memoryId << "key=" << originalKey;
         emit errorOccurred(QString("PCB data not found in memory for ID: %1").arg(memoryId));
         return false;
+    }
+
+    // Quick header dump for diagnostics
+    if (data.size() >= 8) {
+        const QByteArray head = data.left(16);
+        qDebug() << "PCBViewerWidget: buffer size=" << data.size()
+                 << " head(hex)=" << head.toHex(' ').constData();
     }
 
     if (!m_viewerInitialized) {

@@ -459,8 +459,17 @@ bool PDFViewerWidget::loadPDFFromMemory(const QString& memoryId, const QString& 
     QByteArray data = memMgr->getFileData(memoryId);
     
     if (data.isEmpty()) {
+        qWarning() << "PDFViewerWidget: memory data empty for" << memoryId << "key=" << originalKey;
         emit errorOccurred(QString("PDF data not found in memory for ID: %1").arg(memoryId));
         return false;
+    }
+
+    // Quick magic check for diagnostics
+    if (data.size() >= 5) {
+        const QByteArray head = data.left(8);
+        qDebug() << "PDFViewerWidget: buffer size=" << data.size()
+                 << " head(hex)=" << head.toHex(' ').constData()
+                 << " looksPDF=" << data.startsWith("%PDF-");
     }
 
     if (!m_viewerInitialized)

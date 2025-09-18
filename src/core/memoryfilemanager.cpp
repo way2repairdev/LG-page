@@ -53,6 +53,8 @@ void MemoryFileManager::removeFile(const QString& memoryId) {
     
     auto it = m_files.find(memoryId);
     if (it != m_files.end()) {
+        // Zeroize buffer before erase
+        secureZero(it->data);
         qDebug() << "MemoryFileManager: Removed file" << it->originalKey 
                  << "with memory ID" << memoryId;
         m_files.erase(it);
@@ -62,6 +64,10 @@ void MemoryFileManager::removeFile(const QString& memoryId) {
 void MemoryFileManager::clearAll() {
     QMutexLocker locker(&m_mutex);
     
+    // Zeroize all buffers before clearing
+    for (auto it = m_files.begin(); it != m_files.end(); ++it) {
+        secureZero(it->data);
+    }
     qDebug() << "MemoryFileManager: Cleared all files (" << m_files.size() << "files)";
     m_files.clear();
 }

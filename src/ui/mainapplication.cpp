@@ -2351,6 +2351,29 @@ void MainApplication::onTabCloseRequestedByType(int index, DualTabWidget::TabTyp
 
 void MainApplication::openFileFromMemory(const QString &memoryId, const QString &originalKey)
 {
+    // Early sanity: ensure the buffer exists in MemoryFileManager and is non-empty
+    {
+        MemoryFileManager* memMgr = MemoryFileManager::instance();
+        const bool has = memMgr->hasFile(memoryId);
+        const QByteArray probe = memMgr->getFileData(memoryId);
+        const int sz = probe.size();
+        writeTransitionLog(QString("openFileFromMemory: id=%1 has=%2 bytes=%3 key=%4")
+                           .arg(memoryId)
+                           .arg(has)
+                           .arg(sz)
+                           .arg(originalKey));
+        if (!has || sz <= 0) {
+            const QString msg = QString("Memory buffer %1 %2 (size=%3)\nKey: %4")
+                                    .arg(memoryId)
+                                    .arg(has ? "present-but-empty" : "missing")
+                                    .arg(sz)
+                                    .arg(originalKey);
+            showNoticeDialog("File content not available in RAM. " + msg, QStringLiteral("Open From Memory"));
+            statusBar()->showMessage("Open failed: memory buffer missing/empty", 5000);
+            return;
+        }
+    }
+
     // Determine file type from original key
     QString ext = QFileInfo(originalKey).suffix().toLower();
     bool isPdf = (ext == "pdf");
@@ -3136,9 +3159,17 @@ void MainApplication::processNextAwsDownload()
         // If user cancelled, suppress noisy error UI and end gracefully via next tick
         if (!m_cancelAwsQueue) {
             const QString err = m_aws.lastError();
+            writeTransitionLog(QString("processNextAwsDownload: download failed key=%1 err=%2").arg(key, err));
             showTreeIssue(this, "AWS download failed", err.isEmpty()?key:err);
         }
         // Continue (or exit) on next iteration
+        ++m_awsQueueIndex;
+        QTimer::singleShot(0, this, [this]() { processNextAwsDownload(); });
+        return;
+    }
+    if (data->isEmpty()) {
+        // Avoid storing empty buffers which will cause 'not found in memory' downstream
+        writeTransitionLog(QString("processNextAwsDownload: empty payload for key=%1 - skipping store/open").arg(key));
         ++m_awsQueueIndex;
         QTimer::singleShot(0, this, [this]() { processNextAwsDownload(); });
         return;
@@ -3147,6 +3178,9 @@ void MainApplication::processNextAwsDownload()
     // Store and open
     MemoryFileManager* memMgr = MemoryFileManager::instance();
     QString memoryId = memMgr->storeFileData(key, data.value());
+    writeTransitionLog(QString("processNextAwsDownload: stored memoryId=%1 key=%2 size=%3")
+                       .arg(memoryId, key)
+                       .arg(data->size()));
     openFileFromMemory(memoryId, key);
 
     // Advance and continue with a tiny delay to keep UI responsive

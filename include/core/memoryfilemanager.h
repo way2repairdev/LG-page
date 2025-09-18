@@ -49,6 +49,14 @@ private:
         QByteArray data;
         qint64 timestamp;
     };
+    static inline void secureZero(QByteArray &buf) {
+#if defined(__STDC_LIB_EXT1__)
+    if (!buf.isEmpty()) memset_s(buf.data(), buf.size(), 0, buf.size());
+#else
+    volatile char* p = buf.data();
+    for (int i = 0; i < buf.size(); ++i) p[i] = 0;
+#endif
+    }
     
     mutable QMutex m_mutex;
     QHash<QString, FileEntry> m_files;

@@ -190,6 +190,11 @@ set(NETWORK_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/network/authservice.cpp
 )
 
+# Security sources
+set(SECURITY_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/security/security_envelope.cpp
+)
+
 # Header files
 # UI headers - conditionally include hybrid PDF viewer
 set(UI_HEADERS
@@ -261,6 +266,7 @@ set(PROJECT_SOURCES
     ${PCB_SOURCES}
     ${DATABASE_SOURCES}
     ${NETWORK_SOURCES}
+    ${SECURITY_SOURCES}
     ${UI_HEADERS}
     ${PDF_HEADERS}
     ${PCB_HEADERS}
@@ -377,6 +383,31 @@ if(AWSSDK_FOUND)
     target_link_libraries(Way2RepairLoginSystem PRIVATE ${AWSSDK_LIBRARIES})
     target_include_directories(Way2RepairLoginSystem PRIVATE ${AWSSDK_INCLUDE_DIRS})
     target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_AWS_SDK)
+    # Try to locate KMS component (now available via vcpkg)
+    find_package(aws-cpp-sdk-kms CONFIG QUIET)
+    if(TARGET aws-cpp-sdk-kms)
+        message(STATUS "AWS KMS component found (vcpkg target aws-cpp-sdk-kms) - enabling client-side envelope decryption")
+        target_link_libraries(Way2RepairLoginSystem PRIVATE aws-cpp-sdk-kms)
+        target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_AWS_KMS)
+    elseif(TARGET AWS::aws-cpp-sdk-kms)
+        message(STATUS "AWS KMS component found (AWS::aws-cpp-sdk-kms) - enabling client-side envelope decryption")
+        target_link_libraries(Way2RepairLoginSystem PRIVATE AWS::aws-cpp-sdk-kms)
+        target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_AWS_KMS)
+    else()
+        # Fallback: try via aggregated AWSSDK package
+        find_package(AWSSDK CONFIG COMPONENTS kms QUIET)
+        if(TARGET aws-cpp-sdk-kms)
+            message(STATUS "AWS KMS component found via AWSSDK (aws-cpp-sdk-kms) - enabling client-side envelope decryption")
+            target_link_libraries(Way2RepairLoginSystem PRIVATE aws-cpp-sdk-kms)
+            target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_AWS_KMS)
+        elseif(TARGET AWS::aws-cpp-sdk-kms)
+            message(STATUS "AWS KMS component found via AWSSDK (AWS::aws-cpp-sdk-kms) - enabling client-side envelope decryption")
+            target_link_libraries(Way2RepairLoginSystem PRIVATE AWS::aws-cpp-sdk-kms)
+            target_compile_definitions(Way2RepairLoginSystem PRIVATE HAVE_AWS_KMS)
+        else()
+            message(WARNING "AWS KMS component not found - encryptedPayload decryption will be disabled at runtime")
+        endif()
+    endif()
 else()
     message(WARNING "AWS SDK not found via vcpkg - AWS functionality will be disabled")
     message(STATUS "To enable AWS functionality, install AWS SDK via: ./vcpkg/vcpkg install aws-sdk-cpp[core,s3]:x64-mingw-static")
@@ -385,6 +416,8 @@ endif()
 # Link Windows DbgHelp for minidump generation
 if(WIN32)
     target_link_libraries(Way2RepairLoginSystem PRIVATE Dbghelp)
+    # For AES-GCM via CNG (BCrypt)
+    target_link_libraries(Way2RepairLoginSystem PRIVATE bcrypt)
 endif()
 
 # Link Qt PDF modules if available

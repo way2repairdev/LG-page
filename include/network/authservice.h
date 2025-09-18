@@ -33,6 +33,17 @@ struct AuthResult {
     AuthAwsCreds aws;
     QDateTime expiresAt; // Token expiration time
     bool isValid() const { return !token.isEmpty() && expiresAt > QDateTime::currentDateTime(); }
+    // Optional envelope-encrypted payload returned by server on login
+    struct EncryptedPayload {
+        QString algorithm;         // e.g., "AES-256-GCM"
+        QString encryptedDataB64;  // base64 ciphertext
+        QString encryptedDataKeyB64; // base64 KMS-encrypted data key
+        QString ivB64;             // base64 12-byte IV
+        QString authTagB64;        // base64 16-byte tag
+        bool isValid() const {
+            return !encryptedDataB64.isEmpty() && !encryptedDataKeyB64.isEmpty() && !ivB64.isEmpty() && !authTagB64.isEmpty();
+        }
+    } encryptedPayload; // empty when server didn't include it
 };
 
 class AuthService : public QObject {

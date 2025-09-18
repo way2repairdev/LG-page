@@ -12,6 +12,7 @@
 #include <QCryptographicHash>
 #include <QSslConfiguration>
 #include <QTimer>
+#include "security/security_envelope.h"
 
 AuthService::AuthService(QObject* parent) 
     : QObject(parent)
@@ -93,6 +94,9 @@ void AuthService::login(const QString& username, const QString& password)
                     ok = true;
                     result.token = obj.value("token").toString();
                     
+                    // Temporary debug: log full token for security testing
+                    qDebug() << "[AUTH-DEBUG] Full JWT token:" << result.token;
+                    
                     // Parse token expiration
                     const QString expiresAtStr = obj.value("expiresAt").toString();
                     if (!expiresAtStr.isEmpty()) {
@@ -121,6 +125,42 @@ void AuthService::login(const QString& username, const QString& password)
                         result.aws.region = ao.value("region").toString();
                         result.aws.bucket = ao.value("bucket").toString();
                         result.aws.endpoint = ao.value("endpoint").toString();
+                    }
+
+                    // Optional encryptedPayload: attempt to parse and decrypt for immediate use
+                    if (obj.contains("encryptedPayload") && obj.value("encryptedPayload").isObject()) {
+                        const auto ep = obj.value("encryptedPayload").toObject();
+                        result.encryptedPayload.algorithm = ep.value("algorithm").toString();
+                        result.encryptedPayload.encryptedDataB64 = ep.value("encryptedData").toString();
+                        result.encryptedPayload.encryptedDataKeyB64 = ep.value("encryptedDataKey").toString();
+                        result.encryptedPayload.ivB64 = ep.value("iv").toString();
+                        result.encryptedPayload.authTagB64 = ep.value("authTag").toString();
+
+                        if (result.encryptedPayload.isValid()) {
+                            EnvelopeInputs in;
+                            in.jwtToken = result.token;
+                            in.algorithm = result.encryptedPayload.algorithm;
+                            in.encryptedData = QByteArray::fromBase64(result.encryptedPayload.encryptedDataB64.toUtf8());
+                            in.encryptedDataKey = QByteArray::fromBase64(result.encryptedPayload.encryptedDataKeyB64.toUtf8());
+                            in.iv = QByteArray::fromBase64(result.encryptedPayload.ivB64.toUtf8());
+                            in.authTag = QByteArray::fromBase64(result.encryptedPayload.authTagB64.toUtf8());
+                            in.accessKeyId = result.aws.accessKeyId;
+                            in.secretAccessKey = result.aws.secretAccessKey;
+                            in.sessionToken = result.aws.sessionToken;
+                            in.region = result.aws.region;
+
+                            QString decErr;
+                            auto out = SecurityEnvelope::decrypt(in, &decErr);
+                            if (out.has_value()) {
+                                // Optional: you may want to cache or pass this to MainApplication later.
+                                // For now, just log length to avoid dumping sensitive data.
+                                qDebug() << "encryptedPayload decrypted, size=" << out->plaintext.size();
+                                // You could parse JSON here if needed:
+                                // QJsonDocument jd = QJsonDocument::fromJson(out->plaintext);
+                            } else {
+                                qWarning() << "Failed to decrypt encryptedPayload:" << decErr;
+                            }
+                        }
                     }
                     
                     // Update current token and save securely

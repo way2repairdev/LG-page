@@ -14,6 +14,8 @@
 #include <QSet>
 #include <memory>
 #include <QPointer>
+#include <QCoreApplication>
+#include "security/security_envelope.h"
 
 #ifdef HAVE_AWS_SDK
 // AWS SDK
@@ -154,12 +156,25 @@ QString AwsClient::cachePathForKey(const QString& key) const {
 QString AwsClient::bucket() const { return d->bucket; }
 QString AwsClient::lastError() const { return d->lastError; }
 
+// Local helper: append a line to build/tab_debug.txt next to the exe
+static inline void appendTabDebug(const QString &msg) {
+    const QString logPath = QCoreApplication::applicationDirPath() + "/tab_debug.txt";
+    QFile f(logPath);
+    if (f.open(QIODevice::Append | QIODevice::Text)) {
+        const QString line = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss.zzz ") + msg + QLatin1Char('\n');
+        f.write(line.toUtf8());
+        f.flush();
+    }
+}
+
 // Private helper for server-proxied operations
 std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& prefix, int maxKeys) {
     if (!d->serverMode || d->serverUrl.isEmpty() || d->authToken.isEmpty()) {
         d->lastError = "Server mode not properly configured";
         return std::nullopt;
     }
+    appendTabDebug(QString("AWS list: serverUrl=%1 prefix='%2' maxKeys=%3 bucket=%4")
+                   .arg(d->serverUrl, prefix).arg(maxKeys).arg(d->bucket));
     
     // Step 1: Get pre-signed URL from server
     const QUrl authUrl(d->serverUrl + "/auth/s3/list");
@@ -184,6 +199,7 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
     
     if (authReply->error() != QNetworkReply::NoError) {
         d->lastError = QString("Server auth request failed: %1").arg(authReply->errorString());
+        appendTabDebug(QString("AWS list auth error: %1").arg(d->lastError));
         authReply->deleteLater();
         d->currentAuthReply = nullptr;
         return std::nullopt;
@@ -196,12 +212,14 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
     const QJsonDocument authDoc = QJsonDocument::fromJson(authData, &pe);
     if (pe.error != QJsonParseError::NoError) {
         d->lastError = QString("Invalid JSON response from auth: %1").arg(pe.errorString());
+        appendTabDebug(QString("AWS list parse error: %1").arg(d->lastError));
         return std::nullopt;
     }
     
     const QJsonObject authObj = authDoc.object();
     if (!authObj.value("success").toBool()) {
         d->lastError = authObj.value("message").toString("Server auth request failed");
+        appendTabDebug(QString("AWS list server reported failure: %1").arg(d->lastError));
         return std::nullopt;
     }
     
@@ -209,6 +227,7 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
     const QString presignedUrl = authObj.value("presignedUrl").toString();
     if (presignedUrl.isEmpty()) {
         d->lastError = "Server did not return a list pre-signed URL";
+        appendTabDebug("AWS list: missing presignedUrl in server response");
         return std::nullopt;
     }
     
@@ -224,6 +243,7 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
     
     if (listReply->error() != QNetworkReply::NoError) {
         d->lastError = QString("S3 list request failed: %1").arg(listReply->errorString());
+        appendTabDebug(QString("AWS list S3 request error: %1").arg(d->lastError));
         listReply->deleteLater();
         d->currentListReply = nullptr;
         return std::nullopt;
@@ -303,6 +323,7 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
 
     if (xml.hasError()) {
         d->lastError = QStringLiteral("Failed to parse S3 XML: %1").arg(xml.errorString());
+        appendTabDebug(QString("AWS list XML parse error: %1").arg(d->lastError));
         return std::nullopt;
     }
 
@@ -315,6 +336,8 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
         d->lastError = "Server mode not properly configured";
         return std::nullopt;
     }
+    appendTabDebug(QString("AWS download: key='%1' serverUrl=%2 bucket=%3")
+                   .arg(key, d->serverUrl, d->bucket));
     
     const QUrl url(d->serverUrl + "/auth/s3/download");
     QNetworkRequest request(url);
@@ -328,65 +351,165 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     
     QNetworkReply* reply = d->networkManager->post(request, payload);
     d->currentAuthReply = reply;
-    
+
     // Synchronous wait for response
     QEventLoop loop;
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
     loop.exec();
-    
-    if (reply->error() != QNetworkReply::NoError) {
-        d->lastError = QString("Server download request failed: %1").arg(reply->errorString());
-        reply->deleteLater();
-        d->currentAuthReply = nullptr;
+
+    // Always capture HTTP status and body for diagnostics
+    const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const QByteArray data = reply->readAll();
+    const QString errStr = reply->error() == QNetworkReply::NoError ? QString() : reply->errorString();
+    reply->deleteLater();
+    d->currentAuthReply = nullptr;
+
+    if (reply->error() != QNetworkReply::NoError || httpStatus >= 400) {
+        // Try to parse JSON error payload
+        QString detail;
+        QJsonParseError pe{};
+        const QJsonDocument edoc = QJsonDocument::fromJson(data, &pe);
+        if (pe.error == QJsonParseError::NoError && edoc.isObject()) {
+            const auto o = edoc.object();
+            const QString msg = o.value("message").toString();
+            const QString code = o.value("error").toString(o.value("code").toString());
+            const QString stage = o.value("stage").toString();
+            if (!msg.isEmpty() || !code.isEmpty() || !stage.isEmpty()) {
+                detail = QString(" msg='%1' code=%2%3")
+                             .arg(msg)
+                             .arg(code.isEmpty()?QStringLiteral("none"):code)
+                             .arg(stage.isEmpty()?QString():QString(" stage=%1").arg(stage));
+            }
+        }
+        if (detail.isEmpty() && !data.isEmpty()) {
+            const auto snippet = QString::fromUtf8(data.left(256)).trimmed();
+            if (!snippet.isEmpty()) detail = QString(" body='%1'").arg(snippet);
+        }
+        d->lastError = QString("Server download request failed: HTTP %1%2%3")
+                            .arg(httpStatus > 0 ? QString::number(httpStatus) : QStringLiteral("?"))
+                            .arg(errStr.isEmpty()?QString():QString(" %1").arg(errStr))
+                            .arg(detail);
+        appendTabDebug(QString("AWS download server error: %1").arg(d->lastError));
         return std::nullopt;
     }
-    d->currentAuthReply = nullptr;
-    
-    const QByteArray data = reply->readAll();
-    reply->deleteLater();
     
     QJsonParseError pe;
     const QJsonDocument doc = QJsonDocument::fromJson(data, &pe);
     if (pe.error != QJsonParseError::NoError) {
         d->lastError = QString("Invalid JSON response: %1").arg(pe.errorString());
+        appendTabDebug(QString("AWS download parse error: %1").arg(d->lastError));
         return std::nullopt;
     }
     
     const QJsonObject obj = doc.object();
     if (!obj.value("success").toBool()) {
         d->lastError = obj.value("message").toString("Server download request failed");
+        appendTabDebug(QString("AWS download server failure: %1").arg(d->lastError));
         return std::nullopt;
     }
     
-    // The server should return a pre-signed URL for download
-    const QString presignedUrl = obj.value("presignedUrl").toString();
-    if (presignedUrl.isEmpty()) {
-        d->lastError = "Server did not return a download URL";
+    // Envelope-aware path: prefer encrypted delivery if provided
+    const QJsonObject envelope = obj.value("envelope").toObject().isEmpty()
+        ? obj.value("encryptMeta").toObject() : obj.value("envelope").toObject();
+    const bool hasEnvelope = !envelope.isEmpty();
+    const bool kmsEnabled = obj.value("kmsEnabled").toBool();
+    if (kmsEnabled && !hasEnvelope) {
+        d->lastError = QStringLiteral("Server indicated encrypted delivery but did not include envelope metadata");
+        appendTabDebug("AWS download error: kmsEnabled=true but envelope missing");
         return std::nullopt;
     }
-    
-    // Download the file using the pre-signed URL
-    QNetworkRequest downloadRequest{QUrl(presignedUrl)};
+
+    // Extract URL with multiple aliases for safety
+    QString downloadUrl = obj.value("ciphertextUrl").toString();
+    if (downloadUrl.isEmpty()) downloadUrl = obj.value("downloadUrl").toString();
+    if (downloadUrl.isEmpty()) downloadUrl = obj.value("presignedUrl").toString();
+    if (downloadUrl.isEmpty()) downloadUrl = obj.value("cipherTextUrl").toString();
+    if (downloadUrl.isEmpty()) downloadUrl = obj.value("ciphertext_url").toString();
+    if (downloadUrl.isEmpty()) downloadUrl = obj.value("url").toString();
+    if (downloadUrl.isEmpty()) downloadUrl = obj.value("Location").toString();
+    if (downloadUrl.isEmpty()) {
+        QStringList keys; keys.reserve(obj.keys().size());
+        for (const auto &k : obj.keys()) keys << k;
+        d->lastError = QStringLiteral("Server did not return a download URL (keys: %1)").arg(keys.join(","));
+        appendTabDebug(QString("AWS download error: missing URL; response keys=[%1]").arg(keys.join(",")));
+        return std::nullopt;
+    }
+
+    // Download bytes (ciphertext or plaintext depending on server)
+    const QUrl dlUrl(downloadUrl);
+    appendTabDebug(QString("AWS download presigned URL target: %1%2").arg(dlUrl.host(), dlUrl.path()));
+    QNetworkRequest downloadRequest{dlUrl};
     QNetworkReply* downloadReply = d->networkManager->get(downloadRequest);
     d->currentDownloadReply = downloadReply;
-    
-    // Synchronous wait for download
+
     QEventLoop downloadLoop;
     QObject::connect(downloadReply, &QNetworkReply::finished, &downloadLoop, &QEventLoop::quit);
     downloadLoop.exec();
-    
+
     if (downloadReply->error() != QNetworkReply::NoError) {
         d->lastError = QString("File download failed: %1").arg(downloadReply->errorString());
+        appendTabDebug(QString("AWS download HTTP error: %1").arg(d->lastError));
         downloadReply->deleteLater();
         d->currentDownloadReply = nullptr;
         return std::nullopt;
     }
-    d->currentDownloadReply = nullptr;
-    
-    const QByteArray fileData = downloadReply->readAll();
+
+    QByteArray downloaded = downloadReply->readAll();
     downloadReply->deleteLater();
-    
-    return fileData;
+    d->currentDownloadReply = nullptr;
+
+    if (!hasEnvelope) {
+        // Plaintext mode - log head for quick triage
+        if (downloaded.size() >= 8) {
+            appendTabDebug(QString("AWS download plaintext: size=%1 head=%2")
+                           .arg(downloaded.size())
+                           .arg(QString::fromLatin1(downloaded.left(8).toHex(' '))));
+        }
+        return downloaded;
+    }
+
+    // Decrypt using SecurityEnvelope::decryptBuffer
+    SecurityEnvelope::BufferInputs bi;
+    bi.algorithm = envelope.value("algorithm").toString();
+    const auto b64 = [](const QJsonObject& o, const char* k){ return QByteArray::fromBase64(o.value(k).toString().toUtf8()); };
+    bi.encryptedData = downloaded; // ciphertext body
+    bi.encryptedDataKey = b64(envelope, "encryptedDataKey");
+    bi.iv = b64(envelope, "iv");
+    bi.authTag = b64(envelope, "authTag");
+
+    // AAD bound to JWT jti when available
+    const QString jti = SecurityEnvelope::extractJtiFromJwt(d->authToken);
+    bi.aad = jti.isEmpty() ? QByteArray() : jti.toUtf8();
+
+    // AWS credentials for KMS Decrypt (from server response)
+    const QJsonObject aws = obj.value("aws").toObject();
+    bi.accessKeyId = aws.value("accessKeyId").toString();
+    bi.secretAccessKey = aws.value("secretAccessKey").toString();
+    bi.sessionToken = aws.value("sessionToken").toString();
+    bi.region = aws.value("region").toString();
+    if (bi.region.isEmpty()) bi.region = obj.value("region").toString();
+
+    appendTabDebug(QString("AWS envelope: edk=%1 iv=%2 tag=%3 aad=%4")
+                   .arg(bi.encryptedDataKey.size())
+                   .arg(bi.iv.size())
+                   .arg(bi.authTag.size())
+                   .arg(bi.aad.size()));
+
+    QString decErr;
+    auto plainOpt = SecurityEnvelope::decryptBuffer(bi, &decErr);
+    if (!plainOpt.has_value()) {
+        d->lastError = decErr.isEmpty() ? QStringLiteral("Failed to decrypt file content") : decErr;
+        appendTabDebug(QString("AWS decrypt failed: %1").arg(d->lastError));
+        return std::nullopt;
+    }
+
+    const QByteArray& plain = plainOpt.value();
+    if (plain.size() >= 8) {
+        appendTabDebug(QString("AWS decrypted: size=%1 head=%2")
+                       .arg(plain.size())
+                       .arg(QString::fromLatin1(plain.left(8).toHex(' '))));
+    }
+    return plain;
 }
 
 #else
@@ -682,22 +805,44 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     
     QNetworkReply* reply = d->networkManager->post(request, payload);
     d->currentAuthReply = reply;
-    
+
     // Synchronous wait for response
     QEventLoop loop;
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
     loop.exec();
-    
-    if (reply->error() != QNetworkReply::NoError) {
-        d->lastError = QString("Server download request failed: %1").arg(reply->errorString());
-        reply->deleteLater();
-        d->currentAuthReply = nullptr;
-        return std::nullopt;
-    }
-    
+
+    const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const QByteArray data = reply->readAll();
+    const QString errStr = reply->error() == QNetworkReply::NoError ? QString() : reply->errorString();
     reply->deleteLater();
     d->currentAuthReply = nullptr;
+
+    if (reply->error() != QNetworkReply::NoError || httpStatus >= 400) {
+        QString detail;
+        QJsonParseError pe{};
+        const QJsonDocument edoc = QJsonDocument::fromJson(data, &pe);
+        if (pe.error == QJsonParseError::NoError && edoc.isObject()) {
+            const auto o = edoc.object();
+            const QString msg = o.value("message").toString();
+            const QString code = o.value("error").toString(o.value("code").toString());
+            const QString stage = o.value("stage").toString();
+            if (!msg.isEmpty() || !code.isEmpty() || !stage.isEmpty()) {
+                detail = QString(" msg='%1' code=%2%3")
+                             .arg(msg)
+                             .arg(code.isEmpty()?QStringLiteral("none"):code)
+                             .arg(stage.isEmpty()?QString():QString(" stage=%1").arg(stage));
+            }
+        }
+        if (detail.isEmpty() && !data.isEmpty()) {
+            const auto snippet = QString::fromUtf8(data.left(256)).trimmed();
+            if (!snippet.isEmpty()) detail = QString(" body='%1'").arg(snippet);
+        }
+        d->lastError = QString("Server download request failed: HTTP %1%2%3")
+                            .arg(httpStatus > 0 ? QString::number(httpStatus) : QStringLiteral("?"))
+                            .arg(errStr.isEmpty()?QString():QString(" %1").arg(errStr))
+                            .arg(detail);
+        return std::nullopt;
+    }
     
     QJsonParseError pe;
     const QJsonDocument doc = QJsonDocument::fromJson(data, &pe);
@@ -711,36 +856,128 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
         d->lastError = obj.value("message").toString("Server download request failed");
         return std::nullopt;
     }
-    
-    // The server should return a pre-signed URL for download
-    const QString presignedUrl = obj.value("presignedUrl").toString();
-    if (presignedUrl.isEmpty()) {
-        d->lastError = "Server did not return a download URL";
+
+    // Envelope-aware path: if server returns encryption metadata, prefer encrypted download
+    const QJsonObject envelope = obj.value("envelope").toObject().isEmpty()
+        ? obj.value("encryptMeta").toObject() : obj.value("envelope").toObject();
+    const bool hasEnvelope = !envelope.isEmpty();
+    const bool kmsEnabled = obj.value("kmsEnabled").toBool();
+    if (kmsEnabled && !hasEnvelope) {
+        d->lastError = QStringLiteral("Server indicated encrypted delivery but did not include envelope metadata");
+        appendTabDebug("AWS download error: kmsEnabled=true but envelope missing");
         return std::nullopt;
     }
-    
-    // Download the file using the pre-signed URL
-    QNetworkRequest downloadRequest{QUrl(presignedUrl)};
+
+    QString downloadUrl = obj.value("ciphertextUrl").toString();
+    if (downloadUrl.isEmpty()) downloadUrl = obj.value("downloadUrl").toString();
+    if (downloadUrl.isEmpty()) downloadUrl = obj.value("presignedUrl").toString();
+    // Extra fallbacks for safety
+    if (downloadUrl.isEmpty()) downloadUrl = obj.value("cipherTextUrl").toString();
+    if (downloadUrl.isEmpty()) downloadUrl = obj.value("ciphertext_url").toString();
+    if (downloadUrl.isEmpty()) downloadUrl = obj.value("url").toString();
+    if (downloadUrl.isEmpty()) downloadUrl = obj.value("Location").toString();
+    if (downloadUrl.isEmpty()) {
+        // Emit diagnostic with available top-level keys
+        QStringList keys; keys.reserve(obj.keys().size());
+        for (const auto &k : obj.keys()) keys << k;
+        d->lastError = QStringLiteral("Server did not return a download URL (keys: %1)").arg(keys.join(","));
+        appendTabDebug(QString("AWS download error: missing URL; response keys=[%1]").arg(keys.join(",")));
+        return std::nullopt;
+    }
+
+    // Download bytes (ciphertext or plaintext depending on server)
+    // Avoid logging full presigned URL (contains signature). Log host+path only.
+    const QUrl dlUrl(downloadUrl);
+    appendTabDebug(QString("AWS download presigned URL target: %1%2")
+                   .arg(dlUrl.host(), dlUrl.path()));
+    QNetworkRequest downloadRequest{dlUrl};
     QNetworkReply* downloadReply = d->networkManager->get(downloadRequest);
     d->currentDownloadReply = downloadReply;
-    
-    // Synchronous wait for download
+
     QEventLoop downloadLoop;
     QObject::connect(downloadReply, &QNetworkReply::finished, &downloadLoop, &QEventLoop::quit);
     downloadLoop.exec();
-    
+
     if (downloadReply->error() != QNetworkReply::NoError) {
         d->lastError = QString("File download failed: %1").arg(downloadReply->errorString());
+        appendTabDebug(QString("AWS download HTTP error: %1").arg(d->lastError));
         downloadReply->deleteLater();
         d->currentDownloadReply = nullptr;
         return std::nullopt;
     }
-    
-    const QByteArray fileData = downloadReply->readAll();
+
+    QByteArray downloaded = downloadReply->readAll();
     downloadReply->deleteLater();
     d->currentDownloadReply = nullptr;
-    
-    return fileData;
+
+    if (!hasEnvelope) {
+        // Plaintext mode (current behavior) - log magic for quick triage
+        if (downloaded.size() >= 5) {
+            const QByteArray head = downloaded.left(8);
+            qDebug() << "AWS download plaintext size=" << downloaded.size()
+                     << " head(hex)=" << head.toHex(' ').constData();
+            appendTabDebug(QString("AWS download plaintext: size=%1 head=%2")
+                           .arg(downloaded.size())
+                           .arg(QString::fromLatin1(head.toHex(' '))));
+        }
+        return downloaded;
+    }
+
+    // Decrypt using SecurityEnvelope::decryptBuffer
+    SecurityEnvelope::BufferInputs bi;
+    bi.algorithm = envelope.value("algorithm").toString();
+    const auto b64 = [](const QJsonObject& o, const char* k){ return QByteArray::fromBase64(o.value(k).toString().toUtf8()); };
+    bi.encryptedData = downloaded; // ciphertext body from S3/proxy
+    bi.encryptedDataKey = b64(envelope, "encryptedDataKey");
+    bi.iv = b64(envelope, "iv");
+    bi.authTag = b64(envelope, "authTag");
+
+    // AAD: bind to JWT jti from our bearer token when available
+    const QString bearer = d->authToken;
+    const QString jti = SecurityEnvelope::extractJtiFromJwt(bearer);
+    bi.aad = jti.isEmpty() ? QByteArray() : jti.toUtf8();
+
+    // AWS credentials for KMS Decrypt (from server response)
+    const QJsonObject aws = obj.value("aws").toObject();
+    bi.accessKeyId = aws.value("accessKeyId").toString();
+    bi.secretAccessKey = aws.value("secretAccessKey").toString();
+    bi.sessionToken = aws.value("sessionToken").toString();
+    bi.region = aws.value("region").toString();
+    if (bi.region.isEmpty()) bi.region = obj.value("region").toString(); // fallback
+
+    // Quick envelope diagnostics
+    qDebug() << "AWS envelope present. edkBytes=" << bi.encryptedDataKey.size()
+             << " ivBytes=" << bi.iv.size() << " tagBytes=" << bi.authTag.size()
+             << " aadBytes=" << bi.aad.size();
+    appendTabDebug(QString("AWS envelope: edk=%1 iv=%2 tag=%3 aad=%4")
+                   .arg(bi.encryptedDataKey.size())
+                   .arg(bi.iv.size())
+                   .arg(bi.authTag.size())
+                   .arg(bi.aad.size()));
+
+    QString decErr;
+    auto plainOpt = SecurityEnvelope::decryptBuffer(bi, &decErr);
+    if (!plainOpt.has_value()) {
+        d->lastError = decErr.isEmpty() ? QStringLiteral("Failed to decrypt file content") : decErr;
+        appendTabDebug(QString("AWS decrypt failed: %1").arg(d->lastError));
+        return std::nullopt;
+    }
+    // Log magic of decrypted bytes for format verification
+    const QByteArray& plain = plainOpt.value();
+    if (plain.size() >= 8) {
+        qDebug() << "AWS decrypted size=" << plain.size()
+                 << " head(hex)=" << plain.left(8).toHex(' ').constData();
+        appendTabDebug(QString("AWS decrypted: size=%1 head=%2")
+                       .arg(plain.size())
+                       .arg(QString::fromLatin1(plain.left(8).toHex(' '))));
+        // Hint for PDF
+        if (key.endsWith('.' + QStringLiteral("pdf"), Qt::CaseInsensitive)) {
+            const bool looksPdf = plain.startsWith("%PDF-");
+            qDebug() << "Looks like PDF?" << looksPdf;
+            appendTabDebug(QString("Looks like PDF? %1").arg(looksPdf));
+        }
+    }
+    return plain;
 }
 
 #endif
