@@ -187,6 +187,16 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
     authBody["prefix"] = prefix;
     authBody["maxKeys"] = maxKeys;
     authBody["delimiter"] = "/";
+    // Add viewType parameter to request only public files from the new S3 structure
+    if (prefix.startsWith("public/") || prefix.isEmpty()) {
+        authBody["viewType"] = "all-public"; // Use broader search to find any public files
+    } else if (prefix.startsWith("private/user-data/")) {
+        authBody["viewType"] = "private";
+    } else if (prefix.startsWith("private/encrypted/")) {
+        authBody["viewType"] = "encrypted";
+    } else {
+        authBody["viewType"] = "all-public"; // Default to broader public view
+    }
     const QByteArray authPayload = QJsonDocument(authBody).toJson(QJsonDocument::Compact);
     
     QNetworkReply* authReply = d->networkManager->post(authRequest, authPayload);
@@ -223,11 +233,55 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
         return std::nullopt;
     }
     
-    // Step 2: Get the pre-signed URL from server response
+    // Check if server returned direct file list (new format) or presigned URL (old format)
+    if (authObj.contains("files")) {
+        // New format: server returns files directly
+        appendTabDebug("AWS list: using new direct response format");
+        const QJsonArray filesArray = authObj.value("files").toArray();
+        QVector<AwsListEntry> out;
+        QSet<QString> seenDirs;
+        
+        auto emitDir = [&](const QString &dirKey){
+            if (dirKey.isEmpty()) return;
+            if (seenDirs.contains(dirKey)) return;
+            if (dirKey == prefix) return; // skip echo of current prefix
+            seenDirs.insert(dirKey);
+            AwsListEntry dir;
+            dir.isDir = true;
+            dir.key = dirKey;
+            dir.name = dirKey.endsWith('/') ? QString(dirKey).chopped(1).split('/').last() : dirKey.split('/').last();
+            if (dir.name.isEmpty()) dir.name = dirKey;
+            dir.size = 0;
+            out.push_back(dir);
+        };
+        
+        // Create directories from file paths and add files
+        for (const auto &fileValue : filesArray) {
+            const QJsonObject fileObj = fileValue.toObject();
+            const QString key = fileObj.value("key").toString();
+            const QString folder = fileObj.value("folder").toString();
+            
+            if (!folder.isEmpty() && !folder.endsWith('/')) {
+                emitDir(folder + '/');
+            }
+            
+            AwsListEntry file;
+            file.isDir = false;
+            file.key = key;
+            file.name = fileObj.value("name").toString();
+            file.size = fileObj.value("size").toVariant().toLongLong();
+            out.push_back(file);
+        }
+        
+        appendTabDebug(QString("AWS list: parsed %1 items from direct response").arg(out.size()));
+        return out;
+    }
+    
+    // Fall back to old format: Get the pre-signed URL from server response
     const QString presignedUrl = authObj.value("presignedUrl").toString();
     if (presignedUrl.isEmpty()) {
-        d->lastError = "Server did not return a list pre-signed URL";
-        appendTabDebug("AWS list: missing presignedUrl in server response");
+        d->lastError = "Server did not return files or presigned URL";
+        appendTabDebug("AWS list: missing both files and presignedUrl in server response");
         return std::nullopt;
     }
     
@@ -346,7 +400,8 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     request.setRawHeader("Cache-Control", "no-cache");
     
     QJsonObject body;
-    body["key"] = key;
+    body["fileKey"] = key;  // Use fileKey parameter as expected by lambda function
+    body["downloadType"] = "presigned";  // Request presigned URLs for security
     const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
     
     QNetworkReply* reply = d->networkManager->post(request, payload);
@@ -413,6 +468,89 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
         ? obj.value("encryptMeta").toObject() : obj.value("envelope").toObject();
     const bool hasEnvelope = !envelope.isEmpty();
     const bool kmsEnabled = obj.value("kmsEnabled").toBool();
+    
+    // Check for direct content delivery (fallback for presigned URL issues)
+    const QString downloadType = obj.value("downloadType").toString();
+    if (downloadType == "direct-content") {
+        const QString fileContent = obj.value("fileContent").toString();
+        if (fileContent.isEmpty()) {
+            d->lastError = QStringLiteral("Server returned direct-content mode but no file content");
+            appendTabDebug("AWS download error: direct-content mode missing fileContent");
+            return std::nullopt;
+        }
+        
+        // Decode base64 content directly
+        const QByteArray decoded = QByteArray::fromBase64(fileContent.toUtf8());
+        if (decoded.isEmpty()) {
+            d->lastError = QStringLiteral("Failed to decode base64 file content");
+            appendTabDebug("AWS download error: base64 decode failed");
+            return std::nullopt;
+        }
+        
+        appendTabDebug(QString("AWS download direct content: size=%1 type=%2")
+                       .arg(decoded.size())
+                       .arg(obj.value("contentType").toString()));
+        return decoded;
+    }
+    
+    // Check for envelope-encrypted delivery (KMS encrypted public files)
+    if (downloadType == "envelope-encrypted") {
+        const QJsonObject envelope = obj.value("envelope").toObject();
+        if (envelope.isEmpty()) {
+            d->lastError = QStringLiteral("Server returned envelope-encrypted mode but no envelope data");
+            appendTabDebug("AWS download error: envelope-encrypted mode missing envelope");
+            return std::nullopt;
+        }
+        
+        // Decrypt using SecurityEnvelope::decryptBuffer directly on the envelope data
+        SecurityEnvelope::BufferInputs bi;
+        bi.algorithm = envelope.value("algorithm").toString();
+        const auto b64 = [](const QJsonObject& o, const char* k){ return QByteArray::fromBase64(o.value(k).toString().toUtf8()); };
+        bi.encryptedData = b64(envelope, "encryptedData"); // encrypted base64 file content
+        bi.encryptedDataKey = b64(envelope, "encryptedDataKey");
+        bi.iv = b64(envelope, "iv");
+        bi.authTag = b64(envelope, "authTag");
+
+        // AAD bound to JWT jti when available
+        const QString jti = SecurityEnvelope::extractJtiFromJwt(d->authToken);
+        bi.aad = jti.isEmpty() ? QByteArray() : jti.toUtf8();
+
+        // AWS credentials for KMS Decrypt (from server response)
+        const QJsonObject aws = obj.value("aws").toObject();
+        bi.accessKeyId = aws.value("accessKeyId").toString();
+        bi.secretAccessKey = aws.value("secretAccessKey").toString();
+        bi.sessionToken = aws.value("sessionToken").toString();
+        bi.region = aws.value("region").toString();
+        if (bi.region.isEmpty()) bi.region = obj.value("region").toString();
+
+        appendTabDebug(QString("AWS envelope-encrypted: edk=%1 iv=%2 tag=%3 aad=%4")
+                       .arg(bi.encryptedDataKey.size())
+                       .arg(bi.iv.size())
+                       .arg(bi.authTag.size())
+                       .arg(bi.aad.size()));
+
+        QString decErr;
+        auto plainOpt = SecurityEnvelope::decryptBuffer(bi, &decErr);
+        if (!plainOpt.has_value()) {
+            d->lastError = decErr.isEmpty() ? QStringLiteral("Failed to decrypt envelope-encrypted file content") : decErr;
+            appendTabDebug(QString("AWS envelope decrypt failed: %1").arg(d->lastError));
+            return std::nullopt;
+        }
+
+        // The decrypted content is base64-encoded file data, decode it
+        const QByteArray& decryptedBase64 = plainOpt.value();
+        const QByteArray fileData = QByteArray::fromBase64(decryptedBase64);
+        if (fileData.isEmpty()) {
+            d->lastError = QStringLiteral("Failed to decode base64 content after envelope decryption");
+            appendTabDebug("AWS download error: base64 decode after envelope decrypt failed");
+            return std::nullopt;
+        }
+
+        appendTabDebug(QString("AWS envelope-encrypted decrypted: size=%1")
+                       .arg(fileData.size()));
+        return fileData;
+    }
+    
     if (kmsEnabled && !hasEnvelope) {
         d->lastError = QStringLiteral("Server indicated encrypted delivery but did not include envelope metadata");
         appendTabDebug("AWS download error: kmsEnabled=true but envelope missing");
@@ -648,6 +786,16 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
     authBody["prefix"] = prefix;
     authBody["maxKeys"] = maxKeys;
     authBody["delimiter"] = "/";
+    // Add viewType parameter to request only public files from the new S3 structure
+    if (prefix.startsWith("public/") || prefix.isEmpty()) {
+        authBody["viewType"] = "all-public"; // Use broader search to find any public files
+    } else if (prefix.startsWith("private/user-data/")) {
+        authBody["viewType"] = "private";
+    } else if (prefix.startsWith("private/encrypted/")) {
+        authBody["viewType"] = "encrypted";
+    } else {
+        authBody["viewType"] = "all-public"; // Default to broader public view
+    }
     const QByteArray authPayload = QJsonDocument(authBody).toJson(QJsonDocument::Compact);
     
     QNetworkReply* authReply = d->networkManager->post(authRequest, authPayload);
@@ -682,10 +830,52 @@ std::optional<QVector<AwsListEntry>> AwsClient::listViaServer(const QString& pre
         return std::nullopt;
     }
     
-    // Step 2: Get the pre-signed URL from server response
+    // Check if server returned direct file list (new format) or presigned URL (old format)
+    if (authObj.contains("files")) {
+        // New format: server returns files directly
+        const QJsonArray filesArray = authObj.value("files").toArray();
+        QVector<AwsListEntry> out;
+        QSet<QString> seenDirs;
+        
+        auto emitDir = [&](const QString &dirKey){
+            if (dirKey.isEmpty()) return;
+            if (seenDirs.contains(dirKey)) return;
+            if (dirKey == prefix) return; // skip echo of current prefix
+            seenDirs.insert(dirKey);
+            AwsListEntry dir;
+            dir.isDir = true;
+            dir.key = dirKey;
+            dir.name = dirKey.endsWith('/') ? QString(dirKey).chopped(1).split('/').last() : dirKey.split('/').last();
+            if (dir.name.isEmpty()) dir.name = dirKey;
+            dir.size = 0;
+            out.push_back(dir);
+        };
+        
+        // Create directories from file paths and add files
+        for (const auto &fileValue : filesArray) {
+            const QJsonObject fileObj = fileValue.toObject();
+            const QString key = fileObj.value("key").toString();
+            const QString folder = fileObj.value("folder").toString();
+            
+            if (!folder.isEmpty() && !folder.endsWith('/')) {
+                emitDir(folder + '/');
+            }
+            
+            AwsListEntry file;
+            file.isDir = false;
+            file.key = key;
+            file.name = fileObj.value("name").toString();
+            file.size = fileObj.value("size").toVariant().toLongLong();
+            out.push_back(file);
+        }
+        
+        return out;
+    }
+    
+    // Fall back to old format: Get the pre-signed URL from server response
     const QString presignedUrl = authObj.value("presignedUrl").toString();
     if (presignedUrl.isEmpty()) {
-        d->lastError = "Server did not return a list pre-signed URL";
+        d->lastError = "Server did not return files or presigned URL";
         return std::nullopt;
     }
     
@@ -800,7 +990,8 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     request.setRawHeader("Cache-Control", "no-cache");
     
     QJsonObject body;
-    body["key"] = key;
+    body["fileKey"] = key;  // Use fileKey parameter as expected by lambda function
+    body["downloadType"] = "presigned";  // Request presigned URLs for security
     const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
     
     QNetworkReply* reply = d->networkManager->post(request, payload);
@@ -862,6 +1053,73 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
         ? obj.value("encryptMeta").toObject() : obj.value("envelope").toObject();
     const bool hasEnvelope = !envelope.isEmpty();
     const bool kmsEnabled = obj.value("kmsEnabled").toBool();
+    
+    // Check for direct content delivery (fallback for presigned URL issues)
+    const QString downloadType = obj.value("downloadType").toString();
+    if (downloadType == "direct-content") {
+        const QString fileContent = obj.value("fileContent").toString();
+        if (fileContent.isEmpty()) {
+            d->lastError = QStringLiteral("Server returned direct-content mode but no file content");
+            return std::nullopt;
+        }
+        
+        // Decode base64 content directly
+        const QByteArray decoded = QByteArray::fromBase64(fileContent.toUtf8());
+        if (decoded.isEmpty()) {
+            d->lastError = QStringLiteral("Failed to decode base64 file content");
+            return std::nullopt;
+        }
+        
+        return decoded;
+    }
+    
+    // Check for envelope-encrypted delivery (KMS encrypted public files)
+    if (downloadType == "envelope-encrypted") {
+        const QJsonObject envelope = obj.value("envelope").toObject();
+        if (envelope.isEmpty()) {
+            d->lastError = QStringLiteral("Server returned envelope-encrypted mode but no envelope data");
+            return std::nullopt;
+        }
+        
+        // Decrypt using SecurityEnvelope::decryptBuffer directly on the envelope data
+        SecurityEnvelope::BufferInputs bi;
+        bi.algorithm = envelope.value("algorithm").toString();
+        const auto b64 = [](const QJsonObject& o, const char* k){ return QByteArray::fromBase64(o.value(k).toString().toUtf8()); };
+        bi.encryptedData = b64(envelope, "encryptedData"); // encrypted base64 file content
+        bi.encryptedDataKey = b64(envelope, "encryptedDataKey");
+        bi.iv = b64(envelope, "iv");
+        bi.authTag = b64(envelope, "authTag");
+
+        // AAD bound to JWT jti when available
+        const QString jti = SecurityEnvelope::extractJtiFromJwt(d->authToken);
+        bi.aad = jti.isEmpty() ? QByteArray() : jti.toUtf8();
+
+        // AWS credentials for KMS Decrypt (from server response)
+        const QJsonObject aws = obj.value("aws").toObject();
+        bi.accessKeyId = aws.value("accessKeyId").toString();
+        bi.secretAccessKey = aws.value("secretAccessKey").toString();
+        bi.sessionToken = aws.value("sessionToken").toString();
+        bi.region = aws.value("region").toString();
+        if (bi.region.isEmpty()) bi.region = obj.value("region").toString();
+
+        QString decErr;
+        auto plainOpt = SecurityEnvelope::decryptBuffer(bi, &decErr);
+        if (!plainOpt.has_value()) {
+            d->lastError = decErr.isEmpty() ? QStringLiteral("Failed to decrypt envelope-encrypted file content") : decErr;
+            return std::nullopt;
+        }
+
+        // The decrypted content is base64-encoded file data, decode it
+        const QByteArray& decryptedBase64 = plainOpt.value();
+        const QByteArray fileData = QByteArray::fromBase64(decryptedBase64);
+        if (fileData.isEmpty()) {
+            d->lastError = QStringLiteral("Failed to decode base64 content after envelope decryption");
+            return std::nullopt;
+        }
+
+        return fileData;
+    }
+    
     if (kmsEnabled && !hasEnvelope) {
         d->lastError = QStringLiteral("Server indicated encrypted delivery but did not include envelope metadata");
         appendTabDebug("AWS download error: kmsEnabled=true but envelope missing");

@@ -1555,8 +1555,8 @@ QVector<QString> MainApplication::findMatchingFiles(const QString &term, int max
     const qint64 tStart = QDateTime::currentMSecsSinceEpoch();
     const qint64 timeBudgetMs = 2000; // ~2s budget to keep UI responsive
 
-    // Breadth-first over prefixes (folders)
-    QStringList queue; queue << QString(); // root prefix
+    // Breadth-first over prefixes (folders) - restrict to public folders only
+    QStringList queue; queue << QStringLiteral("public/"); // Start with public prefix only
     QSet<QString> visited;
     int visitedPrefixes = 0;
     const int maxPrefixes = 120;   // tighter safety cap
@@ -1858,40 +1858,98 @@ void MainApplication::loadAwsFiles()
             return;
         }
 
-        auto list = m_aws.list("", 1000);
+        // Load only public files from the new S3 structure
+        // Request public/ prefix to show only public PCB and PDF files
+        auto list = m_aws.list("public/", 1000);
         if (!list.has_value()) {
             const QString err = m_aws.lastError();
-            showTreeIssue(this, "AWS list error", err.isEmpty()?QStringLiteral("Unable to list root"):err);
+            showTreeIssue(this, "AWS list error", err.isEmpty()?QStringLiteral("Unable to list public files"):err);
             statusBar()->showMessage("AWS list failed.");
             return;
         }
 
         // Populate root level from S3 (simulate folders via prefixes)
         int count = 0;
+        QSet<QString> seenKeys; // avoid duplicates from server responses
         const int kMax = 5000;
+        const QString rootPrefix = QStringLiteral("public/");
         for (const auto &e : list.value()) {
             if (++count > kMax) { showTreeIssue(this, "AWS root trimmed for performance"); break; }
+            
+            // When listing "public/", the returned names are relative to that prefix
+            // So e.name will be like "PCB Files/" or "iPhone6s schematic.pdf", not "public/PCB Files/"
+            // We use e.name directly for display, and e.key (which includes "public/") for AWS operations
+            QString displayName = e.name;
+
+            // Always normalize the stored key to an absolute S3 key under the current base prefix
+            // Some server responses return directory keys relative to the requested prefix.
+            const QString basePrefix = QStringLiteral("public/");
+            QString fullKey = e.key;
+            if (!fullKey.startsWith(basePrefix)) {
+                // Ensure we don't duplicate slashes and that folder keys end with '/'
+                if (!basePrefix.endsWith('/'))
+                    fullKey = basePrefix + '/' + fullKey;
+                else
+                    fullKey = basePrefix + fullKey;
+                if (e.isDir && !fullKey.endsWith('/')) fullKey += '/';
+            }
+            
+            // Skip empty names or echo of the current base prefix (e.g., 'public/')
+            if (displayName.isEmpty()) {
+                continue;
+            }
+
+            // Do not show a 'public' folder under the public root
+            if (fullKey == QStringLiteral("public/") || displayName == QStringLiteral("public") || displayName == QStringLiteral("public/")) {
+                continue;
+            }
+            
+            // Keep only immediate children of rootPrefix
+            if (!fullKey.startsWith(rootPrefix)) {
+                continue;
+            }
+            if (e.isDir) {
+                QString rem = fullKey.mid(rootPrefix.size());
+                if (rem.endsWith('/')) rem.chop(1);
+                if (rem.contains('/')) {
+                    // not a direct child folder; skip
+                    continue;
+                }
+            } else {
+                const QString parent = fullKey.left(fullKey.lastIndexOf('/') + 1);
+                if (parent != rootPrefix) {
+                    // not a direct child file; skip
+                    continue;
+                }
+            }
+
+            // Deduplicate by normalized key
+            if (seenKeys.contains(fullKey)) {
+                continue;
+            }
+            seenKeys.insert(fullKey);
+
             QTreeWidgetItem *item = new QTreeWidgetItem(m_treeWidget);
             if (e.isDir) {
-                item->setText(0, e.name);
+                item->setText(0, displayName);
                 item->setIcon(0, getFolderIcon(false));
-                // store prefix in role +11; also mark as folder via +1 to reuse visuals
-                item->setData(0, Qt::UserRole + 11, e.key);
-                item->setData(0, Qt::UserRole + 1, e.key);
+                // store normalized full key in role +11; also mark as folder via +1 to reuse visuals
+                item->setData(0, Qt::UserRole + 11, fullKey);
+                item->setData(0, Qt::UserRole + 1, fullKey);
                 // dummy child for lazy loading
                 QTreeWidgetItem *dummy = new QTreeWidgetItem(item);
                 dummy->setText(0, "Loading...");
                 dummy->setData(0, Qt::UserRole + 2, true);
                 item->setExpanded(false);
                 item->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
-                item->setToolTip(0, e.name);
+                item->setToolTip(0, displayName);
             } else {
-                item->setText(0, QFileInfo(e.name).baseName());
+                item->setText(0, QFileInfo(displayName).baseName());
                 item->setIcon(0, getFileIcon(e.name));
-                // store key in role +10 (do not use Qt::UserRole which implies local path)
-                item->setData(0, Qt::UserRole + 10, e.key);
+                // store normalized full key (including base prefix) in role +10
+                item->setData(0, Qt::UserRole + 10, fullKey);
                 item->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
-                item->setToolTip(0, QFileInfo(e.name).baseName());
+                item->setToolTip(0, QFileInfo(displayName).baseName());
             }
             if ((count % 200) == 0) QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
         }
@@ -3215,26 +3273,67 @@ void MainApplication::onTreeItemExpanded(QTreeWidgetItem *item)
                             showTreeIssue(this, "AWS list failed", err.isEmpty()?prefix:err);
                         } else {
                             int count = 0; const int kMax = 5000;
+                            QSet<QString> seenChildKeys;
                             for (const auto &e : list.value()) {
                                 if (++count > kMax) { showTreeIssue(this, "Folder trimmed for performance"); break; }
+                                
+                                // When listing a prefix, the returned names are relative to that prefix
+                                // So if we're listing "public/PCB Files/", we get back names like "demo/" or "iPhone11 AP+BB boardview(Diode value)"
+                                // We use e.name directly for display, and e.key (which includes full path) for AWS operations
+                                QString displayName = e.name;
+
+                                // Normalize child keys to be absolute under current prefix to avoid recursive/duplicate folders
+                                QString childFullKey = e.key;
+                                const QString parentPrefix = prefix.endsWith('/') ? prefix : (prefix + '/');
+                                if (!childFullKey.startsWith(parentPrefix) && !childFullKey.startsWith("public/") && !childFullKey.startsWith("private/")) {
+                                    childFullKey = parentPrefix + childFullKey;
+                                }
+                                if (e.isDir && !childFullKey.endsWith('/')) childFullKey += '/';
+                                
+                                // Skip empty names
+                                if (displayName.isEmpty()) {
+                                    continue;
+                                }
+
+                                // Ensure we only show immediate children of this parent
+                                if (!childFullKey.startsWith(parentPrefix)) {
+                                    continue;
+                                }
+                                if (e.isDir) {
+                                    QString rem = childFullKey.mid(parentPrefix.size());
+                                    if (rem.endsWith('/')) rem.chop(1);
+                                    if (rem.contains('/')) continue; // not a direct child folder
+                                } else {
+                                    const QString parent = childFullKey.left(childFullKey.lastIndexOf('/') + 1);
+                                    if (parent != parentPrefix) continue; // not a direct child file
+                                }
+
+                                // Deduplicate
+                                if (seenChildKeys.contains(childFullKey)) {
+                                    continue;
+                                }
+                                seenChildKeys.insert(childFullKey);
+                                
                                 QTreeWidgetItem *childItem = new QTreeWidgetItem(item);
                                 if (e.isDir) {
-                                    childItem->setText(0, e.name);
+                                    childItem->setText(0, displayName);
                                     childItem->setIcon(0, getFolderIcon(false));
-                                    childItem->setData(0, Qt::UserRole + 11, e.key);
-                                    childItem->setData(0, Qt::UserRole + 1, e.key);
+                                    // store normalized full key for folder
+                                    childItem->setData(0, Qt::UserRole + 11, childFullKey);
+                                    childItem->setData(0, Qt::UserRole + 1, childFullKey);
                                     QTreeWidgetItem *dummy = new QTreeWidgetItem(childItem);
                                     dummy->setText(0, "Loading...");
                                     dummy->setData(0, Qt::UserRole + 2, true);
                                     childItem->setExpanded(false);
                                     childItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
-                                    childItem->setToolTip(0, e.name);
+                                    childItem->setToolTip(0, displayName);
                                 } else {
-                                    childItem->setText(0, QFileInfo(e.name).baseName());
+                                    childItem->setText(0, QFileInfo(displayName).baseName());
                                     childItem->setIcon(0, getFileIcon(e.name));
-                                    childItem->setData(0, Qt::UserRole + 10, e.key);
+                                    // store normalized full key for file
+                                    childItem->setData(0, Qt::UserRole + 10, childFullKey);
                                     childItem->setChildIndicatorPolicy(QTreeWidgetItem::DontShowIndicator);
-                                    childItem->setToolTip(0, QFileInfo(e.name).baseName());
+                                    childItem->setToolTip(0, QFileInfo(displayName).baseName());
                                 }
                                 if ((count % 200) == 0) QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
                             }
