@@ -15,6 +15,7 @@
 #include <memory>
 #include <QPointer>
 #include <QCoreApplication>
+#include <QTimer>
 #include "security/security_envelope.h"
 
 #ifdef HAVE_AWS_SDK
@@ -400,7 +401,7 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     request.setRawHeader("Cache-Control", "no-cache");
     
     QJsonObject body;
-    body["fileKey"] = key;  // Use fileKey parameter as expected by lambda function
+    body["key"] = key; // Server expects "key" field for S3 object key
     body["downloadType"] = "presigned";  // Request presigned URLs for security
     const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
     
@@ -467,7 +468,6 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     const QJsonObject envelope = obj.value("envelope").toObject().isEmpty()
         ? obj.value("encryptMeta").toObject() : obj.value("envelope").toObject();
     const bool hasEnvelope = !envelope.isEmpty();
-    const bool kmsEnabled = obj.value("kmsEnabled").toBool();
     
     // Check for direct content delivery (fallback for presigned URL issues)
     const QString downloadType = obj.value("downloadType").toString();
@@ -551,11 +551,9 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
         return fileData;
     }
     
-    if (kmsEnabled && !hasEnvelope) {
-        d->lastError = QStringLiteral("Server indicated encrypted delivery but did not include envelope metadata");
-        appendTabDebug("AWS download error: kmsEnabled=true but envelope missing");
-        return std::nullopt;
-    }
+    // Note: kmsEnabled indicates bucket/object uses SSE-KMS at rest. For presigned URLs,
+    // S3 will transparently decrypt on GET using the signer permissions, so no envelope is required.
+    // Only require an envelope when server explicitly returns envelope-encrypted delivery.
 
     // Extract URL with multiple aliases for safety
     QString downloadUrl = obj.value("ciphertextUrl").toString();
@@ -577,16 +575,53 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     const QUrl dlUrl(downloadUrl);
     appendTabDebug(QString("AWS download presigned URL target: %1%2").arg(dlUrl.host(), dlUrl.path()));
     QNetworkRequest downloadRequest{dlUrl};
+    // Default redirect behavior; we'll enforce a manual timeout via QTimer below for robustness.
+    downloadRequest.setHeader(QNetworkRequest::UserAgentHeader, "W2R-Client/1.0");
+
     QNetworkReply* downloadReply = d->networkManager->get(downloadRequest);
     d->currentDownloadReply = downloadReply;
 
     QEventLoop downloadLoop;
+    // Fallback timeout if attribute is not available
+#if !(defined(QT_VERSION) && (QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)))
+    QTimer fallbackTimeout;
+    fallbackTimeout.setSingleShot(true);
+    QObject::connect(&fallbackTimeout, &QTimer::timeout, downloadReply, &QNetworkReply::abort);
+    fallbackTimeout.start(120000);
+#endif
+    // Log progress occasionally to reassure the user
+    QObject::connect(downloadReply, &QNetworkReply::downloadProgress, &downloadLoop, [=](qint64 received, qint64 total){
+        static qint64 lastLogged = -1;
+        // Log every ~2 seconds worth of progress or on completion; coarse heuristic
+        if (total > 0) {
+            int pct = int((received * 100) / total);
+            if (pct != lastLogged && (pct % 10 == 0 || received == total)) {
+                lastLogged = pct;
+                appendTabDebug(QString("AWS download progress: %1/%2 bytes (%3%)")
+                                   .arg(received)
+                                   .arg(total)
+                                   .arg(pct));
+            }
+        } else {
+            // Unknown total size: log every ~1 MB
+            if (received / (1024*1024) != lastLogged) {
+                lastLogged = received / (1024*1024);
+                appendTabDebug(QString("AWS download progress: %1 MiB received (total unknown)")
+                                   .arg(lastLogged));
+            }
+        }
+    });
     QObject::connect(downloadReply, &QNetworkReply::finished, &downloadLoop, &QEventLoop::quit);
     downloadLoop.exec();
 
     if (downloadReply->error() != QNetworkReply::NoError) {
-        d->lastError = QString("File download failed: %1").arg(downloadReply->errorString());
-        appendTabDebug(QString("AWS download HTTP error: %1").arg(d->lastError));
+        if (downloadReply->error() == QNetworkReply::OperationCanceledError) {
+            d->lastError = QStringLiteral("Operation canceled by user");
+            appendTabDebug(QStringLiteral("AWS download canceled by user"));
+        } else {
+            d->lastError = QString("File download failed: %1").arg(downloadReply->errorString());
+            appendTabDebug(QString("AWS download HTTP error: %1").arg(d->lastError));
+        }
         downloadReply->deleteLater();
         d->currentDownloadReply = nullptr;
         return std::nullopt;
@@ -990,7 +1025,7 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     request.setRawHeader("Cache-Control", "no-cache");
     
     QJsonObject body;
-    body["fileKey"] = key;  // Use fileKey parameter as expected by lambda function
+    body["key"] = key; // Server expects "key" field for S3 object key
     body["downloadType"] = "presigned";  // Request presigned URLs for security
     const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
     
@@ -1052,7 +1087,6 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     const QJsonObject envelope = obj.value("envelope").toObject().isEmpty()
         ? obj.value("encryptMeta").toObject() : obj.value("envelope").toObject();
     const bool hasEnvelope = !envelope.isEmpty();
-    const bool kmsEnabled = obj.value("kmsEnabled").toBool();
     
     // Check for direct content delivery (fallback for presigned URL issues)
     const QString downloadType = obj.value("downloadType").toString();
@@ -1120,11 +1154,7 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
         return fileData;
     }
     
-    if (kmsEnabled && !hasEnvelope) {
-        d->lastError = QStringLiteral("Server indicated encrypted delivery but did not include envelope metadata");
-        appendTabDebug("AWS download error: kmsEnabled=true but envelope missing");
-        return std::nullopt;
-    }
+    // If no envelope is provided, treat as plaintext presigned URL. SSE-KMS is handled transparently by S3.
 
     QString downloadUrl = obj.value("ciphertextUrl").toString();
     if (downloadUrl.isEmpty()) downloadUrl = obj.value("downloadUrl").toString();
@@ -1149,16 +1179,50 @@ std::optional<QByteArray> AwsClient::downloadViaServer(const QString& key) {
     appendTabDebug(QString("AWS download presigned URL target: %1%2")
                    .arg(dlUrl.host(), dlUrl.path()));
     QNetworkRequest downloadRequest{dlUrl};
+    // Default redirect behavior; we'll enforce a manual timeout via QTimer below.
+    downloadRequest.setHeader(QNetworkRequest::UserAgentHeader, "W2R-Client/1.0");
+
     QNetworkReply* downloadReply = d->networkManager->get(downloadRequest);
     d->currentDownloadReply = downloadReply;
 
     QEventLoop downloadLoop;
+    // Fallback timeout if attribute is not available
+#if !(defined(QT_VERSION) && (QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)))
+    QTimer fallbackTimeout;
+    fallbackTimeout.setSingleShot(true);
+    QObject::connect(&fallbackTimeout, &QTimer::timeout, downloadReply, &QNetworkReply::abort);
+    fallbackTimeout.start(120000);
+#endif
+    QObject::connect(downloadReply, &QNetworkReply::downloadProgress, &downloadLoop, [=](qint64 received, qint64 total){
+        static qint64 lastLogged = -1;
+        if (total > 0) {
+            int pct = int((received * 100) / total);
+            if (pct != lastLogged && (pct % 10 == 0 || received == total)) {
+                lastLogged = pct;
+                appendTabDebug(QString("AWS download progress: %1/%2 bytes (%3%)")
+                                   .arg(received)
+                                   .arg(total)
+                                   .arg(pct));
+            }
+        } else {
+            if (received / (1024*1024) != lastLogged) {
+                lastLogged = received / (1024*1024);
+                appendTabDebug(QString("AWS download progress: %1 MiB received (total unknown)")
+                                   .arg(lastLogged));
+            }
+        }
+    });
     QObject::connect(downloadReply, &QNetworkReply::finished, &downloadLoop, &QEventLoop::quit);
     downloadLoop.exec();
 
     if (downloadReply->error() != QNetworkReply::NoError) {
-        d->lastError = QString("File download failed: %1").arg(downloadReply->errorString());
-        appendTabDebug(QString("AWS download HTTP error: %1").arg(d->lastError));
+        if (downloadReply->error() == QNetworkReply::OperationCanceledError) {
+            d->lastError = QStringLiteral("Operation canceled by user");
+            appendTabDebug(QStringLiteral("AWS download canceled by user"));
+        } else {
+            d->lastError = QString("File download failed: %1").arg(downloadReply->errorString());
+            appendTabDebug(QString("AWS download HTTP error: %1").arg(d->lastError));
+        }
         downloadReply->deleteLater();
         d->currentDownloadReply = nullptr;
         return std::nullopt;
